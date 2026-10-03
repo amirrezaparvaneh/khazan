@@ -35,14 +35,14 @@ class WILA_REST_Controller {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۴. جدول اقلام با فیلتر (پست یا دسته‌بندی محصول)
+        // ۴. جدول اقلام با فیلتر
         register_rest_route($this->namespace, '/items', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_items_report'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۵. جزئیات عمیق لینک‌های ورودی و خروجی یک صفحه خاص
+        // ۵. جزئیات دقیق لینک‌های یک صفحه
         register_rest_route($this->namespace, '/item-details', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_item_details'),
@@ -55,15 +55,33 @@ class WILA_REST_Controller {
             'callback'            => array($this, 'get_orphan_items'),
             'permission_callback' => array($this, 'check_permission'),
         ));
+
+        // ۷. ذخیره و دریافت تنظیمات (API Key جمینای)
+        register_rest_route($this->namespace, '/settings', array(
+            array(
+                'methods'             => WP_REST_Server::READABLE,
+                'callback'            => array($this, 'get_settings'),
+                'permission_callback' => array($this, 'check_permission'),
+            ),
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array($this, 'save_settings'),
+                'permission_callback' => array($this, 'check_permission'),
+            )
+        ));
+
+        // ۸. تولید پیشنهادات استراتژیک لینک‌سازی توسط هوش مصنوعی جمینای
+        register_rest_route($this->namespace, '/ai/suggest', array(
+            'methods'             => WP_REST_Server::CREATABLE,
+            'callback'            => array($this, 'generate_ai_suggestions'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     public function check_permission() {
         return current_user_can('manage_options');
     }
 
-    /**
-     * صف اسکن کل محتوا
-     */
     public function get_scan_queue() {
         $scanner = new WILA_Scanner();
         $items = $scanner->get_all_scannable_items();
@@ -75,9 +93,6 @@ class WILA_REST_Controller {
         ));
     }
 
-    /**
-     * اجرای اسکن برای یک آیتم
-     */
     public function scan_single_item($request) {
         $params    = $request->get_json_params();
         $item_id   = isset($params['id']) ? absint($params['id']) : 0;
@@ -97,9 +112,6 @@ class WILA_REST_Controller {
         ));
     }
 
-    /**
-     * آمار اجمالی داشبورد
-     */
     public function get_dashboard_summary() {
         global $wpdb;
         $table = WILA_DB::get_table_name();
@@ -117,14 +129,8 @@ class WILA_REST_Controller {
             if ($item['type'] === 'category') $total_cats++;
         }
 
-        // کل لینک‌های داخلی ثبت‌شده
         $total_links = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
-
-        // تعداد صفحات دارای حداقل یک لینک ورودی
-        $linked_targets_count = (int) $wpdb->get_var("SELECT COUNT(DISTINCT target_id) FROM {$table} WHERE target_id IS NOT NULL");
-
-        // استخراج تعداد صفحات بدون ورودی (Orphans)
-        $orphans = $this->calculate_orphans($all_items);
+        $orphans     = $this->calculate_orphans($all_items);
 
         return rest_ensure_response(array(
             'total_items'        => count($all_items),
@@ -132,20 +138,17 @@ class WILA_REST_Controller {
             'total_product_cats' => $total_product_cats,
             'total_cats'         => $total_cats,
             'total_links'        => $total_links,
-            'orphan_count'       => count($orphans),
+            'orphan_count'       => count($orphans['list']),
             'orphan_posts'       => $orphans['posts_count'],
             'orphan_cats'        => $orphans['cats_count'],
         ));
     }
 
-    /**
-     * لیست گزارش آیتم‌ها با لینک‌های ورودی و خروجی
-     */
     public function get_items_report($request) {
         global $wpdb;
         $table = WILA_DB::get_table_name();
 
-        $filter_type = $request->get_param('type'); // all, post, product_cat, category
+        $filter_type = $request->get_param('type');
         $scanner = new WILA_Scanner();
         $items = $scanner->get_all_scannable_items();
 
@@ -156,14 +159,12 @@ class WILA_REST_Controller {
                 continue;
             }
 
-            // تعداد لینک‌های خروجی که در متن این صفحه کار شده
             $out_count = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$table} WHERE source_id = %d AND source_type = %s",
                 $item['id'],
                 $item['type']
             ));
 
-            // تعداد لینک‌های ورودی که از بقیه صفحات به این صفحه داده شده
             $in_count = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$table} WHERE target_id = %d AND target_type = %s",
                 $item['id'],
@@ -184,9 +185,6 @@ class WILA_REST_Controller {
         return rest_ensure_response($report);
     }
 
-    /**
-     * دریافت جزئیات دقیق لینک‌های ورودی و خروجی یک صفحه با انکرتکست‌ها
-     */
     public function get_item_details($request) {
         global $wpdb;
         $table = WILA_DB::get_table_name();
@@ -198,7 +196,6 @@ class WILA_REST_Controller {
             return new WP_Error('missing_params', 'پارامترهای id و type الزامی هستند.', array('status' => 400));
         }
 
-        // ۱. لینک‌هایی که این صفحه به دیگران داده است (Outgoing Links)
         $out_links = $wpdb->get_results($wpdb->prepare(
             "SELECT target_url, target_id, target_type, anchor_text, rel_attribute 
              FROM {$table} 
@@ -207,7 +204,6 @@ class WILA_REST_Controller {
             $type
         ), ARRAY_A);
 
-        // ۲. لینک‌هایی که صفحات دیگر به این صفحه داده‌اند (Incoming Backlinks)
         $in_links = $wpdb->get_results($wpdb->prepare(
             "SELECT source_id, source_type, source_title, source_url, anchor_text, rel_attribute 
              FROM {$table} 
@@ -226,9 +222,6 @@ class WILA_REST_Controller {
         ));
     }
 
-    /**
-     * استخراج صفحات بدون لینک ورودی (Orphan Pages)
-     */
     public function get_orphan_items() {
         $scanner = new WILA_Scanner();
         $all_items = $scanner->get_all_scannable_items();
@@ -237,14 +230,54 @@ class WILA_REST_Controller {
         return rest_ensure_response($orphans_data['list']);
     }
 
-    /**
-     * متد کمکی محاسبه صفحات بدون لینک ورودی
-     */
+    public function get_settings() {
+        $key = get_option('wila_gemini_api_key', '');
+        return rest_ensure_response(array(
+            'has_api_key' => !empty($key),
+            'api_key'     => !empty($key) ? (substr($key, 0, 6) . '...' . substr($key, -4)) : ''
+        ));
+    }
+
+    public function save_settings($request) {
+        $params  = $request->get_json_params();
+        $api_key = isset($params['api_key']) ? sanitize_text_field($params['api_key']) : '';
+
+        if (!empty($api_key)) {
+            update_option('wila_gemini_api_key', $api_key);
+        }
+
+        return rest_ensure_response(array(
+            'success' => true,
+            'message' => 'تنظیمات با موفقیت ذخیره شد.'
+        ));
+    }
+
+    public function generate_ai_suggestions($request) {
+        $params = $request->get_json_params();
+        $id     = isset($params['id']) ? absint($params['id']) : 0;
+        $type   = isset($params['type']) ? sanitize_text_field($params['type']) : 'post';
+
+        if (!$id || !$type) {
+            return new WP_Error('invalid_params', 'پارامترهای ارسالی ناقص هستند.', array('status' => 400));
+        }
+
+        $gemini = new WILA_Gemini_Client();
+        $suggestions = $gemini->generate_link_suggestions($id, $type);
+
+        if (is_wp_error($suggestions)) {
+            return $suggestions;
+        }
+
+        return rest_ensure_response(array(
+            'success'     => true,
+            'suggestions' => $suggestions
+        ));
+    }
+
     private function calculate_orphans($items) {
         global $wpdb;
         $table = WILA_DB::get_table_name();
 
-        // دریافت تمام تارگت‌هایی که حداقل یک لینک ورودی دارند
         $linked_targets = $wpdb->get_results(
             "SELECT DISTINCT target_id, target_type FROM {$table} WHERE target_id IS NOT NULL",
             ARRAY_A

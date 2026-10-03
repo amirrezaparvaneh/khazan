@@ -39,6 +39,7 @@ final class WP_Internal_Link_Analyzer {
     private function includes() {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
+        require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-gemini-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
     }
 
@@ -56,7 +57,7 @@ final class WP_Internal_Link_Analyzer {
     }
 
     public function deactivate() {
-        // در صورت لزوم پاکسازی صف‌ها
+        // لاجیک پاکسازی در صورت نیاز
     }
 
     public function register_rest_routes() {
