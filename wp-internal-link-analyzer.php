@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌‌سازی داخلی
+ * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
  * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با Gemini AI
  * Version:           1.0.0
@@ -39,13 +39,14 @@ final class WP_Internal_Link_Analyzer {
     private function includes() {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
-        // در گام‌های بعد: REST API و Gemini Client اضافه خواهند شد
+        require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
     }
 
     private function init_hooks() {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
+        add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'register_admin_menu'));
     }
 
@@ -55,7 +56,12 @@ final class WP_Internal_Link_Analyzer {
     }
 
     public function deactivate() {
-        // در صورت لزوم لاجیک پاکسازی
+        // در صورت لزوم پاکسازی صف‌ها
+    }
+
+    public function register_rest_routes() {
+        $controller = new WILA_REST_Controller();
+        $controller->register_routes();
     }
 
     public function register_admin_menu() {
