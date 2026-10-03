@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت هوشمند ارتباط با Gemini API با پشتیبانی از هدر اختصاصی و کشف خودکار مدل
+ * کلاینت هوشمند ارتباط با Gemini API با کشف و مرتب‌سازی خودکار بالاترین نسخه مدل (Future-Proof)
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -12,7 +12,8 @@ if (!defined('ABSPATH')) {
 class WILA_Gemini_Client {
 
     private $api_key;
-    private $default_model = 'gemini-1.5-flash-latest';
+    // تغییر نسخه پیش‌فرض پایه به 3.8 طبق استاندارد جدید گوگل
+    private $default_model = 'gemini-3.8-flash';
 
     public function __construct() {
         $this->api_key = trim(get_option('wila_gemini_api_key', ''));
@@ -26,9 +27,6 @@ class WILA_Gemini_Client {
         return get_option('wila_gemini_active_model', $this->default_model);
     }
 
-    /**
-     * استخراج کلید معتبر با پاکسازی و نادیده گرفتن مقادیر ماسک‌شده
-     */
     private function resolve_key($override_key = null) {
         $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $this->api_key;
         if (strpos($key, '...') !== false) {
@@ -37,9 +35,6 @@ class WILA_Gemini_Client {
         return $key;
     }
 
-    /**
-     * دریافت لیست مدل‌های مجاز برای این API Key از گوگل
-     */
     public function fetch_available_models($override_key = null) {
         $key = $this->resolve_key($override_key);
 
@@ -81,43 +76,33 @@ class WILA_Gemini_Client {
     }
 
     /**
-     * انتخاب هوشمند بهترین مدل
+     * انتخاب هوشمند بالاترین نسخه مدل فلش با مرتب‌سازی نزولی
      */
     public function pick_best_model($available_models) {
         if (empty($available_models)) {
             return $this->default_model;
         }
 
-        $priority_list = array(
-            'gemini-1.5-flash-latest',
-            'gemini-1.5-flash',
-            'gemini-1.5-flash-001',
-            'gemini-1.5-flash-002',
-            'gemini-2.0-flash',
-            'gemini-2.0-flash-exp',
-            'gemini-1.5-pro-latest',
-            'gemini-1.5-pro',
-            'gemini-pro'
-        );
-
-        foreach ($priority_list as $candidate) {
-            if (in_array($candidate, $available_models, true)) {
-                return $candidate;
-            }
-        }
-
+        $flash_models = array();
         foreach ($available_models as $model) {
-            if (stripos($model, 'flash') !== false) {
-                return $model;
+            // استخراج مدل‌های سریع فلش و نادیده گرفتن نسخه‌های آزمایشی (exp)
+            if (stripos($model, 'flash') !== false && stripos($model, 'exp') === false) {
+                $flash_models[] = $model;
             }
         }
 
+        if (!empty($flash_models)) {
+            // مرتب‌سازی نزولی نام مدل‌ها به صورت الفبایی/عددی
+            // در این حالت gemini-3.8-flash بالاتر از gemini-2.5-flash قرار می‌گیرد
+            rsort($flash_models);
+            return $flash_models[0];
+        }
+
+        // در صورت عدم یافتن فلش، بالاترین مدل موجود را برمی‌گرداند
+        rsort($available_models);
         return $available_models[0];
     }
 
-    /**
-     * تست زنده اتصال با ارسال کلید در هدر و URL
-     */
     public function test_connection($override_key = null) {
         $key = $this->resolve_key($override_key);
 
@@ -130,15 +115,13 @@ class WILA_Gemini_Client {
             'x-goog-api-key' => $key,
         );
 
-        // ۱. کشف مدل‌های مجاز این کلید
         $available_models = $this->fetch_available_models($key);
-        $selected_model   = 'gemini-1.5-flash-latest';
+        $selected_model   = $this->default_model;
 
         if (!is_wp_error($available_models) && !empty($available_models)) {
             $selected_model = $this->pick_best_model($available_models);
         }
 
-        // ۲. ارسال درخواست تستی
         $start_time = microtime(true);
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$selected_model}:generateContent?key=" . urlencode($key);
 
@@ -182,14 +165,14 @@ class WILA_Gemini_Client {
                 'success'    => true,
                 'model'      => $selected_model,
                 'latency_ms' => $latency,
-                'message'    => 'ارتباط با موفقیت برقرار شد. مدل مناسب با کلید شما شناسایی و ذخیره گردید.'
+                'message'    => 'ارتباط برقرار شد. بالاترین مدل در دسترس برای حساب شما شناسایی و تنظیم گردید.'
             );
         }
 
         if ($code === 401) {
             return new WP_Error(
                 'auth_failed',
-                'احراز هویت ناموفق بود (401). مطمئن شوید کلید API را مستقیماً از Google AI Studio (aistudio.google.com/app/apikey) کپی کرده‌اید.'
+                'احراز هویت ناموفق بود (401). مطمئن شوید کلید API را مستقیماً از Google AI Studio (aistudio.google.com/app/apikey) کپی کرده‌‌اید.'
             );
         }
 
@@ -197,9 +180,6 @@ class WILA_Gemini_Client {
         return new WP_Error('api_error', $err_msg, array('status' => $code));
     }
 
-    /**
-     * تولید پیشنهادهای استراتژیک لینک‌سازی برای یک صفحه مشخص
-     */
     public function generate_link_suggestions($target_id, $target_type) {
         if (!$this->is_configured()) {
             return new WP_Error('missing_api_key', 'کلید Gemini API هنوز در تنظیمات افزونه ثبت نشده است.');
