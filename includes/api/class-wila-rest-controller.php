@@ -1,8 +1,6 @@
 <?php
 /**
  * کنترلر مسیرهای REST API سامانه لینکر
- *
- * @package WP_Internal_Link_Analyzer
  */
 
 if (!defined('ABSPATH')) {
@@ -30,9 +28,7 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_gemini_connection'), 'permission_callback' => array($this, 'check_permission')));
     }
 
-    public function check_permission() {
-        return current_user_can('manage_options');
-    }
+    public function check_permission() { return current_user_can('manage_options'); }
 
     public function get_scan_queue() {
         $scanner = new WILA_Scanner();
@@ -44,8 +40,7 @@ class WILA_REST_Controller {
         $params  = $request->get_json_params();
         $item_id = isset($params['id']) ? absint($params['id']) : 0;
         $type    = isset($params['type']) ? sanitize_text_field($params['type']) : 'post';
-        
-        if (!$item_id) return new WP_Error('invalid_id', 'شناسه آیتم نامعتبر است.', array('status' => 400));
+        if (!$item_id) return new WP_Error('invalid_id', 'شناسه نامعتبر.', array('status' => 400));
         
         $scanner = new WILA_Scanner();
         $result  = $scanner->scan_item($item_id, $type);
@@ -58,20 +53,31 @@ class WILA_REST_Controller {
         $scanner = new WILA_Scanner();
         $all_items = $scanner->get_all_scannable_items();
 
-        $posts = $product_cats = $cats = 0;
+        $posts = $pages = $products = $other_custom = 0;
+        
         foreach ($all_items as $item) {
-            if ($item['type'] === 'post') $posts++;
-            if ($item['type'] === 'product_cat') $product_cats++;
-            if ($item['type'] === 'category') $cats++;
+            if ($item['type'] === 'post') {
+                $posts++;
+            } elseif ($item['type'] === 'page') {
+                $pages++;
+            } elseif ($item['type'] === 'product') {
+                $products++;
+            } elseif (!taxonomy_exists($item['type'])) {
+                $other_custom++;
+            }
         }
 
         $total_links = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
         $orphans = $this->calculate_orphans($all_items);
 
         return rest_ensure_response(array(
-            'total_items' => count($all_items), 'total_posts' => $posts, 'total_product_cats' => $product_cats, 
-            'total_cats' => $cats, 'total_links' => $total_links, 'orphan_count' => count($orphans['list']), 
-            'orphan_posts' => $orphans['posts_count'], 'orphan_cats' => $orphans['cats_count']
+            'total_items'    => count($all_items), 
+            'total_posts'    => $posts, 
+            'total_pages'    => $pages,
+            'total_products' => $products,
+            'total_custom'   => $other_custom,
+            'total_links'    => $total_links, 
+            'orphan_count'   => count($orphans['list'])
         ));
     }
 
@@ -98,8 +104,6 @@ class WILA_REST_Controller {
         $id = absint($request->get_param('id'));
         $type = sanitize_text_field($request->get_param('type'));
         
-        if (!$id || !$type) return new WP_Error('missing_params', 'پارامتر ناقص.', array('status' => 400));
-        
         $out = $wpdb->get_results($wpdb->prepare("SELECT target_url, target_type, anchor_text, rel_attribute FROM {$table} WHERE source_id = %d AND source_type = %s", $id, $type), ARRAY_A);
         $in  = $wpdb->get_results($wpdb->prepare("SELECT source_title, source_url, source_type, anchor_text, rel_attribute FROM {$table} WHERE target_id = %d AND target_type = %s", $id, $type), ARRAY_A);
         
@@ -114,7 +118,7 @@ class WILA_REST_Controller {
 
     public function get_settings() {
         $key = trim(get_option('wila_gemini_api_key', ''));
-        $model = get_option('wila_gemini_active_model', 'gemini-1.5-flash');
+        $model = get_option('wila_gemini_active_model', 'gemini-3.8-flash');
         return rest_ensure_response(array(
             'has_api_key'  => !empty($key),
             'masked_key'   => !empty($key) ? (substr($key, 0, 6) . '...' . substr($key, -4)) : '',
@@ -125,10 +129,9 @@ class WILA_REST_Controller {
     public function save_settings($request) {
         $params  = $request->get_json_params();
         $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : '';
-        $model   = isset($params['model']) ? sanitize_text_field($params['model']) : 'gemini-1.5-flash';
+        $model   = isset($params['model']) ? sanitize_text_field($params['model']) : 'gemini-3.8-flash';
 
         update_option('wila_gemini_active_model', $model);
-
         if (!empty($api_key) && strpos($api_key, '...') === false) {
             update_option('wila_gemini_api_key', $api_key);
         }
@@ -137,13 +140,8 @@ class WILA_REST_Controller {
 
     public function generate_ai_suggestions($request) {
         $params = $request->get_json_params();
-        $id = isset($params['id']) ? absint($params['id']) : 0;
-        $type = isset($params['type']) ? sanitize_text_field($params['type']) : 'post';
-        
-        if (!$id || !$type) return new WP_Error('invalid_params', 'پارامتر ناقص.', array('status' => 400));
-        
         $gemini = new WILA_Gemini_Client();
-        $suggestions = $gemini->generate_link_suggestions($id, $type);
+        $suggestions = $gemini->generate_link_suggestions(absint($params['id']), sanitize_text_field($params['type']));
         if (is_wp_error($suggestions)) return $suggestions;
         return rest_ensure_response(array('success' => true, 'suggestions' => $suggestions));
     }
@@ -153,9 +151,7 @@ class WILA_REST_Controller {
         $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : null;
         $model   = isset($params['model']) ? sanitize_text_field($params['model']) : null;
 
-        if (!empty($api_key) && strpos($api_key, '...') !== false) {
-            $api_key = null;
-        }
+        if (!empty($api_key) && strpos($api_key, '...') !== false) $api_key = null;
 
         $gemini = new WILA_Gemini_Client();
         $result = $gemini->test_connection($api_key, $model);
@@ -174,13 +170,11 @@ class WILA_REST_Controller {
         foreach ($targets as $t) $map[$t['target_type'] . '_' . $t['target_id']] = true;
         
         $list = array();
-        $p = 0; $c = 0;
         foreach ($items as $item) {
             if (!isset($map[$item['type'] . '_' . $item['id']])) {
                 $list[] = $item;
-                if ($item['type'] === 'post') $p++; else $c++;
             }
         }
-        return array('list' => $list, 'posts_count' => $p, 'cats_count' => $c);
+        return array('list' => $list);
     }
 }

@@ -1,5 +1,6 @@
 /**
  * هسته کلاینت داشبورد تحلیل لینک‌های داخلی
+ * نسخه عمومی، تفکیک‌شده و بدون نام‌های هاردکد شده
  */
 (function () {
   'use strict';
@@ -12,10 +13,12 @@
 
   function translateType(type) {
     switch (type) {
-      case 'post': return 'مقاله وبلاگ';
-      case 'product_cat': return 'دسته محصول ووکامرس';
-      case 'category': return 'دسته وبلاگ';
-      default: return 'سایر';
+      case 'post': return 'مقاله';
+      case 'page': return 'برگه';
+      case 'product': return 'محصول';
+      case 'product_cat': return 'دسته محصول';
+      case 'category': return 'دسته مقاله';
+      default: return 'محتوای سفارشی';
     }
   }
 
@@ -32,7 +35,7 @@
       scanCurrent: 0,
       hasApiKey: false,
       maskedKey: '',
-      activeModel: 'gemini-1.5-flash',
+      activeModel: 'gemini-3.8-flash',
       modal: { isOpen: false, title: '', contentHtml: '' },
     },
 
@@ -52,10 +55,7 @@
     },
 
     fetchSummary: async function () {
-      try {
-        this.state.summary = await this.apiFetch('/summary');
-        this.render();
-      } catch (e) { console.error(e); }
+      try { this.state.summary = await this.apiFetch('/summary'); this.render(); } catch (e) {}
     },
 
     fetchSettings: async function () {
@@ -63,23 +63,17 @@
         const data = await this.apiFetch('/settings');
         this.state.hasApiKey = data.has_api_key;
         this.state.maskedKey = data.masked_key || '';
-        this.state.activeModel = data.active_model || 'gemini-1.5-flash';
+        this.state.activeModel = data.active_model || 'gemini-3.8-flash';
         this.render();
-      } catch (e) { console.error(e); }
+      } catch (e) {}
     },
 
     fetchItems: async function () {
-      try {
-        this.state.items = await this.apiFetch(`/items?type=${this.state.filterType}`);
-        this.render();
-      } catch (e) { console.error(e); }
+      try { this.state.items = await this.apiFetch(`/items?type=${this.state.filterType}`); this.render(); } catch (e) {}
     },
 
     fetchOrphans: async function () {
-      try {
-        this.state.orphans = await this.apiFetch('/orphans');
-        this.render();
-      } catch (e) { console.error(e); }
+      try { this.state.orphans = await this.apiFetch('/orphans'); this.render(); } catch (e) {}
     },
 
     startBatchScan: async function () {
@@ -94,10 +88,13 @@
 
         const items = queueRes.items;
         this.state.scanTotal = items.length;
-        this.state.scanCurrent = 0;
 
         for (let i = 0; i < items.length; i++) {
-          await this.apiFetch('/scan-item', { method: 'POST', body: JSON.stringify({ id: items[i].id, type: items[i].type }) });
+          try {
+            await this.apiFetch('/scan-item', { method: 'POST', body: JSON.stringify({ id: items[i].id, type: items[i].type }) });
+          } catch (itemError) {
+            console.warn(`اسکن آیتم ${items[i].title} با خطا مواجه شد و رد شد.`);
+          }
           this.state.scanCurrent = i + 1;
           this.state.scanProgress = Math.round(((i + 1) / items.length) * 100);
           this.render();
@@ -107,7 +104,7 @@
         await this.fetchSummary();
         alert('اسکن سایت کامل شد!');
       } catch (err) {
-        alert('خطا در فرآیند اسکن: ' + err.message);
+        alert('خطای سیستمی در دریافت صف اسکن: ' + err.message);
         this.state.isScanning = false;
         this.render();
       }
@@ -127,7 +124,7 @@
             ${details.outgoing_links.length === 0 ? '<p style="color:#94a3b8;">خروجی ندارد.</p>' : `
               <table class="wila-table" style="font-size:0.8rem;">
                 <thead><tr><th>انکر تکست</th><th>آدرس مقصد</th></tr></thead>
-                <tbody>${details.outgoing_links.map(l => `<tr><td style="font-weight:600;">${l.anchor_text}</td><td>${l.target_url}</td></tr>`).join('')}</tbody>
+                <tbody>${details.outgoing_links.map(l => `<tr><td style="font-weight:600;">${l.anchor_text}</td><td style="direction:ltr; text-align:left;">${l.target_url}</td></tr>`).join('')}</tbody>
               </table>
             `}
           </div>
@@ -156,13 +153,19 @@
       }
 
       this.state.modal.isOpen = true;
-      this.state.modal.title = `پیشنهادات هوشمند لینک‌سازی برای: ${title}`;
+      this.state.modal.title = `پیشنهاد هوشمند برای: ${title}`;
       this.state.modal.contentHtml = `<div style="text-align:center; padding: 30px; font-weight:600;">در حال پردازش محتوا توسط مدل ${this.state.activeModel}...</div>`;
       this.render();
 
       try {
         const res = await this.apiFetch('/ai/suggest', { method: 'POST', body: JSON.stringify({ id, type }) });
         if (!res.success) throw new Error(res.message || 'خطا در تولید پاسخ.');
+
+        if (!res.suggestions || res.suggestions.length === 0) {
+            this.state.modal.contentHtml = `<p style="text-align:center; padding:20px;">هوش مصنوعی هیچ صفحه مرتبطی برای لینک‌سازی پیدا نکرد.</p>`;
+            this.render();
+            return;
+        }
 
         let html = '';
         res.suggestions.forEach((s, idx) => {
@@ -184,9 +187,9 @@
 
     testConnection: async function () {
       const input = document.getElementById('wila-api-key-input');
-      const select = document.getElementById('wila-model-select');
+      const modelInput = document.getElementById('wila-model-input');
       const key = input ? input.value.trim() : '';
-      const model = select ? select.value : 'gemini-1.5-flash';
+      const model = modelInput ? modelInput.value.trim() : 'gemini-3.8-flash';
       const resultBox = document.getElementById('wila-test-result');
       const testBtn = document.getElementById('wila-test-api-btn');
 
@@ -206,7 +209,7 @@
           resultBox.innerHTML = `<div style="background:#ecfdf5; padding:14px; font-size:0.825rem; color:#065f46;">
             <div style="font-weight:600;">✅ اتصال موفقیت‌آمیز بود!</div>
             <div>${res.message}</div>
-            <div>مدل: <code>${res.model}</code> | زمان پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌ثانیه</strong></div>
+            <div>مدل: <code>${res.model}</code> | زمان پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌‌ثانیه</strong></div>
           </div>`;
         }
       } catch (err) {
@@ -222,9 +225,9 @@
 
     saveSettings: async function () {
       const input = document.getElementById('wila-api-key-input');
-      const select = document.getElementById('wila-model-select');
+      const modelInput = document.getElementById('wila-model-input');
       const key = input ? input.value.trim() : '';
-      const model = select ? select.value : 'gemini-1.5-flash';
+      const model = modelInput ? modelInput.value.trim() : 'gemini-3.8-flash';
 
       if (!key && !this.state.hasApiKey) {
         alert('لطفاً ابتدا کلید API را وارد کنید.');
@@ -256,16 +259,18 @@
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <h3 style="margin:0 0 4px 0; font-size:1rem; font-weight:600;">پویش و تحلیل ساختار لینک‌های داخلی</h3>
-                <p style="margin:0; font-size:0.8rem; color:#64748b;">${isScanning ? `در حال آنالیز آیتم ${toPersianDigits(scanCurrent)} از ${toPersianDigits(scanTotal)}` : 'برای به‌روزرسانی اطلاعات لینک‌ها، موتور اسکنر را اجرا کنید.'}</p>
+                <p style="margin:0; font-size:0.8rem; color:#64748b;">${isScanning ? `در حال آنالیز آیتم ${toPersianDigits(scanCurrent)} از ${toPersianDigits(scanTotal)}` : 'برای به‌‌روزرسانی اطلاعات لینک‌ها، موتور اسکنر را اجرا کنید.'}</p>
               </div>
               <button class="wila-btn wila-btn-primary" id="wila-start-scan-btn" ${isScanning ? 'disabled' : ''}>${isScanning ? 'در حال اسکن...' : 'شروع اسکن کامل'}</button>
             </div>
             ${isScanning ? `<div class="wila-progress-bar-bg"><div class="wila-progress-bar-fill" style="width: ${scanProgress}%;"></div></div>` : ''}
           </div>
+          
           <div class="wila-grid">
             <div class="wila-card"><div class="wila-card-header"><h3>کل پیوندها</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_links) : '---'}</div></div>
-            <div class="wila-card"><div class="wila-card-header"><h3>دسته‌های محصول</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_product_cats) : '---'}</div></div>
-            <div class="wila-card"><div class="wila-card-header"><h3>مقالات وبلاگ</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_posts) : '---'}</div></div>
+            <div class="wila-card"><div class="wila-card-header"><h3>مقالات</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_posts) : '---'}</div></div>
+            <div class="wila-card"><div class="wila-card-header"><h3>محصولات</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_products) : '---'}</div></div>
+            <div class="wila-card"><div class="wila-card-header"><h3>برگه‌ها</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_pages) : '---'}</div></div>
             <div class="wila-card" style="border-right: 4px solid #ef4444;"><div class="wila-card-header"><h3 style="color:#ef4444;">صفحات یتیم</h3></div><div class="wila-card-value" style="color:#ef4444;">${summary ? toPersianDigits(summary.orphan_count) : '---'}</div></div>
           </div>`;
       } else if (activeTab === 'items') {
@@ -273,15 +278,18 @@
           <div class="wila-table-container">
             <div class="wila-table-toolbar">
               <select class="wila-select" id="wila-filter-type">
-                <option value="all" ${this.state.filterType === 'all' ? 'selected' : ''}>همه بخش‌ها</option>
-                <option value="product_cat" ${this.state.filterType === 'product_cat' ? 'selected' : ''}>دسته‌های محصول</option>
+                <option value="all" ${this.state.filterType === 'all' ? 'selected' : ''}>همه موارد</option>
                 <option value="post" ${this.state.filterType === 'post' ? 'selected' : ''}>مقالات</option>
+                <option value="product" ${this.state.filterType === 'product' ? 'selected' : ''}>محصولات</option>
+                <option value="page" ${this.state.filterType === 'page' ? 'selected' : ''}>برگه‌ها</option>
+                <option value="category" ${this.state.filterType === 'category' ? 'selected' : ''}>دسته‌بندی مقالات</option>
+                <option value="product_cat" ${this.state.filterType === 'product_cat' ? 'selected' : ''}>دسته‌بندی محصولات</option>
               </select>
             </div>
             <table class="wila-table">
               <thead><tr><th>عنوان</th><th>نوع</th><th>ورودی</th><th>خروجی</th><th>عملیات</th></tr></thead>
               <tbody>
-                ${this.state.items.length === 0 ? '<tr><td colspan="5" style="text-align:center; padding:30px;">داده‌ای یافت نشد.</td></tr>' : 
+                ${this.state.items.length === 0 ? '<tr><td colspan="5" style="text-align:center; padding:30px;">داده‌ای یافت نشد. اسکنر را اجرا کنید.</td></tr>' : 
                   this.state.items.map(item => `
                     <tr>
                       <td style="font-weight:600;"><a href="${item.url}" target="_blank" style="color:inherit; text-decoration:none;">${item.title}</a></td>
@@ -323,12 +331,8 @@
               <input type="password" id="wila-api-key-input" class="wila-input" style="width:100%;" placeholder="${hasApiKey ? 'برای جایگزینی کلید تایپ کنید...' : 'AIzaSy...'}" />
             </div>
             <div style="margin-bottom:24px;">
-              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">مدل هوش مصنوعی (مدل‌های دارای سهمیه رایگان):</label>
-              <select id="wila-model-select" class="wila-select" style="width:100%;">
-                <option value="gemini-1.5-flash" ${activeModel === 'gemini-1.5-flash' ? 'selected' : ''}>Gemini 1.5 Flash (سریعترین، همیشه رایگان)</option>
-                <option value="gemini-1.5-flash-8b" ${activeModel === 'gemini-1.5-flash-8b' ? 'selected' : ''}>Gemini 1.5 Flash-8B (سبک و پرسرعت)</option>
-                <option value="gemini-1.5-pro" ${activeModel === 'gemini-1.5-pro' ? 'selected' : ''}>Gemini 1.5 Pro (دقیق و هوشمند)</option>
-              </select>
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">نام دقیق مدل (در صورت تغییر توسط گوگل می‌توانید ویرایش کنید):</label>
+              <input type="text" id="wila-model-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${activeModel}" />
             </div>
             <div style="display:flex; gap:10px;">
               <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
