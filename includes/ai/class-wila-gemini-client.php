@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت ارتباط با Gemini API جهت تست اتصال، ارزیابی سئو و پیشنهادات لینک‌سازی
+ * کلاینت هوشمند ارتباط با Gemini API با قابلیت تشخیص خودکار مدل‌های در دسترس
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -12,24 +12,99 @@ if (!defined('ABSPATH')) {
 class WILA_Gemini_Client {
 
     private $api_key;
-    private $model = 'gemini-1.5-flash';
+    private $default_model = 'gemini-1.5-flash-latest';
 
     public function __construct() {
         $this->api_key = get_option('wila_gemini_api_key', '');
     }
 
-    /**
-     * بررسی معتبر بودن و وجود کلید API
-     */
     public function is_configured() {
         return !empty($this->api_key);
     }
 
+    public function get_active_model() {
+        return get_option('wila_gemini_active_model', $this->default_model);
+    }
+
     /**
-     * تست زنده اتصال به سرور Gemini API
-     *
-     * @param string|null $override_key کلید ورودی جهت تست پیش از ذخیره‌سازی
-     * @return array|WP_Error
+     * دریافت لیست مدل‌های مجاز برای این API Key از گوگل
+     */
+    public function fetch_available_models($override_key = null) {
+        $key = !empty($override_key) ? sanitize_text_field($override_key) : $this->api_key;
+
+        if (empty($key)) {
+            return new WP_Error('missing_api_key', 'کلید API مشخص نشده است.');
+        }
+
+        $url = "https://generativelanguage.googleapis.com/v1beta/models?key=" . urlencode($key);
+
+        $response = wp_remote_get($url, array(
+            'timeout' => 15,
+            'headers' => array('Content-Type' => 'application/json')
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $raw_body = wp_remote_retrieve_body($response);
+        $data = json_decode($raw_body, true);
+
+        if ($code !== 200 || !isset($data['models'])) {
+            $err_msg = isset($data['error']['message']) ? $data['error']['message'] : ('کد خطای سرور: ' . $code);
+            return new WP_Error('list_models_failed', $err_msg);
+        }
+
+        $content_models = array();
+        foreach ($data['models'] as $m) {
+            if (isset($m['supportedGenerationMethods']) && in_array('generateContent', $m['supportedGenerationMethods'], true)) {
+                $content_models[] = str_replace('models/', '', $m['name']);
+            }
+        }
+
+        return $content_models;
+    }
+
+    /**
+     * انتخاب خودکار بهینه‌ترین مدل از بین مدل‌های در دسترس
+     */
+    public function pick_best_model($available_models) {
+        if (empty($available_models)) {
+            return $this->default_model;
+        }
+
+        // اولویت‌بندی مدل‌ها از نظر سرعت، قیمت و کارایی
+        $priority_list = array(
+            'gemini-1.5-flash-latest',
+            'gemini-1.5-flash',
+            'gemini-1.5-flash-001',
+            'gemini-1.5-flash-002',
+            'gemini-1.5-flash-8b',
+            'gemini-2.0-flash',
+            'gemini-2.0-flash-exp',
+            'gemini-1.5-pro-latest',
+            'gemini-1.5-pro',
+            'gemini-pro'
+        );
+
+        foreach ($priority_list as $candidate) {
+            if (in_array($candidate, $available_models, true)) {
+                return $candidate;
+            }
+        }
+
+        foreach ($available_models as $model) {
+            if (stripos($model, 'flash') !== false) {
+                return $model;
+            }
+        }
+
+        return $available_models[0];
+    }
+
+    /**
+     * تست زنده اتصال همراه با اعتبارسنجی خودکار مدل
      */
     public function test_connection($override_key = null) {
         $key = !empty($override_key) ? sanitize_text_field($override_key) : $this->api_key;
@@ -38,8 +113,22 @@ class WILA_Gemini_Client {
             return new WP_Error('missing_api_key', 'هیچ کلید API برای تست ارسال نشده است.');
         }
 
+        // ۱. واکشی مدل‌های مجاز برای این کلید
+        $available_models = $this->fetch_available_models($key);
+        if (is_wp_error($available_models)) {
+            return $available_models;
+        }
+
+        if (empty($available_models)) {
+            return new WP_Error('no_supported_models', 'این کلید API به هیچ مدلی با قابلیت تولید محتوا (generateContent) دسترسی ندارد.');
+        }
+
+        // ۲. انتخاب هوشمند بهترین مدل در دسترس
+        $selected_model = $this->pick_best_model($available_models);
+
+        // ۳. ارسال پینگ تست به مدل انتخاب‌شده
         $start_time = microtime(true);
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key=" . urlencode($key);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$selected_model}:generateContent?key=" . urlencode($key);
 
         $body = array(
             'contents' => array(
@@ -72,11 +161,13 @@ class WILA_Gemini_Client {
         $data = json_decode($raw_body, true);
 
         if ($code === 200) {
+            update_option('wila_gemini_active_model', $selected_model);
+
             return array(
                 'success'    => true,
-                'model'      => $this->model,
+                'model'      => $selected_model,
                 'latency_ms' => $latency,
-                'message'    => 'ارتباط با موفقیت برقرار شد. مدل آماده دریافت درخواست است.'
+                'message'    => 'ارتباط با موفقیت برقرار شد. مدل مناسب با کلید شما شناسایی و فعال گردید.'
             );
         }
 
@@ -86,10 +177,6 @@ class WILA_Gemini_Client {
 
     /**
      * تولید پیشنهادهای استراتژیک لینک‌سازی برای یک صفحه مشخص
-     *
-     * @param int    $target_id شناسه صفحه یا دسته مقصد
-     * @param string $target_type نوع موجودیت (post, product_cat, category)
-     * @return array|WP_Error
      */
     public function generate_link_suggestions($target_id, $target_type) {
         if (!$this->is_configured()) {
@@ -106,8 +193,9 @@ class WILA_Gemini_Client {
             return new WP_Error('no_candidates', 'صفحه کاندیدایی برای لینک‌سازی در سایت موجود نیست.');
         }
 
+        $active_model = $this->get_active_model();
         $prompt = $this->build_analysis_prompt($target_info, $candidates);
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key=" . urlencode($this->api_key);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$active_model}:generateContent?key=" . urlencode($this->api_key);
 
         $body = array(
             'contents' => array(
@@ -232,7 +320,7 @@ class WILA_Gemini_Client {
 مشخصات صفحه مقصد:
 {$target_json}
 
-لیست صفحات موجود در سایت که می‌توانند به عنوان مبدا لینک‌‌سازی استفاده شوند:
+لیست صفحات موجود در سایت که می‌توانند به عنوان مبدا لینک‌سازی استفاده شوند:
 {$candidates_json}
 
 دستورالعمل‌های دقیق:
