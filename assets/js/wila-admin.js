@@ -1,6 +1,6 @@
 /**
  * هسته کلاینت داشبورد تحلیل لینک‌های داخلی
- * نسخه عمومی، تفکیک‌شده و بدون نام‌های هاردکد شده
+ * نسخه اولویت‌بندی شده بر اساس معماری سئو (Silo Structure)
  */
 (function () {
   'use strict';
@@ -9,17 +9,6 @@
     if (n === null || n === undefined) return '';
     const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
     return n.toString().replace(/\d/g, (x) => farsiDigits[x]);
-  }
-
-  function translateType(type) {
-    switch (type) {
-      case 'post': return 'مقاله';
-      case 'page': return 'برگه';
-      case 'product': return 'محصول';
-      case 'product_cat': return 'دسته محصول';
-      case 'category': return 'دسته مقاله';
-      default: return 'محتوای سفارشی';
-    }
   }
 
   const app = {
@@ -93,7 +82,7 @@
           try {
             await this.apiFetch('/scan-item', { method: 'POST', body: JSON.stringify({ id: items[i].id, type: items[i].type }) });
           } catch (itemError) {
-            console.warn(`اسکن آیتم ${items[i].title} با خطا مواجه شد و رد شد.`);
+            console.warn(`خطا در اسکن آیتم رخ داد، عبور به آیتم بعدی...`);
           }
           this.state.scanCurrent = i + 1;
           this.state.scanProgress = Math.round(((i + 1) / items.length) * 100);
@@ -104,7 +93,7 @@
         await this.fetchSummary();
         alert('اسکن سایت کامل شد!');
       } catch (err) {
-        alert('خطای سیستمی در دریافت صف اسکن: ' + err.message);
+        alert('خطا در فرآیند اسکن: ' + err.message);
         this.state.isScanning = false;
         this.render();
       }
@@ -133,7 +122,7 @@
             ${details.incoming_links.length === 0 ? '<p style="color:#ef4444;">صفحه یتیم است.</p>' : `
               <table class="wila-table" style="font-size:0.8rem;">
                 <thead><tr><th>صفحه مبدا</th><th>نوع</th><th>انکر تکست</th></tr></thead>
-                <tbody>${details.incoming_links.map(l => `<tr><td>${l.source_title}</td><td><span class="wila-badge wila-badge-neutral">${translateType(l.source_type)}</span></td><td style="font-weight:600;">${l.anchor_text}</td></tr>`).join('')}</tbody>
+                <tbody>${details.incoming_links.map(l => `<tr><td>${l.source_title}</td><td><span class="wila-badge wila-badge-neutral">${l.type_label}</span></td><td style="font-weight:600;">${l.anchor_text}</td></tr>`).join('')}</tbody>
               </table>
             `}
           </div>
@@ -148,7 +137,7 @@
 
     requestAiSuggestions: async function (id, type, title) {
       if (!this.state.hasApiKey) {
-        alert('لطفاً ابتدا از تب تنظیمات، کلید API را وارد کنید.');
+        alert('لطفاً ابتدا کلید API را وارد کنید.');
         return;
       }
 
@@ -162,7 +151,7 @@
         if (!res.success) throw new Error(res.message || 'خطا در تولید پاسخ.');
 
         if (!res.suggestions || res.suggestions.length === 0) {
-            this.state.modal.contentHtml = `<p style="text-align:center; padding:20px;">هوش مصنوعی هیچ صفحه مرتبطی برای لینک‌سازی پیدا نکرد.</p>`;
+            this.state.modal.contentHtml = `<p style="text-align:center; padding:20px;">هوش مصنوعی هیچ صفحه مرتبطی پیدا نکرد.</p>`;
             this.render();
             return;
         }
@@ -171,7 +160,7 @@
         res.suggestions.forEach((s, idx) => {
           html += `
             <div class="wila-ai-card">
-              <div class="wila-ai-card-title">${toPersianDigits(idx + 1)}. مبدا: ${s.source_title} <span class="wila-badge wila-badge-neutral">${translateType(s.source_type)}</span></div>
+              <div class="wila-ai-card-title">${toPersianDigits(idx + 1)}. مبدا: ${s.source_title} <span class="wila-badge wila-badge-neutral">${s.type_label || s.source_type}</span></div>
               <div style="margin: 6px 0; font-size:0.825rem;"><strong>انکر تکست‌ها:</strong> ${s.recommended_anchor_texts.map(a => `<span class="wila-badge wila-badge-success" style="margin-left:4px;">${a}</span>`).join('')}</div>
               <div style="margin: 6px 0; font-size:0.825rem;"><strong>محل قرارگیری:</strong> ${s.placement_guide}</div>
               <div style="margin-top: 8px; font-size:0.8rem; color:#64748b; background:#ffffff; padding:8px; border-radius:4px; border:1px dashed #cbd5e1;"><strong>تحلیل:</strong> ${s.reasoning}</div>
@@ -180,7 +169,7 @@
         this.state.modal.contentHtml = html;
         this.render();
       } catch (err) {
-        this.state.modal.contentHtml = `<p style="color:#ef4444; padding:20px;">خطا: ${err.message}</p>`;
+        this.state.modal.contentHtml = `<p style="color:#ef4444; padding:20px; line-height: 1.6;">${err.message}</p>`;
         this.render();
       }
     },
@@ -194,7 +183,7 @@
       const testBtn = document.getElementById('wila-test-api-btn');
 
       if (!key && !this.state.hasApiKey) {
-        alert('لطفاً ابتدا کلید API را وارد کنید.');
+        alert('لطفاً کلید API را وارد کنید.');
         return;
       }
 
@@ -209,12 +198,12 @@
           resultBox.innerHTML = `<div style="background:#ecfdf5; padding:14px; font-size:0.825rem; color:#065f46;">
             <div style="font-weight:600;">✅ اتصال موفقیت‌آمیز بود!</div>
             <div>${res.message}</div>
-            <div>مدل: <code>${res.model}</code> | زمان پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌‌ثانیه</strong></div>
+            <div>مدل: <code>${res.model}</code> | پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌‌ثانیه</strong></div>
           </div>`;
         }
       } catch (err) {
         if (resultBox) {
-          resultBox.innerHTML = `<div style="background:#fef2f2; padding:14px; font-size:0.825rem; color:#991b1b;">
+          resultBox.innerHTML = `<div style="background:#fef2f2; padding:14px; font-size:0.825rem; color:#991b1b; line-height:1.6;">
             <div style="font-weight:600;">❌ خطا در برقراری اتصال:</div><div>${err.message}</div>
           </div>`;
         }
@@ -236,7 +225,6 @@
 
       try {
         await this.apiFetch('/settings', { method: 'POST', body: JSON.stringify({ api_key: key, model: model }) });
-        if (input && key) input.value = '';
         alert('تنظیمات با موفقیت ذخیره شد.');
         await this.fetchSettings();
       } catch (e) {
@@ -254,6 +242,16 @@
       let contentHtml = '';
 
       if (activeTab === 'overview') {
+        let cardsHtml = '';
+        if (summary && summary.breakdown) {
+          Object.keys(summary.breakdown).forEach(key => {
+            const b = summary.breakdown[key];
+            if (b.count > 0) {
+              cardsHtml += `<div class="wila-card"><div class="wila-card-header"><h3>${b.label}</h3></div><div class="wila-card-value">${toPersianDigits(b.count)}</div></div>`;
+            }
+          });
+        }
+
         contentHtml = `
           <div class="wila-progress-wrapper">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -267,76 +265,129 @@
           </div>
           
           <div class="wila-grid">
-            <div class="wila-card"><div class="wila-card-header"><h3>کل پیوندها</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_links) : '---'}</div></div>
-            <div class="wila-card"><div class="wila-card-header"><h3>مقالات</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_posts) : '---'}</div></div>
-            <div class="wila-card"><div class="wila-card-header"><h3>محصولات</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_products) : '---'}</div></div>
-            <div class="wila-card"><div class="wila-card-header"><h3>برگه‌ها</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_pages) : '---'}</div></div>
+            <div class="wila-card"><div class="wila-card-header"><h3>کل پیوندهای یافت‌شده</h3></div><div class="wila-card-value">${summary ? toPersianDigits(summary.total_links) : '---'}</div></div>
+            ${cardsHtml}
             <div class="wila-card" style="border-right: 4px solid #ef4444;"><div class="wila-card-header"><h3 style="color:#ef4444;">صفحات یتیم</h3></div><div class="wila-card-value" style="color:#ef4444;">${summary ? toPersianDigits(summary.orphan_count) : '---'}</div></div>
           </div>`;
       } else if (activeTab === 'items') {
+        let optionsHtml = `<option value="all" ${this.state.filterType === 'all' ? 'selected' : ''}>همه موارد</option>`;
+        if (summary && summary.breakdown) {
+          Object.keys(summary.breakdown).forEach(key => {
+            const b = summary.breakdown[key];
+            if (b.count > 0) {
+              optionsHtml += `<option value="${key}" ${this.state.filterType === key ? 'selected' : ''}>${b.label}</option>`;
+            }
+          });
+        }
+
         contentHtml = `
           <div class="wila-table-container">
             <div class="wila-table-toolbar">
               <select class="wila-select" id="wila-filter-type">
-                <option value="all" ${this.state.filterType === 'all' ? 'selected' : ''}>همه موارد</option>
-                <option value="post" ${this.state.filterType === 'post' ? 'selected' : ''}>مقالات</option>
-                <option value="product" ${this.state.filterType === 'product' ? 'selected' : ''}>محصولات</option>
-                <option value="page" ${this.state.filterType === 'page' ? 'selected' : ''}>برگه‌ها</option>
-                <option value="category" ${this.state.filterType === 'category' ? 'selected' : ''}>دسته‌بندی مقالات</option>
-                <option value="product_cat" ${this.state.filterType === 'product_cat' ? 'selected' : ''}>دسته‌بندی محصولات</option>
+                ${optionsHtml}
               </select>
             </div>
             <table class="wila-table">
-              <thead><tr><th>عنوان</th><th>نوع</th><th>ورودی</th><th>خروجی</th><th>عملیات</th></tr></thead>
+              <thead><tr><th>عنوان</th><th>نوع محتوا</th><th>ورودی</th><th>خروجی</th><th>عملیات</th></tr></thead>
               <tbody>
                 ${this.state.items.length === 0 ? '<tr><td colspan="5" style="text-align:center; padding:30px;">داده‌ای یافت نشد. اسکنر را اجرا کنید.</td></tr>' : 
                   this.state.items.map(item => `
                     <tr>
                       <td style="font-weight:600;"><a href="${item.url}" target="_blank" style="color:inherit; text-decoration:none;">${item.title}</a></td>
-                      <td><span class="wila-badge wila-badge-neutral">${translateType(item.type)}</span></td>
+                      <td><span class="wila-badge wila-badge-neutral">${item.type_label || item.type}</span></td>
                       <td><strong style="color: ${item.in_links === 0 ? '#ef4444' : '#0f172a'};">${toPersianDigits(item.in_links)}</strong></td>
                       <td>${toPersianDigits(item.out_links)}</td>
-                      <td><button class="wila-btn wila-btn-outline wila-btn-sm wila-inspect-btn" data-id="${item.id}" data-type="${item.type}" data-title="${item.title}">مشاهده لینک‌ها</button></td>
+                      <td><button class="wila-btn wila-btn-outline wila-btn-sm wila-inspect-btn" data-id="${item.id}" data-type="${item.type}" data-title="${item.title}">مشاهده</button></td>
                     </tr>
                   `).join('')}
               </tbody>
             </table>
           </div>`;
       } else if (activeTab === 'orphans') {
+        
+        // منطق گروه‌بندی اولویت‌دار سئو
+        const priorityGroups = [
+          { id: 'product_cat', title: 'اولویت ۱: دسته‌بندی محصولات', desc: 'هاب‌های اصلی توزیع اعتبار و هدایت مشتری (ستون‌های درآمدزا).', items: [] },
+          { id: 'product', title: 'اولویت ۲: محصولات', desc: 'صفحات تبدیل (Conversion) که برای کسب رتبه نیاز به لینک ورودی دارند.', items: [] },
+          { id: 'category', title: 'اولویت ۳: دسته‌بندی مقالات', desc: 'هاب‌های محتوایی (Pillar Pages) سایت.', items: [] },
+          { id: 'posts', title: 'اولویت ۴: مقالات و محتواهای سفارشی', desc: 'تقویت‌کننده کلمات کلیدی طولانی (Long-tail).', items: [] },
+          { id: 'page', title: 'اولویت ۵: برگه‌های عمومی', desc: 'صفحاتی که نیاز کمتری به دریافت لینک متنی درون‌مقاله‌ای دارند.', items: [] }
+        ];
+
+        this.state.orphans.forEach(item => {
+          if (item.type === 'product_cat') priorityGroups[0].items.push(item);
+          else if (item.type === 'product') priorityGroups[1].items.push(item);
+          else if (item.type === 'category') priorityGroups[2].items.push(item);
+          else if (item.type === 'page') priorityGroups[4].items.push(item);
+          else priorityGroups[3].items.push(item); // post و سایر محتواهای سفارشی
+        });
+
+        let orphansHtml = '';
+        if (this.state.orphans.length === 0) {
+          orphansHtml = '<div style="text-align:center; padding:40px; color:#64748b;">هیچ صفحه یتیمی یافت نشد. سایت شما از نظر لینک‌سازی داخلی عالی است!</div>';
+        } else {
+          priorityGroups.forEach(group => {
+            if (group.items.length > 0) {
+              orphansHtml += `
+                <div style="margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                  <div style="background: #f8fafc; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                      <h3 style="margin: 0 0 4px 0; color: #0f172a; font-size: 1rem; font-weight: 600;">${group.title}</h3>
+                      <p style="margin: 0; color: #64748b; font-size: 0.825rem;">${group.desc}</p>
+                    </div>
+                    <span class="wila-badge wila-badge-warning">${toPersianDigits(group.items.length)} مورد</span>
+                  </div>
+                  <table class="wila-table" style="margin:0; border:none; width:100%;">
+                    <thead>
+                      <tr style="background:transparent;">
+                        <th style="padding-left:20px; padding-right:20px;">عنوان محتوا</th>
+                        <th>نوع سیستم</th>
+                        <th style="text-align:left; padding-left:20px;">عملیات هوش مصنوعی</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${group.items.map(item => `
+                        <tr>
+                          <td style="font-weight:600; padding-left:20px; padding-right:20px;"><a href="${item.url}" target="_blank" style="color:#2563eb; text-decoration:none;">${item.title}</a></td>
+                          <td><span class="wila-badge wila-badge-neutral">${item.type_label || item.type}</span></td>
+                          <td style="text-align:left; padding-left:20px;">
+                            <button class="wila-btn wila-btn-primary wila-btn-sm wila-ai-btn" data-id="${item.id}" data-type="${item.type}" data-title="${item.title}">
+                              ✨ پیشنهاد لینک
+                            </button>
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `;
+            }
+          });
+        }
+
         contentHtml = `
-          <div class="wila-table-container">
-            <div style="padding:16px 20px; background:#fef2f2; border-bottom:1px solid #e2e8f0;">
-              <h3 style="margin:0; color:#991b1b; font-size:0.95rem;">فرصت‌های لینک‌سازی (Orphan Pages)</h3>
+          <div class="wila-table-container" style="background:transparent; border:none; box-shadow:none; padding:0;">
+            <div style="padding:16px 20px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; margin-bottom:24px;">
+              <h3 style="margin:0 0 6px 0; color:#991b1b; font-size:1rem;">فرصت‌های طلایی لینک‌‌سازی داخلی</h3>
+              <p style="margin:0; color:#b91c1c; font-size:0.85rem;">صفحات زیر هیچ لینک ورودی ندارند. برای بالاترین تاثیر سئو، لینک‌سازی را از باکس <strong>اولویت ۱</strong> آغاز کنید.</p>
             </div>
-            <table class="wila-table">
-              <thead><tr><th>عنوان</th><th>نوع</th><th>پیشنهاد هوش مصنوعی</th></tr></thead>
-              <tbody>
-                ${this.state.orphans.length === 0 ? '<tr><td colspan="3" style="text-align:center; padding:30px;">موردی یافت نشد.</td></tr>' : 
-                  this.state.orphans.map(item => `
-                    <tr>
-                      <td style="font-weight:600;"><a href="${item.url}" target="_blank" style="color:inherit; text-decoration:none;">${item.title}</a></td>
-                      <td><span class="wila-badge wila-badge-neutral">${translateType(item.type)}</span></td>
-                      <td><button class="wila-btn wila-btn-primary wila-btn-sm wila-ai-btn" data-id="${item.id}" data-type="${item.type}" data-title="${item.title}">✨ پیشنهاد با Gemini</button></td>
-                    </tr>
-                  `).join('')}
-              </tbody>
-            </table>
+            ${orphansHtml}
           </div>`;
       } else if (activeTab === 'settings') {
         contentHtml = `
           <div class="wila-card" style="max-width:640px;">
             <div class="wila-card-header"><h3 style="font-weight:600;">تنظیمات هوش مصنوعی Google Gemini</h3></div>
             <div style="margin-bottom:16px;">
-              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">کلید API: ${hasApiKey ? `<span class="wila-badge wila-badge-success">فعال (${maskedKey})</span>` : ''}</label>
-              <input type="password" id="wila-api-key-input" class="wila-input" style="width:100%;" placeholder="${hasApiKey ? 'برای جایگزینی کلید تایپ کنید...' : 'AIzaSy...'}" />
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">کلید API: ${hasApiKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
+              <input type="text" id="wila-api-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${hasApiKey ? maskedKey : ''}" placeholder="AIzaSy..." />
             </div>
             <div style="margin-bottom:24px;">
-              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">نام دقیق مدل (در صورت تغییر توسط گوگل می‌توانید ویرایش کنید):</label>
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">نام دقیق مدل:</label>
               <input type="text" id="wila-model-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${activeModel}" />
             </div>
             <div style="display:flex; gap:10px;">
               <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
-              <button class="wila-btn wila-btn-outline" id="wila-test-api-btn">تست اتصال API</button>
+              <button class="wila-btn wila-btn-outline" id="wila-test-api-btn">تست اتصال</button>
             </div>
             <div id="wila-test-result" style="margin-top:16px; display:none;"></div>
           </div>`;
@@ -345,8 +396,8 @@
       this.root.innerHTML = `
         <div class="wila-header"><div class="wila-header-title"><h1>لینکر | تحلیل پیوند یکتا و لینک‌سازی</h1></div></div>
         <div class="wila-tabs">
-          <button class="wila-tab-btn ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview">پیشخوان</button>
-          <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر</button>
+          <button class="wila-tab-btn ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview">پیشخوان آماری</button>
+          <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر پیوندها</button>
           <button class="wila-tab-btn ${activeTab === 'orphans' ? 'active' : ''}" data-tab="orphans">صفحات یتیم</button>
           <button class="wila-tab-btn ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">تنظیمات</button>
         </div>

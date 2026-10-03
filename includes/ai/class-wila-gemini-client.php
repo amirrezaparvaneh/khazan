@@ -43,7 +43,7 @@ class WILA_Gemini_Client {
             return new WP_Error('missing_api_key', 'کلید API وارد نشده است.');
         }
 
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($key);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . urlencode($key);
 
         $body = array(
             'contents' => array(array('parts' => array(array('text' => 'Ping')))),
@@ -70,8 +70,12 @@ class WILA_Gemini_Client {
         if ($code === 200) {
             return array('success' => true, 'model' => $model, 'latency_ms' => $latency, 'message' => 'ارتباط موفقیت‌آمیز بود!');
         }
+        
+        if ($code === 503 || $code === 429) {
+            return new WP_Error('api_error', 'سرورهای گوگل در حال حاضر ترافیک بالایی دارند. لطفاً چند دقیقه دیگر مجدداً تلاش کنید.');
+        }
 
-        $err_msg = isset($data['error']['message']) ? $data['error']['message'] : ('کد وضعیت سرور: ' . $code);
+        $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : ('کد وضعیت سرور: ' . $code);
         return new WP_Error('api_error', $err_msg, array('status' => $code));
     }
 
@@ -87,7 +91,7 @@ class WILA_Gemini_Client {
         $model = $this->get_active_model();
         $prompt = $this->build_analysis_prompt($target_info, $candidates);
         
-        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key=" . urlencode($this->api_key);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . urlencode($this->api_key);
 
         $body = array(
             'contents' => array(array('parts' => array(array('text' => $prompt)))),
@@ -105,9 +109,14 @@ class WILA_Gemini_Client {
         $code = wp_remote_retrieve_response_code($response);
         $raw = wp_remote_retrieve_body($response);
 
+        if ($code === 503 || $code === 429) {
+            return new WP_Error('gemini_error', 'سرورهای هوش مصنوعی گوگل در حال حاضر شلوغ هستند (ترافیک بالا). لطفاً دقایقی دیگر مجدداً تلاش کنید.');
+        }
+
         if ($code !== 200) {
             $err = json_decode($raw, true);
-            return new WP_Error('gemini_error', isset($err['error']['message']) ? $err['error']['message'] : 'خطای سرور گوگل.');
+            $msg = isset($err['error']['message']) ? sanitize_text_field($err['error']['message']) : 'خطای سرور گوگل.';
+            return new WP_Error('gemini_error', $msg);
         }
 
         $res = json_decode($raw, true);
@@ -126,11 +135,23 @@ class WILA_Gemini_Client {
         if (in_array($type, $post_types)) {
             $post = get_post($id);
             if (!$post) return null;
-            return array('id' => $id, 'type' => $type, 'title' => $post->post_title, 'url' => get_permalink($id), 'excerpt' => wp_strip_all_tags(wp_trim_words($post->post_content, 50)));
+            return array(
+                'id' => $id, 
+                'type' => $type, 
+                'title' => $post->post_title, 
+                'url' => get_permalink($id), 
+                'excerpt' => wp_strip_all_tags(wp_trim_words($post->post_content, 50))
+            );
         }
         $term = get_term($id, $type);
         if (!$term || is_wp_error($term)) return null;
-        return array('id' => $id, 'type' => $type, 'title' => $term->name, 'url' => get_term_link($term), 'excerpt' => !empty($term->description) ? wp_strip_all_tags($term->description) : 'بدون توضیح');
+        return array(
+            'id' => $id, 
+            'type' => $type, 
+            'title' => $term->name, 
+            'url' => get_term_link($term), 
+            'excerpt' => !empty($term->description) ? wp_strip_all_tags($term->description) : 'بدون توضیح'
+        );
     }
 
     private function get_candidate_sources($exclude_id, $exclude_type) {
@@ -145,7 +166,12 @@ class WILA_Gemini_Client {
             'exclude' => !taxonomy_exists($exclude_type) ? array($exclude_id) : array()
         ));
         foreach ($posts as $p) {
-            $candidates[] = array('id' => $p->ID, 'type' => $p->post_type, 'title' => $p->post_title, 'summary' => wp_strip_all_tags(wp_trim_words($p->post_content, 35)));
+            $candidates[] = array(
+                'id' => $p->ID, 
+                'type' => $p->post_type, 
+                'title' => $p->post_title, 
+                'summary' => wp_strip_all_tags(wp_trim_words($p->post_content, 35))
+            );
         }
 
         $taxonomies = get_taxonomies(array('public' => true), 'names');
@@ -159,7 +185,12 @@ class WILA_Gemini_Client {
         
         if (!is_wp_error($terms)) {
             foreach ($terms as $t) {
-                $candidates[] = array('id' => $t->term_id, 'type' => $t->taxonomy, 'title' => $t->name, 'summary' => !empty($t->description) ? wp_strip_all_tags(wp_trim_words($t->description, 25)) : 'دسته‌بندی');
+                $candidates[] = array(
+                    'id' => $t->term_id, 
+                    'type' => $t->taxonomy, 
+                    'title' => $t->name, 
+                    'summary' => !empty($t->description) ? wp_strip_all_tags(wp_trim_words($t->description, 25)) : 'دسته‌بندی'
+                );
             }
         }
 
