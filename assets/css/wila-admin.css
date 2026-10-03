@@ -1,0 +1,356 @@
+@import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+
+:root {
+  --wila-font: 'Vazirmatn', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --wila-bg: #f8fafc;
+  --wila-card-bg: #ffffff;
+  --wila-border: #e2e8f0;
+  --wila-text-primary: #0f172a;
+  --wila-text-muted: #64748b;
+  --wila-primary: #0f172a;
+  --wila-primary-hover: #1e293b;
+  --wila-primary-text: #ffffff;
+  --wila-destructive: #ef4444;
+  --wila-success: #10b981;
+  --wila-warning: #f59e0b;
+  --wila-ring: rgba(15, 23, 42, 0.15);
+  --wila-radius: 0.5rem;
+}
+
+#wila-app-root {
+  font-family: var(--wila-font);
+  direction: rtl;
+  text-align: right;
+  max-width: 1280px;
+  margin: 20px 20px 40px 0;
+  color: var(--wila-text-primary);
+  box-sizing: border-box;
+}
+
+#wila-app-root * {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+/* هدر اصلی داشبورد */
+.wila-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--wila-border);
+}
+
+.wila-header-title h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--wila-text-primary);
+  margin: 0 0 6px 0;
+}
+
+.wila-header-title p {
+  color: var(--wila-text-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* تب‌بندی shadcn */
+.wila-tabs {
+  display: inline-flex;
+  background-color: #f1f5f9;
+  padding: 4px;
+  border-radius: var(--wila-radius);
+  margin-bottom: 24px;
+}
+
+.wila-tab-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 18px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wila-text-muted);
+  border-radius: calc(var(--wila-radius) - 2px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.wila-tab-btn.active {
+  background: var(--wila-card-bg);
+  color: var(--wila-text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* کارت‌های آماری Metrics Grid */
+.wila-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.wila-card {
+  background: var(--wila-card-bg);
+  border: 1px solid var(--wila-border);
+  border-radius: var(--wila-radius);
+  padding: 20px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.wila-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.wila-card-header h3 {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--wila-text-muted);
+  margin: 0;
+}
+
+.wila-card-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--wila-text-primary);
+  margin: 0;
+}
+
+.wila-card-desc {
+  font-size: 0.775rem;
+  color: var(--wila-text-muted);
+  margin-top: 6px;
+}
+
+/* دکمه‌های shadcn */
+.wila-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--wila-radius);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.wila-btn-primary {
+  background: var(--wila-primary);
+  color: var(--wila-primary-text);
+}
+
+.wila-btn-primary:hover {
+  background: var(--wila-primary-hover);
+}
+
+.wila-btn-outline {
+  background: #ffffff;
+  border-color: var(--wila-border);
+  color: var(--wila-text-primary);
+}
+
+.wila-btn-outline:hover {
+  background: #f8fafc;
+}
+
+.wila-btn-sm {
+  padding: 4px 10px;
+  font-size: 0.775rem;
+}
+
+/* نوار پیشرفت اسکن */
+.wila-progress-wrapper {
+  background: var(--wila-card-bg);
+  border: 1px solid var(--wila-border);
+  border-radius: var(--wila-radius);
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.wila-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.wila-progress-bar-fill {
+  height: 100%;
+  background-color: #0f172a;
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* جدول داده‌ها */
+.wila-table-container {
+  background: var(--wila-card-bg);
+  border: 1px solid var(--wila-border);
+  border-radius: var(--wila-radius);
+  overflow: hidden;
+}
+
+.wila-table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--wila-border);
+  gap: 12px;
+}
+
+.wila-input, .wila-select {
+  border: 1px solid var(--wila-border);
+  border-radius: calc(var(--wila-radius) - 2px);
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  outline: none;
+  background: #ffffff;
+}
+
+.wila-input:focus, .wila-select:focus {
+  border-color: var(--wila-primary);
+  box-shadow: 0 0 0 2px var(--wila-ring);
+}
+
+.wila-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: right;
+  font-size: 0.875rem;
+}
+
+.wila-table th {
+  background: #f8fafc;
+  color: var(--wila-text-muted);
+  font-weight: 500;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wila-border);
+}
+
+.wila-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--wila-border);
+  color: var(--wila-text-primary);
+}
+
+.wila-table tr:last-child td {
+  border-bottom: none;
+}
+
+.wila-table tr:hover td {
+  background: #fafafa;
+}
+
+/* بچ‌ها (Badges) */
+.wila-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.wila-badge-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.wila-badge-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.wila-badge-neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* مودال‌ها */
+.wila-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+}
+
+.wila-modal {
+  background: #ffffff;
+  border-radius: var(--wila-radius);
+  border: 1px solid var(--wila-border);
+  width: 100%;
+  max-width: 720px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.wila-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--wila-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wila-modal-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.wila-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  font-size: 0.875rem;
+}
+
+.wila-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--wila-border);
+  display: flex;
+  justify-content: flex-end;
+  background: #f8fafc;
+  border-bottom-left-radius: var(--wila-radius);
+  border-bottom-right-radius: var(--wila-radius);
+}
+
+/* کارت پیشنهادات AI */
+.wila-ai-card {
+  border: 1px solid #e2e8f0;
+  border-radius: var(--wila-radius);
+  padding: 16px;
+  margin-bottom: 14px;
+  background: #f8fafc;
+}
+
+.wila-ai-card-title {
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+/* فوتر داشبورد */
+.wila-footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--wila-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.825rem;
+  color: var(--wila-text-muted);
+}

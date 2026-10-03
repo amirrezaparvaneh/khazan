@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
- * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با Gemini AI
+ * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با Gemini AI
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -49,6 +49,7 @@ final class WP_Internal_Link_Analyzer {
 
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'register_admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
     }
 
     public function activate() {
@@ -68,13 +69,40 @@ final class WP_Internal_Link_Analyzer {
     public function register_admin_menu() {
         add_menu_page(
             'تحلیل لینک‌های داخلی',
-            'لینک‌سازی داخلی',
+            'لینک‌‌سازی داخلی',
             'manage_options',
             'wila-dashboard',
             array($this, 'render_dashboard_view'),
             'dashicons-admin-links',
             30
         );
+    }
+
+    public function enqueue_admin_assets($hook_suffix) {
+        // لود استایل و اسکریپت منحصراً در صفحه اختصاصی افزونه
+        if ($hook_suffix !== 'toplevel_page_wila-dashboard') {
+            return;
+        }
+
+        wp_enqueue_style(
+            'wila-admin-style',
+            WILA_PLUGIN_URL . 'assets/css/wila-admin.css',
+            array(),
+            WILA_VERSION
+        );
+
+        wp_enqueue_script(
+            'wila-admin-script',
+            WILA_PLUGIN_URL . 'assets/js/wila-admin.js',
+            array(),
+            WILA_VERSION,
+            true
+        );
+
+        wp_localize_script('wila-admin-script', 'wilaData', array(
+            'restUrl' => esc_url_raw(rest_url()),
+            'nonce'   => wp_create_nonce('wp_rest'),
+        ));
     }
 
     public function render_dashboard_view() {
