@@ -27,6 +27,7 @@ class WILA_REST_Controller {
         ));
 
         register_rest_route($this->namespace, '/ai/suggest', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_ai_suggestions'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/ai/planner', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_content_blueprint'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_gemini_connection'), 'permission_callback' => array($this, 'check_permission')));
     }
 
@@ -144,25 +145,57 @@ class WILA_REST_Controller {
     }
 
     public function get_settings() {
-        $key = trim(get_option('wila_gemini_api_key', ''));
-        $model = get_option('wila_gemini_active_model', 'gemini-3.8-flash');
+        $provider = get_option('wila_ai_provider', 'gemini');
+        
+        $gemini_key = trim(get_option('wila_gemini_api_key', ''));
+        $gemini_model = get_option('wila_gemini_active_model', 'gemini-3.8-flash');
+        
+        $openrouter_key = trim(get_option('wila_openrouter_api_key', ''));
+        $openrouter_model = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
+
+        $homepage_keywords = get_option('wila_homepage_keywords', '');
+
         return rest_ensure_response(array(
-            'has_api_key'  => !empty($key),
-            'masked_key'   => !empty($key) ? (substr($key, 0, 6) . '...' . substr($key, -4)) : '',
-            'active_model' => $model
+            'provider'           => $provider,
+            'has_gemini_key'     => !empty($gemini_key),
+            'gemini_masked_key'  => !empty($gemini_key) ? (substr($gemini_key, 0, 6) . '...' . substr($gemini_key, -4)) : '',
+            'gemini_model'       => $gemini_model,
+            'has_openrouter_key' => !empty($openrouter_key),
+            'openrouter_masked_key' => !empty($openrouter_key) ? (substr($openrouter_key, 0, 6) . '...' . substr($openrouter_key, -4)) : '',
+            'openrouter_model'   => $openrouter_model,
+            'homepage_keywords'  => $homepage_keywords
         ));
     }
 
     public function save_settings($request) {
-        $params  = $request->get_json_params();
-        $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : '';
-        $model   = isset($params['model']) ? sanitize_text_field($params['model']) : 'gemini-3.8-flash';
+        $params   = $request->get_json_params();
+        $provider = isset($params['provider']) ? sanitize_text_field($params['provider']) : 'gemini';
+        
+        update_option('wila_ai_provider', $provider);
 
-        update_option('wila_gemini_active_model', $model);
-        if (!empty($api_key) && strpos($api_key, '...') === false) {
-            update_option('wila_gemini_api_key', $api_key);
+        if (isset($params['homepage_keywords'])) {
+            update_option('wila_homepage_keywords', sanitize_textarea_field($params['homepage_keywords']));
         }
-        return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات ذخیره شد.'));
+
+        if ($provider === 'openrouter') {
+            $key   = isset($params['openrouter_api_key']) ? trim(sanitize_text_field($params['openrouter_api_key'])) : '';
+            $model = isset($params['openrouter_model']) ? sanitize_text_field($params['openrouter_model']) : 'qwen/qwen3.8-27b:free';
+            
+            update_option('wila_openrouter_active_model', $model);
+            if (!empty($key) && strpos($key, '...') === false) {
+                update_option('wila_openrouter_api_key', $key);
+            }
+        } else {
+            $key   = isset($params['gemini_api_key']) ? trim(sanitize_text_field($params['gemini_api_key'])) : '';
+            $model = isset($params['gemini_model']) ? sanitize_text_field($params['gemini_model']) : 'gemini-3.8-flash';
+            
+            update_option('wila_gemini_active_model', $model);
+            if (!empty($key) && strpos($key, '...') === false) {
+                update_option('wila_gemini_api_key', $key);
+            }
+        }
+
+        return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات با موفقیت ذخیره شد.'));
     }
 
     public function generate_ai_suggestions($request) {
@@ -186,17 +219,49 @@ class WILA_REST_Controller {
         return rest_ensure_response(array('success' => true, 'suggestions' => $suggestions));
     }
 
+    public function generate_content_blueprint($request) {
+        try {
+            $params = $request->get_json_params();
+            $gemini = new WILA_Gemini_Client();
+            
+            $clean_params = array(
+                'h1_title'         => isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : '',
+                'focus_keyword'    => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
+                'long_tail'        => isset($params['long_tail']) ? sanitize_text_field($params['long_tail']) : '',
+                'content_type'     => isset($params['content_type']) ? sanitize_text_field($params['content_type']) : '',
+                'funnel_stage'     => isset($params['funnel_stage']) ? sanitize_text_field($params['funnel_stage']) : '',
+                'word_count'       => isset($params['word_count']) ? absint($params['word_count']) : 1000,
+            );
+
+            $blueprint = $gemini->generate_content_blueprint($clean_params);
+            if (is_wp_error($blueprint)) {
+                return $blueprint;
+            }
+
+            return rest_ensure_response(array('success' => true, 'blueprint' => $blueprint));
+        } catch (Exception $e) {
+            return new WP_Error('rest_blueprint_error', $e->getMessage());
+        }
+    }
+
     public function test_gemini_connection($request) {
-        $params = $request->get_json_params();
-        $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : null;
-        $model   = isset($params['model']) ? sanitize_text_field($params['model']) : null;
+        $params   = $request->get_json_params();
+        $provider = isset($params['provider']) ? sanitize_text_field($params['provider']) : 'gemini';
+        
+        if ($provider === 'openrouter') {
+            $api_key = isset($params['openrouter_api_key']) ? trim(sanitize_text_field($params['openrouter_api_key'])) : null;
+            $model   = isset($params['openrouter_model']) ? sanitize_text_field($params['openrouter_model']) : null;
+        } else {
+            $api_key = isset($params['gemini_api_key']) ? trim(sanitize_text_field($params['gemini_api_key'])) : null;
+            $model   = isset($params['gemini_model']) ? sanitize_text_field($params['model']) : null;
+        }
 
         if (!empty($api_key) && strpos($api_key, '...') !== false) {
             $api_key = null;
         }
 
         $gemini = new WILA_Gemini_Client();
-        $result = $gemini->test_connection($api_key, $model);
+        $result = $gemini->test_connection($api_key, $model, $provider);
 
         if (is_wp_error($result)) {
             return new WP_Error($result->get_error_code(), $result->get_error_message(), array('status' => 400));
