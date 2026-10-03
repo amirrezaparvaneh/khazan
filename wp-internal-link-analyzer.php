@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
+ * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌‌سازی داخلی
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
  * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با Gemini AI
  * Version:           1.0.0
@@ -12,18 +12,14 @@
  */
 
 if (!defined('ABSPATH')) {
-    exit; // خروج در صورت دسترسی مستقیم
+    exit;
 }
 
-// تعریف ثوابت پلاگین
 define('WILA_VERSION', '1.0.0');
 define('WILA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WILA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WILA_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
-/**
- * کلاس اصلی راه انداز افزونه
- */
 final class WP_Internal_Link_Analyzer {
 
     private static $instance = null;
@@ -36,22 +32,14 @@ final class WP_Internal_Link_Analyzer {
     }
 
     private function __construct() {
-        $this->check_requirements();
         $this->includes();
         $this->init_hooks();
     }
 
-    private function check_requirements() {
-        if (version_compare(PHP_VERSION, '7.4', '<')) {
-            add_action('admin_notices', function() {
-                echo '<div class="error"><p>' . esc_html__('افزونه لینکر برای اجرا حداقل به نسخه PHP 7.4 نیاز دارد.', 'wp-internal-link-analyzer') . '</p></div>';
-            });
-            return;
-        }
-    }
-
     private function includes() {
-        // فایل‌های مراحل بعدی در اینجا include خواهند شد
+        require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
+        require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
+        // در گام‌های بعد: REST API و Gemini Client اضافه خواهند شد
     }
 
     private function init_hooks() {
@@ -62,12 +50,12 @@ final class WP_Internal_Link_Analyzer {
     }
 
     public function activate() {
-        // ایجاد جداول اختصاصی پایگاه‌داده در گام بعدی
+        WILA_DB::create_tables();
         update_option('wila_db_version', WILA_VERSION);
     }
 
     public function deactivate() {
-        // پاکسازی صف‌های زمان‌بندی‌شده در صورت نیاز
+        // در صورت لزوم لاجیک پاکسازی
     }
 
     public function register_admin_menu() {
@@ -83,14 +71,10 @@ final class WP_Internal_Link_Analyzer {
     }
 
     public function render_dashboard_view() {
-        echo '<div class="wrap">';
-        echo '<h1>' . esc_html__('سامانه تحلیل لینک‌سازی داخلی', 'wp-internal-link-analyzer') . '</h1>';
-        echo '<p>' . esc_html__('هسته اولیه با موفقیت لود شد. آماده برای پیاده‌سازی دیتابیس و اسکنر.', 'wp-internal-link-analyzer') . '</p>';
-        echo '</div>';
+        echo '<div id="wila-app-root"></div>';
     }
 }
 
-// راه‌اندازی اولیه
 function wila_run_plugin() {
     return WP_Internal_Link_Analyzer::instance();
 }
