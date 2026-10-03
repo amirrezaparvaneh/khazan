@@ -1,6 +1,6 @@
 /**
  * هسته کلاینت داشبورد تحلیل لینک‌های داخلی
- * طراحی مینیمال بر پایه shadcn/ui با پشتیبانی از اعداد فارسی
+ * طراحی مینیمال بر پایه shadcn/ui با پشتیبانی از اعداد فارسی و تست زنده API
  */
 
 (function () {
@@ -13,7 +13,7 @@
     return n.toString().replace(/\d/g, (x) => farsiDigits[x]);
   }
 
-  // ترجمه نوع پست
+  // ترجمه فارسی نوع پست یا دسته‌بندی
   function translateType(type) {
     switch (type) {
       case 'post': return 'مقاله وبلاگ';
@@ -25,7 +25,7 @@
 
   const app = {
     state: {
-      activeTab: 'overview', // 'overview', 'items', 'orphans', 'settings'
+      activeTab: 'overview',
       summary: null,
       items: [],
       orphans: [],
@@ -107,7 +107,6 @@
       }
     },
 
-    // شروع فرآیند اسکن دسته‌ای
     startBatchScan: async function () {
       if (this.state.isScanning) return;
       this.state.isScanning = true;
@@ -144,7 +143,6 @@
       }
     },
 
-    // باز کردن مودال جزئیات لینک‌های یک صفحه
     showItemDetails: async function (id, type, title) {
       this.state.modal.isOpen = true;
       this.state.modal.title = `جزئیات پیوندهای: ${title}`;
@@ -217,7 +215,6 @@
       }
     },
 
-    // تولید و نمایش پیشنهادات هوش مصنوعی برای صفحه یتیم یا کم‌لینک
     requestAiSuggestions: async function (id, type, title) {
       if (!this.state.hasApiKey) {
         alert('لطفاً ابتدا از تب تنظیمات، کلید Gemini API را وارد و ذخیره کنید.');
@@ -283,6 +280,69 @@
       }
     },
 
+    testConnection: async function () {
+      const input = document.getElementById('wila-api-key-input');
+      const key = input ? input.value.trim() : '';
+      const resultBox = document.getElementById('wila-test-result');
+      const testBtn = document.getElementById('wila-test-api-btn');
+
+      if (!key && !this.state.hasApiKey) {
+        alert('لطفاً ابتدا کلید API را وارد کنید.');
+        return;
+      }
+
+      if (testBtn) {
+        testBtn.disabled = true;
+        testBtn.innerText = 'در حال بررسی اتصال...';
+      }
+
+      if (resultBox) {
+        resultBox.style.display = 'block';
+        resultBox.innerHTML = `
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; padding:12px; border-radius:6px; font-size:0.825rem; color:#475569;">
+            در حال ارسال درخواست تست به Google Gemini API...
+          </div>
+        `;
+      }
+
+      try {
+        const res = await this.apiFetch('/test-connection', {
+          method: 'POST',
+          body: JSON.stringify({ api_key: key }),
+        });
+
+        if (!res.success) {
+          throw new Error(res.message || 'پاسخ نامعتبر از سرور.');
+        }
+
+        if (resultBox) {
+          resultBox.innerHTML = `
+            <div style="background:#ecfdf5; border:1px solid #a7f3d0; padding:14px; border-radius:6px; font-size:0.825rem; color:#065f46;">
+              <div style="font-weight:600; margin-bottom:4px;">✅ اتصال موفقیت‌آمیز بود!</div>
+              <div>${res.message}</div>
+              <div style="margin-top:6px; font-size:0.775rem; color:#047857;">
+                مدل فعال: <code>${res.model}</code> | زمان پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌ثانیه</strong>
+              </div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        if (resultBox) {
+          resultBox.innerHTML = `
+            <div style="background:#fef2f2; border:1px solid #fecaca; padding:14px; border-radius:6px; font-size:0.825rem; color:#991b1b;">
+              <div style="font-weight:600; margin-bottom:4px;">❌ خطا در برقراری اتصال:</div>
+              <div style="line-height:1.6;">${err.message}</div>
+            </div>
+          `;
+        }
+      } finally {
+        if (testBtn) {
+          testBtn.disabled = false;
+          testBtn.innerText = 'تست اتصال API';
+        }
+      }
+    },
+
     closeModal: function () {
       this.state.modal.isOpen = false;
       this.render();
@@ -313,7 +373,6 @@
 
       if (activeTab === 'overview') {
         contentHtml = `
-          <!-- بنر وضعیت اسکن دسته‌ای -->
           <div class="wila-progress-wrapper">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
@@ -335,7 +394,6 @@
             ` : ''}
           </div>
 
-          <!-- کارت‌های آمار shadcn/ui -->
           <div class="wila-grid">
             <div class="wila-card">
               <div class="wila-card-header">
@@ -467,7 +525,11 @@
               <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">کلید API جمینای:</label>
               <input type="password" id="wila-api-key-input" class="wila-input" style="width:100%;" placeholder="AIzaSy..." value="${this.state.apiKey}" />
             </div>
-            <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
+              <button class="wila-btn wila-btn-outline" id="wila-test-api-btn">تست اتصال API</button>
+            </div>
+            <div id="wila-test-result" style="margin-top:16px; display:none;"></div>
           </div>
         `;
       }
@@ -491,7 +553,6 @@
           ${contentHtml}
         </div>
 
-        <!-- مودال سراسری -->
         ${modal.isOpen ? `
           <div class="wila-modal-backdrop" id="wila-modal-backdrop">
             <div class="wila-modal">
@@ -519,7 +580,6 @@
     },
 
     bindEvents: function () {
-      // تغییر تب‌ها
       const tabBtns = this.root.querySelectorAll('.wila-tab-btn');
       tabBtns.forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -531,13 +591,11 @@
         });
       });
 
-      // دکمه اسکن
       const scanBtn = this.root.querySelector('#wila-start-scan-btn');
       if (scanBtn) {
         scanBtn.addEventListener('click', () => this.startBatchScan());
       }
 
-      // فیلتر جدول
       const filterSelect = this.root.querySelector('#wila-filter-type');
       if (filterSelect) {
         filterSelect.addEventListener('change', (e) => {
@@ -546,7 +604,6 @@
         });
       }
 
-      // دکمه‌های بازرسی لینک
       const inspectBtns = this.root.querySelectorAll('.wila-inspect-btn');
       inspectBtns.forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -557,7 +614,6 @@
         });
       });
 
-      // دکمه‌های پیشنهاد AI
       const aiBtns = this.root.querySelectorAll('.wila-ai-btn');
       aiBtns.forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -568,13 +624,16 @@
         });
       });
 
-      // ذخیره تنظیمات
       const saveSettingsBtn = this.root.querySelector('#wila-save-settings-btn');
       if (saveSettingsBtn) {
         saveSettingsBtn.addEventListener('click', () => this.saveSettings());
       }
 
-      // بستن مودال
+      const testApiBtn = this.root.querySelector('#wila-test-api-btn');
+      if (testApiBtn) {
+        testApiBtn.addEventListener('click', () => this.testConnection());
+      }
+
       const closeBtn1 = this.root.querySelector('#wila-close-modal-btn');
       const closeBtn2 = this.root.querySelector('#wila-modal-footer-close');
       if (closeBtn1) closeBtn1.addEventListener('click', () => this.closeModal());

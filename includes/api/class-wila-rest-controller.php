@@ -14,7 +14,7 @@ class WILA_REST_Controller {
     private $namespace = 'wila/v1';
 
     public function register_routes() {
-        // ۱. دریافت لیست آیتم‌ها برای اسکن گام‌به‌گام
+        // ۱. صف اسکن مرحله‌ای
         register_rest_route($this->namespace, '/queue', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_scan_queue'),
@@ -28,7 +28,7 @@ class WILA_REST_Controller {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۳. خلاصه آمار داشبورد
+        // ۳. خلاصه آمار پیشخوان
         register_rest_route($this->namespace, '/summary', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_dashboard_summary'),
@@ -56,7 +56,7 @@ class WILA_REST_Controller {
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۷. ذخیره و دریافت تنظیمات (API Key جمینای)
+        // ۷. دریافت و ذخیره تنظیمات API Key
         register_rest_route($this->namespace, '/settings', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
@@ -74,6 +74,13 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/ai/suggest', array(
             'methods'             => WP_REST_Server::CREATABLE,
             'callback'            => array($this, 'generate_ai_suggestions'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
+
+        // ۹. تست زنده اتصال به Gemini API
+        register_rest_route($this->namespace, '/test-connection', array(
+            'methods'             => WP_REST_Server::CREATABLE,
+            'callback'            => array($this, 'test_gemini_connection'),
             'permission_callback' => array($this, 'check_permission'),
         ));
     }
@@ -272,6 +279,24 @@ class WILA_REST_Controller {
             'success'     => true,
             'suggestions' => $suggestions
         ));
+    }
+
+    public function test_gemini_connection($request) {
+        $params  = $request->get_json_params();
+        $api_key = isset($params['api_key']) ? sanitize_text_field($params['api_key']) : null;
+
+        $gemini = new WILA_Gemini_Client();
+        $result = $gemini->test_connection($api_key);
+
+        if (is_wp_error($result)) {
+            return new WP_Error(
+                $result->get_error_code(),
+                $result->get_error_message(),
+                array('status' => 400)
+            );
+        }
+
+        return rest_ensure_response($result);
     }
 
     private function calculate_orphans($items) {

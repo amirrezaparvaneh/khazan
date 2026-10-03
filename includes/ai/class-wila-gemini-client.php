@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت ارتباط با Gemini API جهت ارائه پیشنهادات سئو و لینک‌سازی داخلی
+ * کلاینت ارتباط با Gemini API جهت تست اتصال، ارزیابی سئو و پیشنهادات لینک‌سازی
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -19,16 +19,75 @@ class WILA_Gemini_Client {
     }
 
     /**
-     * بررسی معتبر بودن کلید API
+     * بررسی معتبر بودن و وجود کلید API
      */
     public function is_configured() {
         return !empty($this->api_key);
     }
 
     /**
+     * تست زنده اتصال به سرور Gemini API
+     *
+     * @param string|null $override_key کلید ورودی جهت تست پیش از ذخیره‌سازی
+     * @return array|WP_Error
+     */
+    public function test_connection($override_key = null) {
+        $key = !empty($override_key) ? sanitize_text_field($override_key) : $this->api_key;
+
+        if (empty($key)) {
+            return new WP_Error('missing_api_key', 'هیچ کلید API برای تست ارسال نشده است.');
+        }
+
+        $start_time = microtime(true);
+        $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key=" . urlencode($key);
+
+        $body = array(
+            'contents' => array(
+                array(
+                    'parts' => array(
+                        array('text' => 'Ping')
+                    )
+                )
+            ),
+            'generationConfig' => array(
+                'maxOutputTokens' => 3
+            )
+        );
+
+        $response = wp_remote_post($url, array(
+            'headers'     => array('Content-Type' => 'application/json'),
+            'body'        => wp_json_encode($body),
+            'timeout'     => 15,
+            'data_format' => 'body'
+        ));
+
+        $latency = round((microtime(true) - $start_time) * 1000);
+
+        if (is_wp_error($response)) {
+            return new WP_Error('connection_failed', 'خطا در ارتباط با سرور گوگل: ' . $response->get_error_message());
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $raw_body = wp_remote_retrieve_body($response);
+        $data = json_decode($raw_body, true);
+
+        if ($code === 200) {
+            return array(
+                'success'    => true,
+                'model'      => $this->model,
+                'latency_ms' => $latency,
+                'message'    => 'ارتباط با موفقیت برقرار شد. مدل آماده دریافت درخواست است.'
+            );
+        }
+
+        $err_msg = isset($data['error']['message']) ? $data['error']['message'] : ('کد وضعیت سرور: ' . $code);
+        return new WP_Error('api_error', $err_msg, array('status' => $code));
+    }
+
+    /**
      * تولید پیشنهادهای استراتژیک لینک‌سازی برای یک صفحه مشخص
      *
-     * @param int    $target_id شناسه پست یا ترم مقصد
+     * @param int    $target_id شناسه صفحه یا دسته مقصد
      * @param string $target_type نوع موجودیت (post, product_cat, category)
      * @return array|WP_Error
      */
@@ -37,22 +96,17 @@ class WILA_Gemini_Client {
             return new WP_Error('missing_api_key', 'کلید Gemini API هنوز در تنظیمات افزونه ثبت نشده است.');
         }
 
-        // ۱. استخراج مشخصات صفحه مقصد
         $target_info = $this->get_entity_info($target_id, $target_type);
         if (!$target_info) {
             return new WP_Error('invalid_target', 'اطلاعات صفحه مقصد یافت نشد.');
         }
 
-        // ۲. آماده‌سازی لیست صفحات کاندیدا به عنوان مبدا لینک‌سازی
         $candidates = $this->get_candidate_sources($target_id, $target_type);
         if (empty($candidates)) {
             return new WP_Error('no_candidates', 'صفحه کاندیدایی برای لینک‌سازی در سایت موجود نیست.');
         }
 
-        // ۳. تدوین پرامپت مهندسی‌شده سئو با خروجی ساختاریافته JSON
         $prompt = $this->build_analysis_prompt($target_info, $candidates);
-
-        // ۴. ارسال به اندپوینت گوگل جمینای
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key=" . urlencode($this->api_key);
 
         $body = array(
@@ -64,8 +118,8 @@ class WILA_Gemini_Client {
                 )
             ),
             'generationConfig' => array(
-                'temperature'       => 0.2,
-                'responseMimeType'  => 'application/json',
+                'temperature'      => 0.2,
+                'responseMimeType' => 'application/json',
             )
         );
 
@@ -100,9 +154,6 @@ class WILA_Gemini_Client {
         return $parsed_suggestions ? $parsed_suggestions : array();
     }
 
-    /**
-     * استخراج مشخصات محتوایی صفحه
-     */
     private function get_entity_info($id, $type) {
         if ($type === 'post') {
             $post = get_post($id);
@@ -129,13 +180,9 @@ class WILA_Gemini_Client {
         );
     }
 
-    /**
-     * دریافت لیست صفحات کاندیدا جهت پیشنهاد لینک‌دهی
-     */
     private function get_candidate_sources($exclude_id, $exclude_type) {
         $candidates = array();
 
-        // مقالات اخیر سایت
         $posts = get_posts(array(
             'post_type'      => 'post',
             'post_status'    => 'publish',
@@ -152,7 +199,6 @@ class WILA_Gemini_Client {
             );
         }
 
-        // دسته‌بندی‌های محصولات ووکامرس
         if (taxonomy_exists('product_cat')) {
             $terms = get_terms(array(
                 'taxonomy'   => 'product_cat',
@@ -176,9 +222,6 @@ class WILA_Gemini_Client {
         return $candidates;
     }
 
-    /**
-     * تدوین ساختار پیام ورودی برای جمینای
-     */
     private function build_analysis_prompt($target, $candidates) {
         $target_json     = wp_json_encode($target, JSON_UNESCAPED_UNICODE);
         $candidates_json = wp_json_encode($candidates, JSON_UNESCAPED_UNICODE);
@@ -189,7 +232,7 @@ class WILA_Gemini_Client {
 مشخصات صفحه مقصد:
 {$target_json}
 
-لیست صفحات موجود در سایت که می‌توانند به عنوان مبدا لینک‌سازی استفاده شوند:
+لیست صفحات موجود در سایت که می‌توانند به عنوان مبدا لینک‌‌سازی استفاده شوند:
 {$candidates_json}
 
 دستورالعمل‌های دقیق:
