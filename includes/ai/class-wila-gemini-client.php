@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت هوشمند ارتباط با Gemini API با قابلیت تشخیص خودکار مدل‌های در دسترس
+ * کلاینت هوشمند ارتباط با Gemini API با پشتیبانی از هدر اختصاصی و کشف خودکار مدل
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -15,7 +15,7 @@ class WILA_Gemini_Client {
     private $default_model = 'gemini-1.5-flash-latest';
 
     public function __construct() {
-        $this->api_key = get_option('wila_gemini_api_key', '');
+        $this->api_key = trim(get_option('wila_gemini_api_key', ''));
     }
 
     public function is_configured() {
@@ -27,10 +27,21 @@ class WILA_Gemini_Client {
     }
 
     /**
+     * استخراج کلید معتبر با پاکسازی و نادیده گرفتن مقادیر ماسک‌شده
+     */
+    private function resolve_key($override_key = null) {
+        $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $this->api_key;
+        if (strpos($key, '...') !== false) {
+            $key = $this->api_key;
+        }
+        return $key;
+    }
+
+    /**
      * دریافت لیست مدل‌های مجاز برای این API Key از گوگل
      */
     public function fetch_available_models($override_key = null) {
-        $key = !empty($override_key) ? sanitize_text_field($override_key) : $this->api_key;
+        $key = $this->resolve_key($override_key);
 
         if (empty($key)) {
             return new WP_Error('missing_api_key', 'کلید API مشخص نشده است.');
@@ -40,7 +51,10 @@ class WILA_Gemini_Client {
 
         $response = wp_remote_get($url, array(
             'timeout' => 15,
-            'headers' => array('Content-Type' => 'application/json')
+            'headers' => array(
+                'Content-Type'   => 'application/json',
+                'x-goog-api-key' => $key,
+            )
         ));
 
         if (is_wp_error($response)) {
@@ -67,20 +81,18 @@ class WILA_Gemini_Client {
     }
 
     /**
-     * انتخاب خودکار بهینه‌ترین مدل از بین مدل‌های در دسترس
+     * انتخاب هوشمند بهترین مدل
      */
     public function pick_best_model($available_models) {
         if (empty($available_models)) {
             return $this->default_model;
         }
 
-        // اولویت‌بندی مدل‌ها از نظر سرعت، قیمت و کارایی
         $priority_list = array(
             'gemini-1.5-flash-latest',
             'gemini-1.5-flash',
             'gemini-1.5-flash-001',
             'gemini-1.5-flash-002',
-            'gemini-1.5-flash-8b',
             'gemini-2.0-flash',
             'gemini-2.0-flash-exp',
             'gemini-1.5-pro-latest',
@@ -104,29 +116,29 @@ class WILA_Gemini_Client {
     }
 
     /**
-     * تست زنده اتصال همراه با اعتبارسنجی خودکار مدل
+     * تست زنده اتصال با ارسال کلید در هدر و URL
      */
     public function test_connection($override_key = null) {
-        $key = !empty($override_key) ? sanitize_text_field($override_key) : $this->api_key;
+        $key = $this->resolve_key($override_key);
 
         if (empty($key)) {
-            return new WP_Error('missing_api_key', 'هیچ کلید API برای تست ارسال نشده است.');
+            return new WP_Error('missing_api_key', 'هیچ کلید معتبری برای تست ارسال نشده است. لطفاً کلید کامل را وارد کنید.');
         }
 
-        // ۱. واکشی مدل‌های مجاز برای این کلید
+        $headers = array(
+            'Content-Type'   => 'application/json',
+            'x-goog-api-key' => $key,
+        );
+
+        // ۱. کشف مدل‌های مجاز این کلید
         $available_models = $this->fetch_available_models($key);
-        if (is_wp_error($available_models)) {
-            return $available_models;
+        $selected_model   = 'gemini-1.5-flash-latest';
+
+        if (!is_wp_error($available_models) && !empty($available_models)) {
+            $selected_model = $this->pick_best_model($available_models);
         }
 
-        if (empty($available_models)) {
-            return new WP_Error('no_supported_models', 'این کلید API به هیچ مدلی با قابلیت تولید محتوا (generateContent) دسترسی ندارد.');
-        }
-
-        // ۲. انتخاب هوشمند بهترین مدل در دسترس
-        $selected_model = $this->pick_best_model($available_models);
-
-        // ۳. ارسال پینگ تست به مدل انتخاب‌شده
+        // ۲. ارسال درخواست تستی
         $start_time = microtime(true);
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$selected_model}:generateContent?key=" . urlencode($key);
 
@@ -144,7 +156,7 @@ class WILA_Gemini_Client {
         );
 
         $response = wp_remote_post($url, array(
-            'headers'     => array('Content-Type' => 'application/json'),
+            'headers'     => $headers,
             'body'        => wp_json_encode($body),
             'timeout'     => 15,
             'data_format' => 'body'
@@ -162,12 +174,22 @@ class WILA_Gemini_Client {
 
         if ($code === 200) {
             update_option('wila_gemini_active_model', $selected_model);
+            if (!empty($override_key) && strpos($override_key, '...') === false) {
+                update_option('wila_gemini_api_key', $override_key);
+            }
 
             return array(
                 'success'    => true,
                 'model'      => $selected_model,
                 'latency_ms' => $latency,
-                'message'    => 'ارتباط با موفقیت برقرار شد. مدل مناسب با کلید شما شناسایی و فعال گردید.'
+                'message'    => 'ارتباط با موفقیت برقرار شد. مدل مناسب با کلید شما شناسایی و ذخیره گردید.'
+            );
+        }
+
+        if ($code === 401) {
+            return new WP_Error(
+                'auth_failed',
+                'احراز هویت ناموفق بود (401). مطمئن شوید کلید API را مستقیماً از Google AI Studio (aistudio.google.com/app/apikey) کپی کرده‌اید.'
             );
         }
 
@@ -212,7 +234,10 @@ class WILA_Gemini_Client {
         );
 
         $response = wp_remote_post($url, array(
-            'headers'     => array('Content-Type' => 'application/json'),
+            'headers'     => array(
+                'Content-Type'   => 'application/json',
+                'x-goog-api-key' => $this->api_key,
+            ),
             'body'        => wp_json_encode($body),
             'timeout'     => 45,
             'data_format' => 'body'
@@ -301,7 +326,7 @@ class WILA_Gemini_Client {
                         'id'      => $t->term_id,
                         'type'    => 'product_cat',
                         'title'   => $t->name,
-                        'summary' => !empty($t->description) ? wp_strip_all_tags(wp_trim_words($t->description, 25)) : 'دسته‌بندی فروشگاه'
+                        'summary' => !empty($t->description) ? wp_strip_all_tags(wp_trim_words($t->description, 25)) : 'دسته‌‌بندی فروشگاه'
                     );
                 }
             }

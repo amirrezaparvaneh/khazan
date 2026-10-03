@@ -14,49 +14,42 @@ class WILA_REST_Controller {
     private $namespace = 'wila/v1';
 
     public function register_routes() {
-        // ۱. صف اسکن مرحله‌ای
         register_rest_route($this->namespace, '/queue', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_scan_queue'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۲. اسکن تکی یک آیتم
         register_rest_route($this->namespace, '/scan-item', array(
             'methods'             => WP_REST_Server::CREATABLE,
             'callback'            => array($this, 'scan_single_item'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۳. خلاصه آمار پیشخوان
         register_rest_route($this->namespace, '/summary', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_dashboard_summary'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۴. جدول اقلام با فیلتر
         register_rest_route($this->namespace, '/items', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_items_report'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۵. جزئیات دقیق لینک‌های یک صفحه
         register_rest_route($this->namespace, '/item-details', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_item_details'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۶. استخراج صفحات بدون لینک ورودی (Orphan Pages)
         register_rest_route($this->namespace, '/orphans', array(
             'methods'             => WP_REST_Server::READABLE,
             'callback'            => array($this, 'get_orphan_items'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۷. دریافت و ذخیره تنظیمات API Key
         register_rest_route($this->namespace, '/settings', array(
             array(
                 'methods'             => WP_REST_Server::READABLE,
@@ -70,14 +63,12 @@ class WILA_REST_Controller {
             )
         ));
 
-        // ۸. تولید پیشنهادات استراتژیک لینک‌سازی توسط هوش مصنوعی جمینای
         register_rest_route($this->namespace, '/ai/suggest', array(
             'methods'             => WP_REST_Server::CREATABLE,
             'callback'            => array($this, 'generate_ai_suggestions'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // ۹. تست زنده اتصال به Gemini API
         register_rest_route($this->namespace, '/test-connection', array(
             'methods'             => WP_REST_Server::CREATABLE,
             'callback'            => array($this, 'test_gemini_connection'),
@@ -238,24 +229,29 @@ class WILA_REST_Controller {
     }
 
     public function get_settings() {
-        $key = get_option('wila_gemini_api_key', '');
+        $key = trim(get_option('wila_gemini_api_key', ''));
         return rest_ensure_response(array(
             'has_api_key' => !empty($key),
-            'api_key'     => !empty($key) ? (substr($key, 0, 6) . '...' . substr($key, -4)) : ''
+            'masked_key'  => !empty($key) ? (substr($key, 0, 6) . '...' . substr($key, -4)) : ''
         ));
     }
 
     public function save_settings($request) {
         $params  = $request->get_json_params();
-        $api_key = isset($params['api_key']) ? sanitize_text_field($params['api_key']) : '';
+        $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : '';
 
-        if (!empty($api_key)) {
+        // نادیده گرفتن رشته‌های ماسک‌شده
+        if (!empty($api_key) && strpos($api_key, '...') === false) {
             update_option('wila_gemini_api_key', $api_key);
+            return rest_ensure_response(array(
+                'success' => true,
+                'message' => 'کلید API با موفقیت ذخیره شد.'
+            ));
         }
 
         return rest_ensure_response(array(
             'success' => true,
-            'message' => 'تنظیمات با موفقیت ذخیره شد.'
+            'message' => 'تنظیمات بدون تغییر ذخیره شد.'
         ));
     }
 
@@ -283,7 +279,11 @@ class WILA_REST_Controller {
 
     public function test_gemini_connection($request) {
         $params  = $request->get_json_params();
-        $api_key = isset($params['api_key']) ? sanitize_text_field($params['api_key']) : null;
+        $api_key = isset($params['api_key']) ? trim(sanitize_text_field($params['api_key'])) : null;
+
+        if (!empty($api_key) && strpos($api_key, '...') !== false) {
+            $api_key = null;
+        }
 
         $gemini = new WILA_Gemini_Client();
         $result = $gemini->test_connection($api_key);

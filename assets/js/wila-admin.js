@@ -1,19 +1,17 @@
 /**
  * هسته کلاینت داشبورد تحلیل لینک‌های داخلی
- * طراحی مینیمال بر پایه shadcn/ui با پشتیبانی از اعداد فارسی و تست زنده API
+ * طراحی مینیمال بر پایه shadcn/ui با پشتیبانی از اعداد فارسی و تست هوشمند API
  */
 
 (function () {
   'use strict';
 
-  // تابع تبدیل اعداد انگلیسی به فارسی
   function toPersianDigits(n) {
     if (n === null || n === undefined) return '';
     const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
     return n.toString().replace(/\d/g, (x) => farsiDigits[x]);
   }
 
-  // ترجمه فارسی نوع پست یا دسته‌بندی
   function translateType(type) {
     switch (type) {
       case 'post': return 'مقاله وبلاگ';
@@ -35,8 +33,8 @@
       scanProgress: 0,
       scanTotal: 0,
       scanCurrent: 0,
-      apiKey: '',
       hasApiKey: false,
+      maskedKey: '',
       modal: {
         isOpen: false,
         title: '',
@@ -80,7 +78,8 @@
       try {
         const data = await this.apiFetch('/settings');
         this.state.hasApiKey = data.has_api_key;
-        this.state.apiKey = data.api_key;
+        this.state.maskedKey = data.masked_key || '';
+        this.render();
       } catch (e) {
         console.error('Error fetching settings:', e);
       }
@@ -315,10 +314,15 @@
           throw new Error(res.message || 'پاسخ نامعتبر از سرور.');
         }
 
+        if (input && key) {
+          input.value = '';
+        }
+        await this.fetchSettings();
+
         if (resultBox) {
           resultBox.innerHTML = `
             <div style="background:#ecfdf5; border:1px solid #a7f3d0; padding:14px; border-radius:6px; font-size:0.825rem; color:#065f46;">
-              <div style="font-weight:600; margin-bottom:4px;">✅ اتصال موفقیت‌آمیز بود!</div>
+              <div style="font-weight:600; margin-bottom:4px;">✅ اتصال با موفقیت تایید شد!</div>
               <div>${res.message}</div>
               <div style="margin-top:6px; font-size:0.775rem; color:#047857;">
                 مدل فعال: <code>${res.model}</code> | زمان پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلی‌ثانیه</strong>
@@ -350,24 +354,33 @@
 
     saveSettings: async function () {
       const input = document.getElementById('wila-api-key-input');
-      if (!input) return;
-      const key = input.value.trim();
+      const key = input ? input.value.trim() : '';
+
+      if (!key && !this.state.hasApiKey) {
+        alert('لطفاً ابتدا کلید API را وارد کنید.');
+        return;
+      }
+
+      if (!key && this.state.hasApiKey) {
+        alert('کلید معتبر از قبل ذخیره شده است. برای تغییر، مقدار جدید را تایپ کنید.');
+        return;
+      }
 
       try {
         await this.apiFetch('/settings', {
           method: 'POST',
           body: JSON.stringify({ api_key: key }),
         });
-        alert('تنظیمات کلید Gemini API با موفقیت ذخیره شد.');
+        if (input) input.value = '';
+        alert('تنظیمات با موفقیت ذخیره شد.');
         await this.fetchSettings();
-        this.render();
       } catch (e) {
         alert('خطا در ذخیره تنظیمات.');
       }
     },
 
     render: function () {
-      const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal } = this.state;
+      const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal, hasApiKey, maskedKey } = this.state;
 
       let contentHtml = '';
 
@@ -519,11 +532,16 @@
               <h3 style="font-weight:600; color:#0f172a; font-size:1rem;">تنظیمات هوش مصنوعی Google Gemini</h3>
             </div>
             <p style="font-size:0.875rem; color:#64748b; margin-bottom:16px;">
-              برای فعال‌سازی بخش پیشنهادات انکرتکست و آنالیز محتوا، کلید API سرویس Gemini را وارد کنید.
+              برای فعال‌سازی پیشنهادات انکرتکست و معماری لینک‌ها، کلید رایگان خود را از 
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#2563eb; text-decoration:underline; font-weight:600;">Google AI Studio</a> 
+              دریافت کرده و در کادر زیر وارد کنید:
             </p>
             <div style="margin-bottom:16px;">
-              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">کلید API جمینای:</label>
-              <input type="password" id="wila-api-key-input" class="wila-input" style="width:100%;" placeholder="AIzaSy..." value="${this.state.apiKey}" />
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:6px;">
+                کلید Gemini API:
+                ${hasApiKey ? `<span class="wila-badge wila-badge-success" style="margin-right:8px;">فعال (${maskedKey})</span>` : ''}
+              </label>
+              <input type="password" id="wila-api-key-input" class="wila-input" style="width:100%;" placeholder="${hasApiKey ? 'برای جایگزینی کلید، مقدار جدید را تایپ کنید...' : 'AIzaSy...'}" value="" />
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
               <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
@@ -571,7 +589,7 @@
         ` : ''}
 
         <div class="wila-footer">
-          <div>توسعه یافته با ❤️ توســـط امیــــــــررضا پـروانه</div>
+          <div>توسعه یافته با ❤️️ توســـط امیــــــــررضا پـروانه</div>
           <div>نسخه ۱.۰.۰</div>
         </div>
       `;
