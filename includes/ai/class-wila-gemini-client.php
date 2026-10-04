@@ -25,9 +25,24 @@ class WILA_Gemini_Client {
             $this->model   = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
         } else {
             $this->api_key = trim(get_option('wila_gemini_api_key', ''));
-            $this->model   = get_option('wila_gemini_active_model', 'gemini-3.8-flash');
+            $this->model   = $this->normalize_gemini_model(get_option('wila_gemini_active_model', 'gemini-3.1-pro-preview'));
         }
     }
+
+    public function normalize_gemini_model($model) {
+        $model = trim(str_replace('models/', '', (string) $model));
+        $legacy_models = array(
+            ''                 => 'gemini-3.1-pro-preview',
+            'gemini-1.5-flash' => 'gemini-2.5-flash',
+            'gemini-1.5-pro'   => 'gemini-3.1-pro-preview',
+            'gemini-2.0-flash' => 'gemini-2.5-flash',
+            'gemini-2.5-pro'   => 'gemini-3.1-pro-preview',
+            'gemini-3.8-flash' => 'gemini-2.5-flash',
+        );
+        return isset($legacy_models[$model]) ? $legacy_models[$model] : $model;
+    }
+
+
 
     public function is_configured() {
         return !empty($this->api_key);
@@ -36,20 +51,82 @@ class WILA_Gemini_Client {
     public function get_active_model() {
         return $this->model;
     }
+    public function list_gemini_models($override_key = null) {
+        $key = $this->resolve_key($override_key, 'gemini');
+        if (empty($key)) {
+            return new WP_Error('missing_api_key', 'کلید API جمینای وارد نشده است.');
+        }
 
-    private function resolve_key($override_key = null) {
-        $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $this->api_key;
-        if (strpos($key, '...') !== false) {
-            $key = $this->api_key;
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key);
+        $response = wp_remote_get($url, array(
+            'headers' => array(
+                'Content-Type'   => 'application/json',
+                'x-goog-api-key' => $key,
+            ),
+            'timeout' => 15,
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_Error('connection_failed', 'خطا در ارتباط با گوگل: ' . $response->get_error_message());
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($code !== 200 || !isset($data['models'])) {
+            $msg = isset($data['error']['message']) ? $data['error']['message'] : ('خطای سرور گوگل: ' . $code);
+            return new WP_Error('api_error', $msg);
+        }
+
+        $models = array();
+        foreach ($data['models'] as $m) {
+            $methods = isset($m['supportedGenerationMethods']) ? (array) $m['supportedGenerationMethods'] : array();
+            if (in_array('generateContent', $methods, true)) {
+                $id = str_replace('models/', '', $m['name']);
+                $models[] = array(
+                    'id'          => $id,
+                    'displayName' => !empty($m['displayName']) ? $m['displayName'] : $id,
+                    'description' => !empty($m['description']) ? $m['description'] : '',
+                );
+            }
+        }
+
+        return $models;
+    }
+
+
+    private function resolve_key($override_key = null, $provider = null) {
+        $provider = $provider ?: $this->provider;
+        $saved_key = ($provider === 'openrouter')
+            ? trim(get_option('wila_openrouter_api_key', ''))
+            : trim(get_option('wila_gemini_api_key', ''));
+
+        $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $saved_key;
+        if (strpos($key, '...') !== false || empty($key)) {
+            $key = $saved_key;
         }
         return $key;
+    }
+
+    private function resolve_model($override_model = null, $provider = null) {
+        $provider = $provider ?: $this->provider;
+        if ($provider === 'openrouter') {
+            $saved_model = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
+            $model = !empty($override_model) ? trim(sanitize_text_field($override_model)) : $saved_model;
+            return !empty($model) ? $model : 'qwen/qwen3.8-27b:free';
+        }
+
+        $saved_model = get_option('wila_gemini_active_model', 'gemini-3.1-pro-preview');
+        $model = !empty($override_model) ? trim(sanitize_text_field($override_model)) : $saved_model;
+        return $this->normalize_gemini_model($model);
     }
 
     public function test_connection($override_key = null, $override_model = null, $override_provider = null) {
         try {
             $provider = !empty($override_provider) ? sanitize_text_field($override_provider) : $this->provider;
-            $key = $this->resolve_key($override_key);
-            $model = !empty($override_model) ? sanitize_text_field($override_model) : $this->model;
+            $key = $this->resolve_key($override_key, $provider);
+            $model = $this->resolve_model($override_model, $provider);
 
             if (empty($key)) {
                 return new WP_Error('missing_api_key', 'کلید API وارد نشده است.');
@@ -76,8 +153,8 @@ class WILA_Gemini_Client {
                     'timeout' => 20
                 ));
             } else {
-                $model = trim(str_replace('models/', '', $model));
-                $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $model . ":generateContent?key=" . urlencode($key);
+                $clean_model = $this->normalize_gemini_model($model);
+                $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $clean_model . ":generateContent?key=" . urlencode($key);
 
                 $body = array(
                     'contents' => array(array('parts' => array(array('text' => 'Ping')))),
@@ -87,7 +164,7 @@ class WILA_Gemini_Client {
                 $response = wp_remote_post($url, array(
                     'headers' => array('Content-Type' => 'application/json', 'x-goog-api-key' => $key),
                     'body'    => wp_json_encode($body),
-                    'timeout' => 15
+                    'timeout' => 20
                 ));
             }
 
@@ -109,14 +186,19 @@ class WILA_Gemini_Client {
                 return new WP_Error('api_error', 'سرور هوش مصنوعی در حال حاضر ترافیک بالایی دارد. لطفاً مجدداً تلاش کنید.');
             }
 
-            $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : ('کد وضعیت سرور: ' . $code);
+            $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : '';
+            if (empty($err_msg)) {
+                $err_msg = 'کد وضعیت سرور: ' . $code;
+            } else {
+                $err_msg = 'کد وضعیت سرور: ' . $code . ' (' . $err_msg . ')';
+            }
             return new WP_Error('api_error', $err_msg, array('status' => $code));
         } catch (Exception $e) {
             return new WP_Error('exception_error', 'خطای سیستمی: ' . $e->getMessage());
         }
     }
 
-    private function send_ai_request($prompt) {
+    private function send_ai_request($prompt, $suggestions_request = false) {
         if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
 
         if ($this->provider === 'openrouter') {
@@ -137,7 +219,7 @@ class WILA_Gemini_Client {
                     'X-Title'       => 'WP Internal Link Analyzer'
                 ),
                 'body'    => wp_json_encode($body),
-                'timeout' => 90 // افزایش Timeout به ۹۰ ثانیه برای جلوگیری از خطای cURL 28
+                'timeout' => $suggestions_request ? 40 : 90 // برای جلوگیری از خطای cURL 28
             ));
 
             if (is_wp_error($response)) return $response;
@@ -158,7 +240,7 @@ class WILA_Gemini_Client {
             return $data['choices'][0]['message']['content'];
 
         } else {
-            $clean_model = trim(str_replace('models/', '', $this->model));
+            $clean_model = $this->normalize_gemini_model($this->model);
             $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $clean_model . ":generateContent?key=" . urlencode($this->api_key);
 
             $body = array(
@@ -166,10 +248,11 @@ class WILA_Gemini_Client {
                 'generationConfig' => array('temperature' => 0.2, 'responseMimeType' => 'application/json')
             );
 
+            if ($suggestions_request) $body['generationConfig']['maxOutputTokens'] = 2048;
             $response = wp_remote_post($url, array(
                 'headers' => array('Content-Type' => 'application/json', 'x-goog-api-key' => $this->api_key),
                 'body'    => wp_json_encode($body),
-                'timeout' => 90 // افزایش Timeout به ۹۰ ثانیه
+                'timeout' => $suggestions_request ? 40 : 90
             ));
 
             if (is_wp_error($response)) return $response;
@@ -199,7 +282,9 @@ class WILA_Gemini_Client {
             $prompt = $this->build_blueprint_prompt($params, $candidates);
             $json_text = $this->send_ai_request($prompt);
             
-            if (is_wp_error($json_text)) return $json_text;
+            if (is_wp_error($json_text)) {
+                return new WP_Error('suggestions_unavailable', 'دریافت پیشنهاد از سرویس هوش مصنوعی ناموفق بود. لطفاً کمی بعد دوباره تلاش کنید. ' . $json_text->get_error_message());
+            }
 
             $json_text = preg_replace('/^```json\s*/i', '', trim($json_text));$json_text = preg_replace('/```$/', '', trim($json_text));
 
@@ -215,18 +300,58 @@ class WILA_Gemini_Client {
             $target_info = $this->get_entity_info($target_id, $target_type);
             if (!$target_info) return new WP_Error('invalid_target', 'اطلاعات صفحه مقصد یافت نشد.');
 
-            $candidates = $this->getAllSiteEntities();
+            $candidates = array_values(array_filter($this->getAllSiteEntities(), function ($candidate) use ($target_id, $target_type) {
+                return !is_wp_error($candidate['url']) && !((int) $candidate['id'] === (int) $target_id && $candidate['type'] === $target_type);
+            }));
             if (empty($candidates)) return new WP_Error('no_candidates', 'هیچ محتوایی برای پیشنهاد پیدا نشد.');
 
             $prompt = $this->build_analysis_prompt($target_info, $candidates);
-            $json_text = $this->send_ai_request($prompt);
+            $cache_key = 'wila_suggest_v2_' . md5($this->provider . $this->model . $prompt);
+            $cached = get_transient($cache_key);
+            if (false !== $cached) return $cached;
 
+            $json_text = $this->send_ai_request($prompt, true);
             if (is_wp_error($json_text)) return $json_text;
+            $json_text = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($json_text));
+            $parsed = json_decode($json_text, true);
+            if (!is_array($parsed) || !isset($parsed['suggestions']) || !is_array($parsed['suggestions'])) {
+                return new WP_Error('invalid_ai_response', 'پاسخ هوش مصنوعی ساختار معتبری ندارد. لطفاً دوباره تلاش کنید.');
+            }
 
-            $json_text = preg_replace('/^```json\s*/i', '', trim($json_text));$json_text = preg_replace('/```$/', '', trim($json_text));
-
-            $parsed = json_decode(trim($json_text), true);
-            return $parsed ? $parsed : array();
+            $sources = array();
+            foreach ($candidates as $candidate) {
+                $sources[$candidate['type'] . ':' . $candidate['id']] = $candidate;
+            }
+            $suggestions = array();
+            $seen = array();
+            foreach ($parsed['suggestions'] as $item) {
+                if (!is_array($item) || !isset($item['source_id'], $item['source_type']) || !is_scalar($item['source_id']) || !is_string($item['source_type'])) continue;
+                $key = $item['source_type'] . ':' . (int) $item['source_id'];
+                if (!isset($sources[$key]) || isset($seen[$key])) continue;
+                if (!isset($item['recommended_anchor_texts']) || !is_array($item['recommended_anchor_texts'])) continue;
+                $anchors = array();
+                foreach ($item['recommended_anchor_texts'] as $anchor) {
+                    if (is_string($anchor) && trim($anchor) !== '') $anchors[] = sanitize_text_field($anchor);
+                }
+                if (empty($anchors)) continue;
+                $source = $sources[$key];
+                $suggestions[] = array(
+                    'source_id' => $source['id'],
+                    'source_type' => $source['type'],
+                    'source_title' => $source['title'],
+                    'recommended_anchor_texts' => array_slice($anchors, 0, 3),
+                    'link_frequency' => 1,
+                    'placement_guide' => isset($item['placement_guide']) && is_string($item['placement_guide']) ? sanitize_text_field($item['placement_guide']) : '',
+                    'reasoning' => isset($item['reasoning']) && is_string($item['reasoning']) ? sanitize_text_field($item['reasoning']) : '',
+                );
+                $seen[$key] = true;
+                if (count($suggestions) >= 5) break;
+            }
+            if (!empty($parsed['suggestions']) && empty($suggestions)) {
+                return new WP_Error('invalid_ai_response', 'پیشنهادهای دریافتی معتبر نیستند. لطفاً دوباره تلاش کنید.');
+            }
+            set_transient($cache_key, $suggestions, HOUR_IN_SECONDS);
+            return $suggestions;
         } catch (Exception $e) {
             return new WP_Error('suggestions_exception', 'خطا: ' . $e->getMessage());
         }
@@ -256,7 +381,7 @@ class WILA_Gemini_Client {
 
         $taxonomies = get_taxonomies(array('public' => true), 'names');
         unset($taxonomies['post_tag'], $taxonomies['nav_menu']);
-        $terms = get_terms(array('taxonomy' => array_values($taxonomies), 'hide_empty' => false, 'number' => 25));
+        $terms = empty($taxonomies) ? array() : get_terms(array('taxonomy' => array_values($taxonomies), 'hide_empty' => false, 'number' => 25));
         
         if (!is_wp_error($terms)) {
             foreach ($terms as $t) {
@@ -270,16 +395,11 @@ class WILA_Gemini_Client {
         $target_json = wp_json_encode($target, JSON_UNESCAPED_UNICODE);
         $cands_json = wp_json_encode($candidates, JSON_UNESCAPED_UNICODE);
         
-        $homepage_instruction = !empty($this->homepage_keywords) 
-            ? "\nنکته بسیار مهم سئو: صفحه اصلی سایت (آدرس: " . home_url() . ") را به عنوان یکی از مقاصد اصلی در نظر بگیرید و از این کلمات کلیدی برای لینک به صفحه اصلی استفاده کنید: [" . $this->homepage_keywords . "]"
-            : "";
-
         return "شما یک متخصص ارشد سئو تکنیکال هستید.\n" .
                "صفحه مقصد: " . $target_json . "\n" .
                "صفحات کاندیدا مبدا: " . $cands_json . "\n" .
-               $homepage_instruction . "\n" .
-               "بر اساس اطلاعات بالا یک آرایه JSON معتبر با مشخصات زیر تولید کنید:\n" .
-               '[{"source_id": 123, "source_title": "...", "source_type": "post", "recommended_anchor_texts": ["انکر۱", "انکر۲"], "link_frequency": 1, "placement_guide": "...", "reasoning": "..."}]';
+               "فقط برای صفحه مقصد مشخص‌شده، حداکثر ۵ پیشنهاد از کاندیداهای مبدا بدهید. شناسه و نوع را دقیقاً از کاندیداها انتخاب کنید. توضیحات کوتاه باشند. اگر مورد مرتبطی نیست suggestions را خالی برگردانید. خروجی فقط یک شیء JSON با ساختار زیر باشد:\n" .
+               '{"suggestions":[{"source_id":123,"source_type":"post","recommended_anchor_texts":["انکر۱","انکر۲"],"placement_guide":"محل پیشنهادی","reasoning":"دلیل کوتاه"}]}';
     }
 
     private function build_blueprint_prompt($params, $candidates) {

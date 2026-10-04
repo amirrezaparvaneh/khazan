@@ -29,6 +29,8 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/ai/suggest', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_ai_suggestions'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/ai/planner', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_content_blueprint'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_gemini_connection'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/gemini-models', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'get_gemini_models_list'), 'permission_callback' => array($this, 'check_permission')));
+
     }
 
     public function check_permission() { 
@@ -148,7 +150,8 @@ class WILA_REST_Controller {
         $provider = get_option('wila_ai_provider', 'gemini');
         
         $gemini_key = trim(get_option('wila_gemini_api_key', ''));
-        $gemini_model = get_option('wila_gemini_active_model', 'gemini-3.8-flash');
+        $gemini_client = new WILA_Gemini_Client();
+        $gemini_model = $gemini_client->normalize_gemini_model(get_option('wila_gemini_active_model', 'gemini-3.1-pro-preview'));
         
         $openrouter_key = trim(get_option('wila_openrouter_api_key', ''));
         $openrouter_model = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
@@ -177,19 +180,24 @@ class WILA_REST_Controller {
             update_option('wila_homepage_keywords', sanitize_textarea_field($params['homepage_keywords']));
         }
 
-        if ($provider === 'openrouter') {
-            $key   = isset($params['openrouter_api_key']) ? trim(sanitize_text_field($params['openrouter_api_key'])) : '';
-            $model = isset($params['openrouter_model']) ? sanitize_text_field($params['openrouter_model']) : 'qwen/qwen3.8-27b:free';
-            
+        if (isset($params['openrouter_model'])) {
+            $model = sanitize_text_field($params['openrouter_model']);
             update_option('wila_openrouter_active_model', $model);
+        }
+        if (isset($params['openrouter_api_key'])) {
+            $key = trim(sanitize_text_field($params['openrouter_api_key']));
             if (!empty($key) && strpos($key, '...') === false) {
                 update_option('wila_openrouter_api_key', $key);
             }
-        } else {
-            $key   = isset($params['gemini_api_key']) ? trim(sanitize_text_field($params['gemini_api_key'])) : '';
-            $model = isset($params['gemini_model']) ? sanitize_text_field($params['gemini_model']) : 'gemini-3.8-flash';
-            
+        }
+
+        if (isset($params['gemini_model'])) {
+            $gemini_client = new WILA_Gemini_Client();
+            $model = $gemini_client->normalize_gemini_model(sanitize_text_field($params['gemini_model']));
             update_option('wila_gemini_active_model', $model);
+        }
+        if (isset($params['gemini_api_key'])) {
+            $key = trim(sanitize_text_field($params['gemini_api_key']));
             if (!empty($key) && strpos($key, '...') === false) {
                 update_option('wila_gemini_api_key', $key);
             }
@@ -253,7 +261,7 @@ class WILA_REST_Controller {
             $model   = isset($params['openrouter_model']) ? sanitize_text_field($params['openrouter_model']) : null;
         } else {
             $api_key = isset($params['gemini_api_key']) ? trim(sanitize_text_field($params['gemini_api_key'])) : null;
-            $model   = isset($params['gemini_model']) ? sanitize_text_field($params['model']) : null;
+            $model   = isset($params['gemini_model']) ? sanitize_text_field($params['gemini_model']) : null;
         }
 
         if (!empty($api_key) && strpos($api_key, '...') !== false) {
@@ -267,6 +275,24 @@ class WILA_REST_Controller {
             return new WP_Error($result->get_error_code(), $result->get_error_message(), array('status' => 400));
         }
         return rest_ensure_response($result);
+    }
+
+    public function get_gemini_models_list($request) {
+        $params  = $request->get_json_params();
+        $api_key = isset($params['gemini_api_key']) ? trim(sanitize_text_field($params['gemini_api_key'])) : null;
+
+        if (!empty($api_key) && strpos($api_key, '...') !== false) {
+            $api_key = null;
+        }
+
+        $gemini = new WILA_Gemini_Client();
+        $result = $gemini->list_gemini_models($api_key);
+
+        if (is_wp_error($result)) {
+            return new WP_Error($result->get_error_code(), $result->get_error_message(), array('status' => 400));
+        }
+
+        return rest_ensure_response(array('success' => true, 'models' => $result));
     }
 
     private function calculate_orphans($items) {

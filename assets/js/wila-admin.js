@@ -10,6 +10,12 @@
     return n.toString().replace(/\d/g, (x) => farsiDigits[x]);
   }
 
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+  }
+
   const app = {
     state: {
       activeTab: 'overview',
@@ -25,7 +31,7 @@
         provider: 'gemini',
         hasGeminiKey: false,
         geminiMaskedKey: '',
-        geminiModel: 'gemini-3.8-flash',
+        geminiModel: 'gemini-2.5-flash',
         hasOpenRouterKey: false,
         openRouterMaskedKey: '',
         openRouterModel: 'qwen/qwen3.8-27b:free',
@@ -70,7 +76,7 @@
           provider: data.provider || 'gemini',
           hasGeminiKey: data.has_gemini_key,
           geminiMaskedKey: data.gemini_masked_key || '',
-          geminiModel: data.gemini_model || 'gemini-3.8-flash',
+          geminiModel: (['gemini-1.5-pro', 'gemini-2.5-pro', 'gemini-3.1-pro-preview'].includes(data.gemini_model)) ? 'gemini-3.1-pro-preview' : ((!data.gemini_model || ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash'].includes(data.gemini_model)) ? 'gemini-2.5-flash' : data.gemini_model),
           hasOpenRouterKey: data.has_openrouter_key,
           openRouterMaskedKey: data.openrouter_masked_key || '',
           openRouterModel: data.openrouter_model || 'qwen/qwen3.8-27b:free',
@@ -197,22 +203,27 @@
     },
 
     requestAiSuggestions: async function (id, type, title) {
+      if (this.suggestionsPending) return;
       const s = this.state.aiSettings;
       if (!s.hasGeminiKey && !s.hasOpenRouterKey) {
         alert('لطفاً ابتدا کلید API را در بخش تنظیمات وارد کنید.');
         return;
       }
 
+      this.suggestionsPending = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
       this.state.modal.isOpen = true;
       this.state.modal.title = `پیشنهاد هوشمند برای: ${title}`;
       this.state.modal.contentHtml = `<div style="text-align:center; padding: 30px; font-weight:600;">در حال پردازش هوش مصنوعی...</div>`;
       this.render();
 
       try {
-        const res = await this.apiFetch('/ai/suggest', { method: 'POST', body: JSON.stringify({ id, type }) });
+        const res = await this.apiFetch('/ai/suggest', { method: 'POST', body: JSON.stringify({ id, type }), signal: controller.signal });
         if (!res.success) throw new Error(res.message || 'خطا در تولید پاسخ.');
 
-        if (!res.suggestions || res.suggestions.length === 0) {
+        if (!Array.isArray(res.suggestions)) throw new Error('ساختار پاسخ پیشنهادها معتبر نیست.');
+        if (res.suggestions.length === 0) {
             this.state.modal.contentHtml = `<p style="text-align:center; padding:20px;">هوش مصنوعی هیچ صفحه مرتبطی پیدا نکرد.</p>`;
             this.render();
             return;
@@ -222,24 +233,27 @@
         res.suggestions.forEach((sugg, idx) => {
           html += `
             <div class="wila-ai-card">
-              <div class="wila-ai-card-title">${toPersianDigits(idx + 1)}. مبدا: ${sugg.source_title} <span class="wila-badge wila-badge-neutral">${sugg.type_label || sugg.source_type}</span></div>
-              <div style="margin: 6px 0; font-size:0.825rem;"><strong>انکر تکست‌ها:</strong> ${sugg.recommended_anchor_texts.map(a => `<span class="wila-badge wila-badge-success" style="margin-left:4px;">${a}</span>`).join('')}</div>
-              <div style="margin: 6px 0; font-size:0.825rem;"><strong>محل قرارگیری:</strong> ${sugg.placement_guide}</div>
-              <div style="margin-top: 8px; font-size:0.8rem; color:#64748b; background:#ffffff; padding:8px; border-radius:4px; border:1px dashed #cbd5e1;"><strong>تحلیل:</strong> ${sugg.reasoning}</div>
+              <div class="wila-ai-card-title">${toPersianDigits(idx + 1)}. مبدا: ${escapeHtml(sugg.source_title)} <span class="wila-badge wila-badge-neutral">${escapeHtml(sugg.type_label || sugg.source_type)}</span></div>
+              <div style="margin: 6px 0; font-size:0.825rem;"><strong>انکر تکست‌ها:</strong> ${(Array.isArray(sugg.recommended_anchor_texts) ? sugg.recommended_anchor_texts : []).map(a => `<span class="wila-badge wila-badge-success" style="margin-left:4px;">${escapeHtml(a)}</span>`).join('')}</div>
+              <div style="margin: 6px 0; font-size:0.825rem;"><strong>محل قرارگیری:</strong> ${escapeHtml(sugg.placement_guide)}</div>
+              <div style="margin-top: 8px; font-size:0.8rem; color:#64748b; background:#ffffff; padding:8px; border-radius:4px; border:1px dashed #cbd5e1;"><strong>تحلیل:</strong> ${escapeHtml(sugg.reasoning)}</div>
             </div>`;
         });
         this.state.modal.contentHtml = html;
         this.render();
       } catch (err) {
-        this.state.modal.contentHtml = `<p style="color:#ef4444; padding:20px; line-height: 1.6;">${err.message}</p>`;
+        this.state.modal.contentHtml = `<p style="color:#ef4444; padding:20px; line-height: 1.6;">${escapeHtml(err.name === 'AbortError' ? 'زمان دریافت پیشنهاد به پایان رسید. لطفاً کمی بعد دوباره تلاش کنید.' : err.message)}</p>`;
         this.render();
+      } finally {
+        clearTimeout(timeout);
+        this.suggestionsPending = false;
       }
     },
 
     testConnection: async function () {
       const provider = document.getElementById('wila-ai-provider').value;
       const geminiKey = document.getElementById('wila-gemini-key-input')?.value.trim() || '';
-      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.8-flash';
+      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.1-pro-preview';
       
       const openRouterKey = document.getElementById('wila-openrouter-key-input')?.value.trim() || '';
       const openRouterModel = document.getElementById('wila-openrouter-model-input')?.value.trim() || 'qwen/qwen3.8-27b:free';
@@ -269,7 +283,7 @@
             openrouter_model: openRouterModel
           })
         });
-        if (!res.success) throw new Error(res.message);
+        if (!res.success) throw new Error(res.message || res.code || 'خطا در برقراری ارتباط');
 
         if (resultBox) {
           resultBox.innerHTML = `<div style="background:#ecfdf5; padding:14px; font-size:0.825rem; color:#065f46;">
@@ -289,10 +303,58 @@
       }
     },
 
+    fetchGeminiModels: async function () {
+      const fetchBtn = document.getElementById('wila-fetch-models-btn');
+      const keyInput = document.getElementById('wila-gemini-key-input');
+      const select = document.getElementById('wila-gemini-model-input');
+      if (!fetchBtn || !select) return;
+
+      const geminiKey = keyInput ? keyInput.value.trim() : '';
+      const originalText = fetchBtn.textContent;
+      fetchBtn.textContent = 'در حال دریافت...';
+      fetchBtn.disabled = true;
+
+      try {
+        const res = await this.apiFetch('/gemini-models', {
+          method: 'POST',
+          body: JSON.stringify({ gemini_api_key: geminiKey })
+        });
+
+        if (res.models && res.models.length > 0) {
+          const currentVal = select.value;
+          select.innerHTML = '';
+          res.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.displayName || m.id} (${m.id})`;
+            if (m.id === currentVal) opt.selected = true;
+            select.appendChild(opt);
+          });
+          if (!select.value && select.options.length > 0) {
+            const preferred = res.models.find(m => m.id.includes('3.1-pro') || m.id.includes('2.5-flash'));
+            if (preferred) {
+              select.value = preferred.id;
+            } else {
+              select.selectedIndex = 0;
+            }
+          }
+          this.state.aiSettings.geminiModel = select.value;
+          alert(`موفقیت: تعداد ${res.models.length} مدل فعال از گوگل برای اکانت شما بارگذاری شد.`);
+        } else {
+          alert('هیچ مدل فعالی یافت نشد.');
+        }
+      } catch (e) {
+        alert('خطا در دریافت مدل‌ها: ' + (e.message || 'پاسخی از سرور دریافت نشد'));
+      } finally {
+        fetchBtn.textContent = originalText;
+        fetchBtn.disabled = false;
+      }
+    },
+
     saveSettings: async function () {
       const provider = document.getElementById('wila-ai-provider').value;
       const geminiKey = document.getElementById('wila-gemini-key-input')?.value.trim() || '';
-      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.8-flash';
+      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.1-pro-preview';
       
       const openRouterKey = document.getElementById('wila-openrouter-key-input')?.value.trim() || '';
       const openRouterModel = document.getElementById('wila-openrouter-model-input')?.value.trim() || 'qwen/qwen3.8-27b:free';
@@ -567,8 +629,16 @@
                 <input type="text" id="wila-gemini-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasGeminiKey ? s.geminiMaskedKey : ''}" placeholder="AIzaSy..." />
               </div>
               <div>
-                <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">مدل جمینای:</label>
-                <input type="text" id="wila-gemini-model-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.geminiModel}" />
+                <label style="display:block; font-size:0.825rem; font-weight:600; margin-bottom:6px;">انتخاب مدل جمینای:</label>
+                <div style="display:flex; gap:8px;">
+                  <select id="wila-gemini-model-input" class="wila-select" style="flex:1;">
+                    <option value="gemini-3.1-pro-preview" ${(s.geminiModel === 'gemini-3.1-pro-preview' || s.geminiModel === 'gemini-2.5-pro' || s.geminiModel === 'gemini-1.5-pro') ? 'selected' : ''}>🧠 Gemini 3.1 Pro (پیشنهاد رسمی گوگل برای حساب‌های جدید)</option>
+                    <option value="gemini-2.5-flash" ${(!s.geminiModel || s.geminiModel === 'gemini-2.5-flash' || s.geminiModel === 'gemini-1.5-flash' || s.geminiModel === 'gemini-2.0-flash' || s.geminiModel === 'gemini-3.8-flash') ? 'selected' : ''}>⚡ Gemini 2.5 Flash (پیشنهادی - سریع و بهینه)</option>
+                    ${(s.geminiModel && !['gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-3.8-flash'].includes(s.geminiModel)) ? `<option value="${s.geminiModel}" selected>⚙️ ${s.geminiModel}</option>` : ''}
+                  </select>
+                  <button type="button" class="wila-btn wila-btn-secondary" id="wila-fetch-models-btn" title="دریافت مدل‌های فعال مستقیم از اکانت گوگل" style="white-space:nowrap; font-size:0.75rem; padding:0 12px;">🔄 مدل‌های فعال اکانت</button>
+                </div>
+                <div style="font-size:0.75rem; color:#64748b; margin-top:5px;">اگر مدلی در اکانت شما با خطا مواجه شد، روی «🔄 مدل‌های فعال اکانت» بزنید تا فهرست کامل مدل‌های در دسترس کلید شما از گوگل بارگذاری شود.</div>
               </div>
             </div>
 
@@ -662,6 +732,9 @@
 
       const testBtn = this.root.querySelector('#wila-test-api-btn');
       if (testBtn) testBtn.addEventListener('click', () => this.testConnection());
+
+      const fetchModelsBtn = this.root.querySelector('#wila-fetch-models-btn');
+      if (fetchModelsBtn) fetchModelsBtn.addEventListener('click', () => this.fetchGeminiModels());
 
       const closeBtn = this.root.querySelector('#wila-close-modal-btn');
       if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());
