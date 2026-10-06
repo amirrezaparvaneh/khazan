@@ -354,3 +354,122 @@
   font-size: 0.825rem;
   color: var(--wila-text-muted);
 }
+
+/* قابلیت آزمایشی نقشه و Search Console */
+.wila-insights-page {
+  max-width: 1280px;
+  direction: rtl;
+}
+
+.wila-insights-section {
+  margin-bottom: 20px;
+}
+
+.wila-graph-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 16px;
+}
+
+.wila-graph-canvas {
+  min-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--wila-border);
+  border-radius: var(--wila-radius);
+  background: #f8fafc;
+}
+
+.wila-node-details {
+  padding: 16px;
+  border: 1px solid var(--wila-border);
+  border-radius: var(--wila-radius);
+  background: #f8fafc;
+  font-size: 0.825rem;
+}
+
+.wila-node-details h3 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.wila-node-details p {
+  margin: 10px 0;
+}
+
+.wila-node-details a,
+.wila-table a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.wila-graph-node {
+  cursor: pointer;
+}
+
+.wila-graph-node:focus {
+  outline: none;
+}
+
+.wila-graph-node:focus circle,
+.wila-graph-node:hover circle {
+  stroke: #0f172a;
+  stroke-width: 4;
+}
+
+.wila-graph-svg {
+  width: 100%;
+  min-width: 720px;
+  height: 480px;
+}
+
+.wila-graph-edge {
+  stroke: #cbd5e1;
+  stroke-width: 1.5;
+}
+
+.wila-graph-node circle {
+  fill: #2563eb;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.wila-graph-node.is-isolated circle {
+  fill: #ef4444;
+}
+
+.wila-graph-node text {
+  fill: #334155;
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.wila-gsc-fields {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(240px, 1.3fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wila-insights-error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-radius: var(--wila-radius);
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.wila-insights-empty {
+  padding: 35px 20px;
+  text-align: center;
+  color: var(--wila-text-muted);
+}
+
+@media (max-width: 782px) {
+  .wila-gsc-fields,
+  .wila-graph-layout {
+    grid-template-columns: 1fr;
+  }
+}
