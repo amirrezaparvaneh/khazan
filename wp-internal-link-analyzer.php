@@ -41,7 +41,6 @@ final class WP_Internal_Link_Analyzer {
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-gemini-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
-        require_once WILA_PLUGIN_DIR . 'includes/class-wila-insights.php';
     }
 
     private function init_hooks() {
@@ -65,35 +64,22 @@ final class WP_Internal_Link_Analyzer {
     public function register_rest_routes() {
         $controller = new WILA_REST_Controller();
         $controller->register_routes();
-
-        $insights = new WILA_Insights();
-        $insights->register_routes();
     }
 
     public function register_admin_menu() {
         add_menu_page(
-            'تحلیل لینک‌های داخلی',
-            'لینک‌‌سازی داخلی',
+            'لینکر - تحلیل و بهینه‌سازی لینک‌های داخلی',
+            'لینکر',
             'manage_options',
             'wila-dashboard',
             array($this, 'render_dashboard_view'),
             'dashicons-admin-links',
             30
         );
-
-        add_submenu_page(
-            'wila-dashboard',
-            'نقشه و Quick Winها',
-            'نقشه و Quick Winها',
-            'manage_options',
-            'wila-insights',
-            array($this, 'render_insights_view')
-        );
     }
 
     public function enqueue_admin_assets($hook_suffix) {
-        // لود استایل و اسکریپت منحصراً در صفحه اختصاصی افزونه
-        if (!in_array($hook_suffix, array('toplevel_page_wila-dashboard', 'wila-dashboard_page_wila-insights'), true)) {
+        if ($hook_suffix !== 'toplevel_page_wila-dashboard') {
             return;
         }
 
@@ -104,22 +90,15 @@ final class WP_Internal_Link_Analyzer {
             WILA_VERSION
         );
 
-        $script_handle = 'wila-admin-script';
-        $script_file = 'assets/js/wila-admin.js';
-        if ($hook_suffix === 'wila-dashboard_page_wila-insights') {
-            $script_handle = 'wila-insights-script';
-            $script_file = 'assets/js/wila-insights.js';
-        }
-
         wp_enqueue_script(
-            $script_handle,
-            WILA_PLUGIN_URL . $script_file,
+            'wila-admin-script',
+            WILA_PLUGIN_URL . 'assets/js/wila-admin.js',
             array(),
             WILA_VERSION,
             true
         );
 
-        wp_localize_script($script_handle, 'wilaData', array(
+        wp_localize_script('wila-admin-script', 'wilaData', array(
             'restUrl' => esc_url_raw(rest_url()),
             'nonce'   => wp_create_nonce('wp_rest'),
         ));
@@ -127,10 +106,6 @@ final class WP_Internal_Link_Analyzer {
 
     public function render_dashboard_view() {
         echo '<div id="wila-app-root"></div>';
-    }
-
-    public function render_insights_view() {
-        echo '<div id="wila-insights-root"></div>';
     }
 }
 
