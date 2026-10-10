@@ -105,7 +105,7 @@ class WILA_AvalAI_Client {
             'messages' => array(array('role' => 'user', 'content' => $prompt)),
             'response_format' => array('type' => 'json_object'),
             'temperature' => 0.2,
-            'max_tokens' => $suggestions_request ? 2048 : 4096,
+            'max_tokens' => $suggestions_request ? 2048 : 12000,
         );
 
         $response = wp_remote_post($url, array(
@@ -114,7 +114,7 @@ class WILA_AvalAI_Client {
                 'Authorization' => 'Bearer ' . $this->api_key,
             ),
             'body'    => wp_json_encode($body),
-            'timeout' => $suggestions_request ? 35 : 60,
+            'timeout' => $suggestions_request ? 35 : 180,
         ));
 
         if (is_wp_error($response)) return $response;
@@ -282,7 +282,9 @@ class WILA_AvalAI_Client {
     }
 
     public function generate_full_content($params, $outline) {
-        $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\nفقط JSON معتبر با کلیدهای content و featured_image_prompt برگردان. content باید HTML کامل بدنه محتوا باشد؛ H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. featured_image_prompt فقط یک پرامپت انگلیسی بسیار دقیق برای تصویر شاخص باشد: موضوع و فضای مقاله را نشان بده، عنوان فارسی مقاله را دقیقاً در مرکز تصویر با فونت Vazirmatn/Vazir خوانا و تمیز بنویس، برای متن از هر چهار طرف حاشیه امن کافی بگذار، ترکیب‌بندی مینیمال، بدون متن درهم‌ریخته یا نوشته اضافه، نسبت 16:9.";
+        $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
+            "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
+            "فقط یک شیء JSON معتبر و کامل برگردان؛ هیچ توضیح، Markdown یا متن بیرون از JSON ننویس. کلیدهای دقیق فقط content و featured_image_prompt باشند. content باید HTML کامل بدنه محتوا باشد؛ H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. مقدار content را کوتاه نکن و آن را در یک رشته JSON معتبر با escape صحیح کوتیشن‌ها و خط‌های جدید قرار بده. featured_image_prompt فقط یک پرامپت انگلیسی بسیار دقیق برای تصویر شاخص باشد: موضوع و فضای مقاله را نشان بده، عنوان فارسی مقاله را دقیقاً در مرکز تصویر با فونت Vazirmatn/Vazir خوانا و تمیز بنویس، برای متن از هر چهار طرف حاشیه امن کافی بگذار، ترکیب‌بندی مینیمال، بدون متن درهم‌ریخته یا نوشته اضافه، نسبت 16:9.";
         $result = $this->decode_ai_json($this->send_ai_request($prompt));
         if (is_wp_error($result)) return $result;
         if (empty($result['content']) || !is_string($result['content'])) return new WP_Error('invalid_content_response', 'محتوای معتبر از AvalAI دریافت نشد.');

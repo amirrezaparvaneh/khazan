@@ -44,7 +44,7 @@
       },
       plannerResult: null,
       isPlanning: false,
-      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '', useOrphanLinks: true },
+      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
       contentOutline: null,
       generatedContent: '',
       featuredImagePrompt: '',
@@ -159,7 +159,7 @@
         const parts = item.split(/\s*:\s*/);
         return { anchor: parts.shift() || '', url: parts.join(':') || '' };
       }).filter(link => link.anchor && /^https?:\/\//i.test(link.url));
-      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks, use_orphan_links: f.useOrphanLinks && !internalLinks.length };
+      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks, description: f.description, use_orphan_links: f.useOrphanLinks && !internalLinks.length };
     },
 
     generateOutline: async function () {
@@ -397,6 +397,7 @@
         const field = (key, label, type = 'text') => `<label style="display:block;margin:10px 0 4px;font-weight:600">${label}</label><input data-generator-field="${key}" type="${type}" class="wila-input" style="width:100%" value="${esc(f[key])}">`;
         contentHtml = `<div class="wila-card" style="max-width:900px"><h3>تولیدکننده محتوای هوشمند سئو</h3><p>طرح را تایید کنید، سپس محتوای HTML تولید و به پیش‌نویس وردپرس منتقل کنید.</p>
           ${field('h1Title','عنوان اصلی / H1')}${field('focusKeyword','کلیدواژه کانونی')}${field('longTail','کلیدواژه‌های لانگ‌تیل')}${field('wordCount','تعداد کلمات','number')}
+          <label style="display:block;margin:10px 0 4px;font-weight:600">توضیحات و الزامات اختصاصی محتوا</label><textarea data-generator-field="description" class="wila-input" rows="5" style="width:100%" placeholder="نکات، منابع، محصولات یا بخش‌هایی که باید حتماً در محتوا پوشش داده شوند...">${esc(f.description)}</textarea>
           <label style="display:block;margin:10px 0 4px;font-weight:600">نوع محتوا</label><select data-generator-field="contentType" class="wila-select" style="width:100%">${['پست وبلاگ','صفحه دسته‌بندی','صفحه محصول','صفحه فرود/لندینگ','تشخیص خودکار بر پایه اینتنت'].map(x=>`<option ${f.contentType===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">فاز قیف</label><select data-generator-field="funnelStage" class="wila-select" style="width:100%">${['TOFU (آگاهی)','MOFU (بررسی)','BOFU (خرید/تبدیل)','تشخیص خودکار'].map(x=>`<option ${f.funnelStage===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">نقشه لینک داخلی</label><textarea data-generator-field="internalLinks" class="wila-input" rows="4" style="width:100%" placeholder="انکرتکست: https://example.com/page\nیا با ویرگول جدا کنید">${esc(f.internalLinks)}</textarea>

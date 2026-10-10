@@ -276,6 +276,7 @@ class WILA_REST_Controller {
             'word_count' => isset($params['word_count']) ? max(300, min(10000, absint($params['word_count']))) : 1200,
             'content_type' => isset($params['content_type']) ? sanitize_text_field($params['content_type']) : '',
             'funnel_stage' => isset($params['funnel_stage']) ? sanitize_text_field($params['funnel_stage']) : '',
+            'description' => isset($params['description']) ? sanitize_textarea_field($params['description']) : '',
             'internal_links' => $internal_links,
             'use_orphan_links' => $use_orphan_links,
             'homepage_keywords' => get_option('wila_homepage_keywords', ''),
