@@ -28,13 +28,10 @@
       scanTotal: 0,
       scanCurrent: 0,
       aiSettings: {
-        provider: 'gemini',
-        hasGeminiKey: false,
-        geminiMaskedKey: '',
-        geminiModel: 'gemini-2.5-flash',
-        hasOpenRouterKey: false,
-        openRouterMaskedKey: '',
-        openRouterModel: 'qwen/qwen3.8-27b:free',
+        provider: 'avalai',
+        hasAvalAIKey: false,
+        avalAIMaskedKey: '',
+        avalAIModel: 'deepseek-chat',
         homepageKeywords: ''
       },
       plannerForm: {
@@ -47,6 +44,10 @@
       },
       plannerResult: null,
       isPlanning: false,
+      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '' },
+      contentOutline: null,
+      generatedContent: '',
+      isGeneratingContent: false,
       modal: { isOpen: false, title: '', contentHtml: '' },
     },
 
@@ -72,14 +73,11 @@
     fetchSettings: async function () {
       try {
         const data = await this.apiFetch('/settings');
-        this.state.aiSettings = {
-          provider: data.provider || 'gemini',
-          hasGeminiKey: data.has_gemini_key,
-          geminiMaskedKey: data.gemini_masked_key || '',
-          geminiModel: (['gemini-1.5-pro', 'gemini-2.5-pro', 'gemini-3.1-pro-preview'].includes(data.gemini_model)) ? 'gemini-3.1-pro-preview' : ((!data.gemini_model || ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash'].includes(data.gemini_model)) ? 'gemini-2.5-flash' : data.gemini_model),
-          hasOpenRouterKey: data.has_openrouter_key,
-          openRouterMaskedKey: data.openrouter_masked_key || '',
-          openRouterModel: data.openrouter_model || 'qwen/qwen3.8-27b:free',
+      this.state.aiSettings = {
+          provider: 'avalai',
+          hasAvalAIKey: data.has_avalai_key,
+          avalAIMaskedKey: data.avalai_masked_key || '',
+          avalAIModel: data.avalai_model || 'deepseek-chat',
           homepageKeywords: data.homepage_keywords || ''
         };
         this.render();
@@ -128,6 +126,36 @@
 
     updatePlannerField: function (field, value) {
       this.state.plannerForm[field] = value;
+    },
+
+    getGeneratorPayload: function () {
+      const f = this.state.generatorForm;
+      const internalLinks = f.internalLinks.split(/\n|,/).map(item => item.trim()).filter(Boolean).map(item => {
+        const parts = item.split(/\s*:\s*/);
+        return { anchor: parts.shift() || '', url: parts.join(':') || '' };
+      }).filter(link => link.anchor && /^https?:\/\//i.test(link.url));
+      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks };
+    },
+
+    generateOutline: async function () {
+      const p = this.getGeneratorPayload();
+      if (!p.h1_title.trim() || !p.focus_keyword.trim()) return alert('عنوان و کلیدواژه کانونی الزامی هستند.');
+      this.state.isGeneratingContent = true; this.state.contentOutline = null; this.state.generatedContent = ''; this.render();
+      try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; }
+      catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
+    },
+
+    generateFullContent: async function () {
+      this.state.isGeneratingContent = true; this.render();
+      try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; }
+      catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
+    },
+
+    copyGeneratedContent: async function () { try { await navigator.clipboard.writeText(this.state.generatedContent); alert('محتوا کپی شد.'); } catch (e) { alert('کپی محتوا ناموفق بود.'); } },
+
+    createDraft: async function () {
+      try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content: this.state.generatedContent }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
+      catch (e) { alert('خطا: ' + e.message); }
     },
 
     runLinkPlanner: async function () {
@@ -205,7 +233,7 @@
     requestAiSuggestions: async function (id, type, title) {
       if (this.suggestionsPending) return;
       const s = this.state.aiSettings;
-      if (!s.hasGeminiKey && !s.hasOpenRouterKey) {
+      if (!s.hasAvalAIKey) {
         alert('لطفاً ابتدا کلید API را در بخش تنظیمات وارد کنید.');
         return;
       }
@@ -251,124 +279,36 @@
     },
 
     testConnection: async function () {
-      const provider = document.getElementById('wila-ai-provider').value;
-      const geminiKey = document.getElementById('wila-gemini-key-input')?.value.trim() || '';
-      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.1-pro-preview';
-      
-      const openRouterKey = document.getElementById('wila-openrouter-key-input')?.value.trim() || '';
-      const openRouterModel = document.getElementById('wila-openrouter-model-input')?.value.trim() || 'qwen/qwen3.8-27b:free';
-
+      const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const resultBox = document.getElementById('wila-test-result');
       const testBtn = document.getElementById('wila-test-api-btn');
-
-      const activeKey = provider === 'openrouter' ? openRouterKey : geminiKey;
-      const hasStoredKey = provider === 'openrouter' ? this.state.aiSettings.hasOpenRouterKey : this.state.aiSettings.hasGeminiKey;
-
-      if (!activeKey && !hasStoredKey) {
-        alert('لطفاً کلید API را وارد کنید.');
+      if (!avalaiKey && !this.state.aiSettings.hasAvalAIKey) {
+        alert('لطفاً کلید API سرویس AvalAI را وارد کنید.');
         return;
       }
-
       if (testBtn) { testBtn.disabled = true; testBtn.innerText = 'در حال بررسی...'; }
-      if (resultBox) { resultBox.style.display = 'block'; resultBox.innerHTML = `<div style="background:#f8fafc; padding:12px; font-size:0.825rem;">در حال تست اتصال به ${provider}...</div>`; }
-
+      if (resultBox) { resultBox.style.display = 'block'; resultBox.innerHTML = '<div style="background:#f8fafc; padding:12px; font-size:0.825rem;">در حال تست اتصال به AvalAI...</div>'; }
       try {
-        const res = await this.apiFetch('/test-connection', {
-          method: 'POST',
-          body: JSON.stringify({
-            provider: provider,
-            gemini_api_key: geminiKey,
-            gemini_model: geminiModel,
-            openrouter_api_key: openRouterKey,
-            openrouter_model: openRouterModel
-          })
-        });
+        const res = await this.apiFetch('/test-connection', { method: 'POST', body: JSON.stringify({ avalai_api_key: avalaiKey }) });
         if (!res.success) throw new Error(res.message || res.code || 'خطا در برقراری ارتباط');
-
-        if (resultBox) {
-          resultBox.innerHTML = `<div style="background:#ecfdf5; padding:14px; font-size:0.825rem; color:#065f46;">
-            <div style="font-weight:600;">✅ اتصال موفقیت‌آمیز بود!</div>
-            <div>${res.message}</div>
-            <div>مدل: <code>${res.model}</code> | پاسخ: <strong>${toPersianDigits(res.latency_ms)} میلیثانیه</strong></div>
-          </div>`;
-        }
+        if (resultBox) resultBox.innerHTML = `<div style="background:#ecfdf5; padding:14px; color:#065f46;"><strong>اتصال موفقیت‌آمیز بود.</strong><div>${res.message}</div><div>مدل: <code>${res.model}</code></div></div>`;
       } catch (err) {
-        if (resultBox) {
-          resultBox.innerHTML = `<div style="background:#fef2f2; padding:14px; font-size:0.825rem; color:#991b1b; line-height:1.6;">
-            <div style="font-weight:600;">❌ خطا در برقراری اتصال:</div><div>${err.message}</div>
-          </div>`;
-        }
+        if (resultBox) resultBox.innerHTML = `<div style="background:#fef2f2; padding:14px; color:#991b1b;">${escapeHtml(err.message)}</div>`;
       } finally {
         if (testBtn) { testBtn.disabled = false; testBtn.innerText = 'تست اتصال'; }
       }
     },
 
-    fetchGeminiModels: async function () {
-      const fetchBtn = document.getElementById('wila-fetch-models-btn');
-      const keyInput = document.getElementById('wila-gemini-key-input');
-      const select = document.getElementById('wila-gemini-model-input');
-      if (!fetchBtn || !select) return;
-
-      const geminiKey = keyInput ? keyInput.value.trim() : '';
-      const originalText = fetchBtn.textContent;
-      fetchBtn.textContent = 'در حال دریافت...';
-      fetchBtn.disabled = true;
-
-      try {
-        const res = await this.apiFetch('/gemini-models', {
-          method: 'POST',
-          body: JSON.stringify({ gemini_api_key: geminiKey })
-        });
-
-        if (res.models && res.models.length > 0) {
-          const currentVal = select.value;
-          select.innerHTML = '';
-          res.models.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m.id;
-            opt.textContent = `${m.displayName || m.id} (${m.id})`;
-            if (m.id === currentVal) opt.selected = true;
-            select.appendChild(opt);
-          });
-          if (!select.value && select.options.length > 0) {
-            const preferred = res.models.find(m => m.id.includes('3.1-pro') || m.id.includes('2.5-flash'));
-            if (preferred) {
-              select.value = preferred.id;
-            } else {
-              select.selectedIndex = 0;
-            }
-          }
-          this.state.aiSettings.geminiModel = select.value;
-          alert(`موفقیت: تعداد ${res.models.length} مدل فعال از گوگل برای اکانت شما بارگذاری شد.`);
-        } else {
-          alert('هیچ مدل فعالی یافت نشد.');
-        }
-      } catch (e) {
-        alert('خطا در دریافت مدل‌ها: ' + (e.message || 'پاسخی از سرور دریافت نشد'));
-      } finally {
-        fetchBtn.textContent = originalText;
-        fetchBtn.disabled = false;
-      }
-    },
-
     saveSettings: async function () {
-      const provider = document.getElementById('wila-ai-provider').value;
-      const geminiKey = document.getElementById('wila-gemini-key-input')?.value.trim() || '';
-      const geminiModel = document.getElementById('wila-gemini-model-input')?.value.trim() || 'gemini-3.1-pro-preview';
-      
-      const openRouterKey = document.getElementById('wila-openrouter-key-input')?.value.trim() || '';
-      const openRouterModel = document.getElementById('wila-openrouter-model-input')?.value.trim() || 'qwen/qwen3.8-27b:free';
+      const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const homepageKeywords = document.getElementById('wila-homepage-keywords-input')?.value.trim() || '';
 
       try {
         await this.apiFetch('/settings', {
           method: 'POST',
           body: JSON.stringify({
-            provider: provider,
-            gemini_api_key: geminiKey,
-            gemini_model: geminiModel,
-            openrouter_api_key: openRouterKey,
-            openrouter_model: openRouterModel,
+            provider: 'avalai',
+            avalai_api_key: avalaiKey,
             homepage_keywords: homepageKeywords
           })
         });
@@ -416,6 +356,19 @@
             ${cardsHtml}
             <div class="wila-card" style="border-right: 4px solid #ef4444;"><div class="wila-card-header"><h3 style="color:#ef4444;">صفحات یتیم</h3></div><div class="wila-card-value" style="color:#ef4444;">${summary ? toPersianDigits(summary.orphan_count) : '---'}</div></div>
           </div>`;
+      } else if (activeTab === 'generator') {
+        const f = this.state.generatorForm;
+        const esc = escapeHtml;
+        const field = (key, label, type = 'text') => `<label style="display:block;margin:10px 0 4px;font-weight:600">${label}</label><input data-generator-field="${key}" type="${type}" class="wila-input" style="width:100%" value="${esc(f[key])}">`;
+        contentHtml = `<div class="wila-card" style="max-width:900px"><h3>تولیدکننده محتوای هوشمند سئو</h3><p>طرح را تایید کنید، سپس محتوای HTML تولید و به پیش‌نویس وردپرس منتقل کنید.</p>
+          ${field('h1Title','عنوان اصلی / H1')}${field('focusKeyword','کلیدواژه کانونی')}${field('longTail','کلیدواژه‌های لانگ‌تیل')}${field('wordCount','تعداد کلمات','number')}
+          <label style="display:block;margin:10px 0 4px;font-weight:600">نوع محتوا</label><select data-generator-field="contentType" class="wila-select" style="width:100%">${['پست وبلاگ','صفحه دسته‌بندی','صفحه محصول','صفحه فرود/لندینگ','تشخیص خودکار بر پایه اینتنت'].map(x=>`<option ${f.contentType===x?'selected':''}>${x}</option>`).join('')}</select>
+          <label style="display:block;margin:10px 0 4px;font-weight:600">فاز قیف</label><select data-generator-field="funnelStage" class="wila-select" style="width:100%">${['TOFU (آگاهی)','MOFU (بررسی)','BOFU (خرید/تبدیل)','تشخیص خودکار'].map(x=>`<option ${f.funnelStage===x?'selected':''}>${x}</option>`).join('')}</select>
+          <label style="display:block;margin:10px 0 4px;font-weight:600">نقشه لینک داخلی</label><textarea data-generator-field="internalLinks" class="wila-input" rows="4" style="width:100%" placeholder="انکرتکست: https://example.com/page\nیا با ویرگول جدا کنید">${esc(f.internalLinks)}</textarea>
+          <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
+          ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
+          ${this.state.generatedContent ? `<div style="margin-top:20px"><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea><div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی مستقیم</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس پست در وردپرس</button></div></div>`:''}
+        </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
         const contentTypes = [
@@ -614,49 +567,13 @@
               <textarea id="wila-homepage-keywords-input" class="wila-input" style="width:100%; height:70px; resize:vertical;" placeholder="مثلاً: چرم تیماج، خرید محصولات چرمی، کیف چرم طبیعی">${s.homepageKeywords || ''}</textarea>
             </div>
 
-            <div style="margin-bottom:20px;">
-              <label style="display:block; font-size:0.875rem; font-weight:600; margin-bottom:6px;">انتخاب ارائه‌‌دهنده هوش مصنوعی:</label>
-              <select id="wila-ai-provider" class="wila-select" style="width:100%;" onchange="document.getElementById('wila-provider-gemini-box').style.display = this.value==='gemini'?'block':'none'; document.getElementById('wila-provider-openrouter-box').style.display = this.value==='openrouter'?'block':'none';">
-                <option value="gemini" ${s.provider === 'gemini' ? 'selected' : ''}>Google Gemini API (مستقیم)</option>
-                <option value="openrouter" ${s.provider === 'openrouter' ? 'selected' : ''}>OpenRouter.ai (مدل‌های رایگان و اقتصادی)</option>
-              </select>
+            <div style="margin-bottom:20px; background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0;">
+              <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات AvalAI</h4>
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید API سرویس AvalAI: ${s.hasAvalAIKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
+              <input type="text" id="wila-avalai-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasAvalAIKey ? s.avalAIMaskedKey : ''}" placeholder="کلید API AvalAI" />
+              <p style="font-size:0.75rem; color:#64748b; margin-bottom:0;">مدل ثابت: <code>deepseek-chat</code></p>
             </div>
 
-            <div id="wila-provider-gemini-box" style="display:${s.provider === 'gemini' ? 'block' : 'none'}; background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;">
-              <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات Google Gemini</h4>
-              <div style="margin-bottom:12px;">
-                <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید Gemini API: ${s.hasGeminiKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
-                <input type="text" id="wila-gemini-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasGeminiKey ? s.geminiMaskedKey : ''}" placeholder="AIzaSy..." />
-              </div>
-              <div>
-                <label style="display:block; font-size:0.825rem; font-weight:600; margin-bottom:6px;">انتخاب مدل جمینای:</label>
-                <div style="display:flex; gap:8px;">
-                  <select id="wila-gemini-model-input" class="wila-select" style="flex:1;">
-                    <option value="gemini-3.1-pro-preview" ${(s.geminiModel === 'gemini-3.1-pro-preview' || s.geminiModel === 'gemini-2.5-pro' || s.geminiModel === 'gemini-1.5-pro') ? 'selected' : ''}>🧠 Gemini 3.1 Pro (پیشنهاد رسمی گوگل برای حساب‌های جدید)</option>
-                    <option value="gemini-2.5-flash" ${(!s.geminiModel || s.geminiModel === 'gemini-2.5-flash' || s.geminiModel === 'gemini-1.5-flash' || s.geminiModel === 'gemini-2.0-flash' || s.geminiModel === 'gemini-3.8-flash') ? 'selected' : ''}>⚡ Gemini 2.5 Flash (پیشنهادی - سریع و بهینه)</option>
-                    ${(s.geminiModel && !['gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-3.8-flash'].includes(s.geminiModel)) ? `<option value="${s.geminiModel}" selected>⚙️ ${s.geminiModel}</option>` : ''}
-                  </select>
-                  <button type="button" class="wila-btn wila-btn-secondary" id="wila-fetch-models-btn" title="دریافت مدل‌های فعال مستقیم از اکانت گوگل" style="white-space:nowrap; font-size:0.75rem; padding:0 12px;">🔄 مدل‌های فعال اکانت</button>
-                </div>
-                <div style="font-size:0.75rem; color:#64748b; margin-top:5px;">اگر مدلی در اکانت شما با خطا مواجه شد، روی «🔄 مدل‌های فعال اکانت» بزنید تا فهرست کامل مدل‌های در دسترس کلید شما از گوگل بارگذاری شود.</div>
-              </div>
-            </div>
-
-            <div id="wila-provider-openrouter-box" style="display:${s.provider === 'openrouter' ? 'block' : 'none'}; background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;">
-              <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات OpenRouter.ai</h4>
-              <div style="margin-bottom:12px;">
-                <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید OpenRouter API: ${s.hasOpenRouterKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
-                <input type="text" id="wila-openrouter-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasOpenRouterKey ? s.openRouterMaskedKey : ''}" placeholder="sk-or-v1-..." />
-              </div>
-              <div>
-                <label style="display:block; font-size:0.825rem; font-weight:600; margin-bottom:6px;">انتخاب مدل هوش مصنوعی:</label>
-                <select id="wila-openrouter-model-input" class="wila-select" style="width:100%;">
-                  <option value="qwen/qwen3.8-27b:free" ${s.openRouterModel === 'qwen/qwen3.8-27b:free' ? 'selected' : ''}>🚀 Qwen 3.8 27B (Free) - قدرتمند برای استراتژی سئو</option>
-                  <option value="nvidia/nemotron-3-ultra:free" ${s.openRouterModel === 'nvidia/nemotron-3-ultra:free' ? 'selected' : ''}>⚡ Nvidia Nemotron 3 Ultra (Free) - پرسرعت و دقیق در تولید JSON</option>
-                  <option value="openrouter/free" ${s.openRouterModel === 'openrouter/free' ? 'selected' : ''}>🥉 OpenRouter Free Auto-Router - انتخاب خودکار بهترین مدل رایگان</option>
-                </select>
-              </div>
-            </div>
 
             <div style="display:flex; gap:10px;">
               <button class="wila-btn wila-btn-primary" id="wila-save-settings-btn">ذخیره تنظیمات</button>
@@ -671,6 +588,7 @@
         <div class="wila-tabs">
           <button class="wila-tab-btn ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview">پیشخوان آماری</button>
           <button class="wila-tab-btn ${activeTab === 'planner' ? 'active' : ''}" data-tab="planner">🎯 برنامه‌‌ریز لینک</button>
+          <button class="wila-tab-btn ${activeTab === 'generator' ? 'active' : ''}" data-tab="generator">تولیدکننده محتوا</button>
           <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر پیوندها</button>
           <button class="wila-tab-btn ${activeTab === 'orphans' ? 'active' : ''}" data-tab="orphans">صفحات یتیم</button>
           <button class="wila-tab-btn ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">تنظیمات</button>
@@ -701,6 +619,17 @@
       
       const plannerBtn = this.root.querySelector('#wila-run-planner-btn');
       if (plannerBtn) plannerBtn.addEventListener('click', () => this.runLinkPlanner());
+
+      this.root.querySelectorAll('[data-generator-field]').forEach(el => el.addEventListener('input', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
+      this.root.querySelectorAll('select[data-generator-field]').forEach(el => el.addEventListener('change', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
+      const outlineBtn = this.root.querySelector('#wila-generate-outline');
+      if (outlineBtn) outlineBtn.addEventListener('click', () => this.generateOutline());
+      const fullBtn = this.root.querySelector('#wila-generate-full');
+      if (fullBtn) fullBtn.addEventListener('click', () => this.generateFullContent());
+      const copyBtn = this.root.querySelector('#wila-copy-content');
+      if (copyBtn) copyBtn.addEventListener('click', () => this.copyGeneratedContent());
+      const draftBtn = this.root.querySelector('#wila-create-draft');
+      if (draftBtn) draftBtn.addEventListener('click', () => this.createDraft());
 
       // اتصال رویدادها برای حفظ دائمی مقادیر فرم برنامه‌ریز در state
       const planTitle = document.getElementById('wila-plan-title');
@@ -733,8 +662,6 @@
       const testBtn = this.root.querySelector('#wila-test-api-btn');
       if (testBtn) testBtn.addEventListener('click', () => this.testConnection());
 
-      const fetchModelsBtn = this.root.querySelector('#wila-fetch-models-btn');
-      if (fetchModelsBtn) fetchModelsBtn.addEventListener('click', () => this.fetchGeminiModels());
 
       const closeBtn = this.root.querySelector('#wila-close-modal-btn');
       if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());

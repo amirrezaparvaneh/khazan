@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت هوش مصنوعی (پشتیبانی از Google Gemini و OpenRouter.ai با قابلیت تزریق کلمات کلیدی صفحه اصلی)
+ * کلاینت AvalAI با مدل ثابت DeepSeek Chat و قابلیت تزریق کلمات کلیدی صفحه اصلی
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class WILA_Gemini_Client {
+class WILA_AvalAI_Client {
 
     private $provider;
     private $api_key;
@@ -17,32 +17,12 @@ class WILA_Gemini_Client {
     private $homepage_keywords;
 
     public function __construct() {
-        $this->provider = get_option('wila_ai_provider', 'gemini');
+        $this->provider = 'avalai';
         $this->homepage_keywords = trim(get_option('wila_homepage_keywords', ''));
         
-        if ($this->provider === 'openrouter') {
-            $this->api_key = trim(get_option('wila_openrouter_api_key', ''));
-            $this->model   = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
-        } else {
-            $this->api_key = trim(get_option('wila_gemini_api_key', ''));
-            $this->model   = $this->normalize_gemini_model(get_option('wila_gemini_active_model', 'gemini-3.1-pro-preview'));
-        }
+        $this->api_key = trim(get_option('wila_avalai_api_key', ''));
+        $this->model   = 'deepseek-chat';
     }
-
-    public function normalize_gemini_model($model) {
-        $model = trim(str_replace('models/', '', (string) $model));
-        $legacy_models = array(
-            ''                 => 'gemini-3.1-pro-preview',
-            'gemini-1.5-flash' => 'gemini-2.5-flash',
-            'gemini-1.5-pro'   => 'gemini-3.1-pro-preview',
-            'gemini-2.0-flash' => 'gemini-2.5-flash',
-            'gemini-2.5-pro'   => 'gemini-3.1-pro-preview',
-            'gemini-3.8-flash' => 'gemini-2.5-flash',
-        );
-        return isset($legacy_models[$model]) ? $legacy_models[$model] : $model;
-    }
-
-
 
     public function is_configured() {
         return !empty($this->api_key);
@@ -51,82 +31,19 @@ class WILA_Gemini_Client {
     public function get_active_model() {
         return $this->model;
     }
-    public function list_gemini_models($override_key = null) {
-        $key = $this->resolve_key($override_key, 'gemini');
-        if (empty($key)) {
-            return new WP_Error('missing_api_key', 'کلید API جمینای وارد نشده است.');
-        }
 
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . urlencode($key);
-        $response = wp_remote_get($url, array(
-            'headers' => array(
-                'Content-Type'   => 'application/json',
-                'x-goog-api-key' => $key,
-            ),
-            'timeout' => 15,
-        ));
-
-        if (is_wp_error($response)) {
-            return new WP_Error('connection_failed', 'خطا در ارتباط با گوگل: ' . $response->get_error_message());
-        }
-
-        $code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
-
-        if ($code !== 200 || !isset($data['models'])) {
-            $msg = isset($data['error']['message']) ? $data['error']['message'] : ('خطای سرور گوگل: ' . $code);
-            return new WP_Error('api_error', $msg);
-        }
-
-        $models = array();
-        foreach ($data['models'] as $m) {
-            $methods = isset($m['supportedGenerationMethods']) ? (array) $m['supportedGenerationMethods'] : array();
-            if (in_array('generateContent', $methods, true)) {
-                $id = str_replace('models/', '', $m['name']);
-                $models[] = array(
-                    'id'          => $id,
-                    'displayName' => !empty($m['displayName']) ? $m['displayName'] : $id,
-                    'description' => !empty($m['description']) ? $m['description'] : '',
-                );
-            }
-        }
-
-        return $models;
-    }
-
-
-    private function resolve_key($override_key = null, $provider = null) {
-        $provider = $provider ?: $this->provider;
-        $saved_key = ($provider === 'openrouter')
-            ? trim(get_option('wila_openrouter_api_key', ''))
-            : trim(get_option('wila_gemini_api_key', ''));
+    private function resolve_key($override_key = null) {
+        $saved_key = trim(get_option('wila_avalai_api_key', ''));
 
         $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $saved_key;
-        if (strpos($key, '...') !== false || empty($key)) {
-            $key = $saved_key;
-        }
+        if (strpos($key, '...') !== false || empty($key)) $key = $saved_key;
         return $key;
     }
 
-    private function resolve_model($override_model = null, $provider = null) {
-        $provider = $provider ?: $this->provider;
-        if ($provider === 'openrouter') {
-            $saved_model = get_option('wila_openrouter_active_model', 'qwen/qwen3.8-27b:free');
-            $model = !empty($override_model) ? trim(sanitize_text_field($override_model)) : $saved_model;
-            return !empty($model) ? $model : 'qwen/qwen3.8-27b:free';
-        }
-
-        $saved_model = get_option('wila_gemini_active_model', 'gemini-3.1-pro-preview');
-        $model = !empty($override_model) ? trim(sanitize_text_field($override_model)) : $saved_model;
-        return $this->normalize_gemini_model($model);
-    }
-
-    public function test_connection($override_key = null, $override_model = null, $override_provider = null) {
+    public function test_connection($override_key = null) {
         try {
-            $provider = !empty($override_provider) ? sanitize_text_field($override_provider) : $this->provider;
-            $key = $this->resolve_key($override_key, $provider);
-            $model = $this->resolve_model($override_model, $provider);
+            $key = $this->resolve_key($override_key);
+            $model = $this->model;
 
             if (empty($key)) {
                 return new WP_Error('missing_api_key', 'کلید API وارد نشده است.');
@@ -134,39 +51,20 @@ class WILA_Gemini_Client {
 
             $start_time = microtime(true);
 
-            if ($provider === 'openrouter') {
-                $url = "https://openrouter.ai/api/v1/chat/completions";
-                $body = array(
-                    'model' => $model,
-                    'messages' => array(array('role' => 'user', 'content' => 'Ping')),
-                    'max_tokens' => 5
-                );
-
-                $response = wp_remote_post($url, array(
-                    'headers' => array(
-                        'Content-Type'  => 'application/json',
-                        'Authorization' => 'Bearer ' . $key,
-                        'HTTP-Referer'  => home_url(),
-                        'X-Title'       => 'WP Internal Link Analyzer'
-                    ),
-                    'body'    => wp_json_encode($body),
-                    'timeout' => 20
-                ));
-            } else {
-                $clean_model = $this->normalize_gemini_model($model);
-                $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $clean_model . ":generateContent?key=" . urlencode($key);
-
-                $body = array(
-                    'contents' => array(array('parts' => array(array('text' => 'Ping')))),
-                    'generationConfig' => array('maxOutputTokens' => 3)
-                );
-
-                $response = wp_remote_post($url, array(
-                    'headers' => array('Content-Type' => 'application/json', 'x-goog-api-key' => $key),
-                    'body'    => wp_json_encode($body),
-                    'timeout' => 20
-                ));
-            }
+            $url = 'https://api.avalai.ir/v1/chat/completions';
+            $body = array(
+                'model' => 'deepseek-chat',
+                'messages' => array(array('role' => 'user', 'content' => 'Ping')),
+                'max_tokens' => 5,
+            );
+            $response = wp_remote_post($url, array(
+                'headers' => array(
+                    'Content-Type' => 'application/json',
+                    'Authorization' => 'Bearer ' . $key,
+                ),
+                'body' => wp_json_encode($body),
+                'timeout' => 20,
+            ));
 
             $latency = round((microtime(true) - $start_time) * 1000);
 
@@ -201,77 +99,36 @@ class WILA_Gemini_Client {
     private function send_ai_request($prompt, $suggestions_request = false) {
         if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
 
-        if ($this->provider === 'openrouter') {
-            $url = "https://openrouter.ai/api/v1/chat/completions";
-            $body = array(
-                'model' => $this->model,
-                'messages' => array(
-                    array('role' => 'user', 'content' => $prompt)
-                ),
-                'response_format' => array('type' => 'json_object')
-            );
+        $url = 'https://api.avalai.ir/v1/chat/completions';
+        $body = array(
+            'model' => $this->model,
+            'messages' => array(array('role' => 'user', 'content' => $prompt)),
+            'response_format' => array('type' => 'json_object'),
+            'temperature' => 0.2,
+            'max_tokens' => $suggestions_request ? 2048 : 4096,
+        );
 
-            $response = wp_remote_post($url, array(
-                'headers' => array(
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => 'Bearer ' . $this->api_key,
-                    'HTTP-Referer'  => home_url(),
-                    'X-Title'       => 'WP Internal Link Analyzer'
-                ),
-                'body'    => wp_json_encode($body),
-                'timeout' => $suggestions_request ? 40 : 90 // برای جلوگیری از خطای cURL 28
-            ));
+        $response = wp_remote_post($url, array(
+            'headers' => array(
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $this->api_key,
+            ),
+            'body'    => wp_json_encode($body),
+            'timeout' => $suggestions_request ? 35 : 60,
+        ));
 
-            if (is_wp_error($response)) return $response;
-            
-            $code = wp_remote_retrieve_response_code($response);
-            $raw = wp_remote_retrieve_body($response);
-            $data = json_decode($raw, true);
+        if (is_wp_error($response)) return $response;
+        $code = wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
 
-            if ($code !== 200) {
-                $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور OpenRouter';
-                return new WP_Error('ai_error', $msg);
-            }
-
-            if (!isset($data['choices'][0]['message']['content'])) {
-                return new WP_Error('invalid_response', 'پاسخ نامعتبر از OpenRouter.');
-            }
-
-            return $data['choices'][0]['message']['content'];
-
-        } else {
-            $clean_model = $this->normalize_gemini_model($this->model);
-            $url = "https://generativelanguage.googleapis.com/v1beta/models/" . $clean_model . ":generateContent?key=" . urlencode($this->api_key);
-
-            $body = array(
-                'contents' => array(array('parts' => array(array('text' => $prompt)))),
-                'generationConfig' => array('temperature' => 0.2, 'responseMimeType' => 'application/json')
-            );
-
-            if ($suggestions_request) $body['generationConfig']['maxOutputTokens'] = 2048;
-            $response = wp_remote_post($url, array(
-                'headers' => array('Content-Type' => 'application/json', 'x-goog-api-key' => $this->api_key),
-                'body'    => wp_json_encode($body),
-                'timeout' => $suggestions_request ? 40 : 90
-            ));
-
-            if (is_wp_error($response)) return $response;
-            
-            $code = wp_remote_retrieve_response_code($response);
-            $raw = wp_remote_retrieve_body($response);
-            $data = json_decode($raw, true);
-
-            if ($code !== 200) {
-                $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور گوگل.';
-                return new WP_Error('ai_error', $msg);
-            }
-
-            if (!isset($data['candidates'][0]['content']['parts'][0]['text'])) {
-                return new WP_Error('invalid_response', 'پاسخ نامعتبر از جمینای.');
-            }
-
-            return $data['candidates'][0]['content']['parts'][0]['text'];
+        if ($code !== 200) {
+            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
+            return new WP_Error('ai_error', $msg);
         }
+        if (!isset($data['choices'][0]['message']['content'])) {
+            return new WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
+        }
+        return $data['choices'][0]['message']['content'];
     }
 
     public function generate_content_blueprint($params) {
@@ -417,6 +274,35 @@ class WILA_Gemini_Client {
                $this->build_anchor_rules_prompt() . "\n" .
                "فقط برای صفحه مقصد مشخص‌شده، حداکثر ۵ پیشنهاد از کاندیداهای مبدا بدهید. شناسه و نوع را دقیقاً از کاندیداها انتخاب کنید. توضیحات کوتاه باشند. اگر مورد مرتبطی نیست suggestions را خالی برگردانید. خروجی فقط یک شیء JSON با ساختار زیر باشد:\n" .
                '{"suggestions":[{"source_id":123,"source_type":"post","recommended_anchor_texts":["انکر۱","انکر۲"],"placement_guide":"محل پیشنهادی","reasoning":"دلیل کوتاه"}]}';
+    }
+
+    public function generate_content_outline($params) {
+        $prompt = $this->build_content_system_prompt($params) . "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
+        return $this->decode_ai_json($this->send_ai_request($prompt));
+    }
+
+    public function generate_full_content($params, $outline) {
+        $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\nفقط JSON معتبر با کلید content برگردان. مقدار content باید HTML کامل بدنه محتوا باشد؛ H1 نساز. همه هدینگ‌های تاییدشده را رعایت کن.";
+        $result = $this->decode_ai_json($this->send_ai_request($prompt));
+        if (is_wp_error($result)) return $result;
+        if (empty($result['content']) || !is_string($result['content'])) return new WP_Error('invalid_content_response', 'محتوای معتبر از AvalAI دریافت نشد.');
+        return $result['content'];
+    }
+
+    private function decode_ai_json($response) {
+        if (is_wp_error($response)) return $response;
+        $response = preg_replace('/^```(?:json)?\\s*|\\s*```$/i', '', trim($response));
+        $parsed = json_decode($response, true);
+        return is_array($parsed) ? $parsed : new WP_Error('invalid_ai_response', 'پاسخ هوش مصنوعی JSON معتبر نیست.');
+    }
+
+    private function build_content_system_prompt($params) {
+        $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
+        return "شما نویسنده ارشد محتوای فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا: " . $data . "\n" .
+            "الزامات قطعی: E-E-A-T را با تجربه دست‌اول قابل‌باور، تخصص و اعتبار پیاده کن؛ موجودیت‌های مهم و روابط معنایی آن‌ها را کامل پوشش بده؛ پاسخ مستقیم نیت جستجو را در پاراگراف‌های نخست بده؛ برای AEO پاسخ‌های کوتاه، روشن و قابل‌استخراج بنویس. از ادعاهای بی‌منبع و keyword stuffing پرهیز کن.\n" .
+            "هدینگ‌های H2 و H3 را مطابق سفر مشتری و FAQ منطقی بچین. فارسی روان، پاراگراف کوتاه، فهرست و جدول فقط در صورت مفیدبودن بنویس.\n" .
+            "نقشه لینک داخلی داده‌شده را دقیقاً با HTML <a href=\"URL\">انکرتکست</a> و فقط در جمله طبیعی وارد کن. از انکرتکست عمومی پرهیز کن و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه بگذار.\n" .
+            "در جای لازم برای تصویر، دقیقاً این HTML را درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> seo-content-strategy.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.";
     }
 
     private function build_blueprint_prompt($params, $candidates) {

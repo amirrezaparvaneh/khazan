@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
- * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با Gemini AI
+ * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با AvalAI و مدل DeepSeek Chat
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
@@ -39,7 +39,7 @@ final class WP_Internal_Link_Analyzer {
     private function includes() {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
-        require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-gemini-client.php';
+        require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-avalai-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
     }
 
@@ -94,7 +94,7 @@ final class WP_Internal_Link_Analyzer {
             'wila-admin-script',
             WILA_PLUGIN_URL . 'assets/js/wila-admin.js',
             array(),
-            WILA_VERSION,
+            WILA_VERSION . '.' . filemtime(WILA_PLUGIN_DIR . 'assets/js/wila-admin.js'),
             true
         );
 
