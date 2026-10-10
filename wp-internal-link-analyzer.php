@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WILA_VERSION', '1.0.0');
+define('WILA_VERSION', '1.1.0');
 define('WILA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WILA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WILA_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -47,6 +47,7 @@ final class WP_Internal_Link_Analyzer {
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
 
+        add_action('plugins_loaded', array($this, 'maybe_upgrade_database'));
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'register_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
@@ -59,6 +60,12 @@ final class WP_Internal_Link_Analyzer {
 
     public function deactivate() {
         // لاجیک پاکسازی در صورت نیاز
+    }
+
+    public function maybe_upgrade_database() {
+        if (get_option('wila_db_installed_version') !== WILA_VERSION) {
+            WILA_DB::create_tables();
+        }
     }
 
     public function register_rest_routes() {

@@ -31,6 +31,8 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/content/outline', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_content_outline'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/generate', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_full_content'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/draft', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'create_content_draft'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/history', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history_item'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_avalai_connection'), 'permission_callback' => array($this, 'check_permission')));
 
     }
@@ -294,7 +296,34 @@ class WILA_REST_Controller {
         $outline = isset($body['outline']) && is_array($body['outline']) ? $body['outline'] : array();
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
         $result = (new WILA_AvalAI_Client())->generate_full_content($params, $outline);
-        return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt']));
+        if (is_wp_error($result)) return $result;
+
+        global $wpdb;
+        $history_table = WILA_DB::get_content_history_table_name();
+        $wpdb->insert($history_table, array(
+            'title' => $params['h1_title'],
+            'focus_keyword' => $params['focus_keyword'],
+            'content' => $result['content'],
+            'featured_image_prompt' => $result['featured_image_prompt'],
+            'created_at' => current_time('mysql'),
+        ), array('%s', '%s', '%s', '%s', '%s'));
+
+        return rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt']));
+    }
+
+    public function get_content_history() {
+        global $wpdb;
+        $table = WILA_DB::get_content_history_table_name();
+        $items = $wpdb->get_results("SELECT id, title, focus_keyword, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+        return rest_ensure_response(array('success' => true, 'items' => $items));
+    }
+
+    public function get_content_history_item($request) {
+        global $wpdb;
+        $table = WILA_DB::get_content_history_table_name();
+        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, content, featured_image_prompt, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
+        if (!$item) return new WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
+        return rest_ensure_response(array('success' => true, 'item' => $item));
     }
 
     public function create_content_draft($request) {

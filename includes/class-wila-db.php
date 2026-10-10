@@ -16,6 +16,11 @@ class WILA_DB {
         return $wpdb->prefix . 'wila_internal_links';
     }
 
+    public static function get_content_history_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'wila_content_history';
+    }
+
     /**
      * ایجاد یا ارتقای جداول دیتابیس
      */
@@ -45,6 +50,19 @@ class WILA_DB {
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+
+        $history_table = self::get_content_history_table_name();
+        $history_sql = "CREATE TABLE {$history_table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            title VARCHAR(255) NOT NULL,
+            focus_keyword VARCHAR(255) NOT NULL DEFAULT '',
+            content LONGTEXT NOT NULL,
+            featured_image_prompt TEXT NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            KEY created_at_idx (created_at)
+        ) $charset_collate;";
+        dbDelta($history_sql);
 
         update_option('wila_db_installed_version', WILA_VERSION);
     }

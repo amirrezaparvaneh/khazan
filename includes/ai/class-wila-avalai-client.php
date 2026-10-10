@@ -291,9 +291,21 @@ class WILA_AvalAI_Client {
 
     private function decode_ai_json($response) {
         if (is_wp_error($response)) return $response;
-        $response = preg_replace('/^```(?:json)?\\s*|\\s*```$/i', '', trim($response));
-        $parsed = json_decode($response, true);
-        return is_array($parsed) ? $parsed : new WP_Error('invalid_ai_response', 'پاسخ هوش مصنوعی JSON معتبر نیست.');
+
+        $response = trim((string) $response);
+        $response = preg_replace('/^```(?:json)?\s*/i', '', $response);
+        $response = preg_replace('/\s*```$/', '', $response);
+        $parsed = json_decode(trim($response), true);
+        if (is_array($parsed)) return $parsed;
+
+        $start = strpos($response, '{');
+        $end = strrpos($response, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $parsed = json_decode(substr($response, $start, $end - $start + 1), true);
+            if (is_array($parsed)) return $parsed;
+        }
+
+        return new WP_Error('invalid_ai_response', 'پاسخ هوش مصنوعی JSON معتبر نیست. دوباره تلاش کنید.');
     }
 
     private function build_content_system_prompt($params) {

@@ -48,6 +48,7 @@
       contentOutline: null,
       generatedContent: '',
       featuredImagePrompt: '',
+      contentHistory: [],
       isGeneratingContent: false,
       modal: { isOpen: false, title: '', contentHtml: '' },
     },
@@ -57,6 +58,7 @@
       if (!this.root) return;
       this.fetchSummary();
       this.fetchSettings();
+      this.fetchContentHistory();
       this.render();
     },
 
@@ -91,6 +93,28 @@
 
     fetchOrphans: async function () {
       try { this.state.orphans = await this.apiFetch('/orphans'); this.render(); } catch (e) {}
+    },
+
+    fetchContentHistory: async function () {
+      try {
+        const response = await this.apiFetch('/content/history');
+        this.state.contentHistory = response.items || [];
+        this.render();
+      } catch (e) {}
+    },
+
+    showContentHistoryItem: async function (id) {
+      try {
+        const response = await this.apiFetch(`/content/history/${id}`);
+        if (!response.success || !response.item) throw new Error(response.message || 'محتوا یافت نشد.');
+        const item = response.item;
+        this.state.modal = {
+          isOpen: true,
+          title: escapeHtml(item.title),
+          contentHtml: `<p><strong>کلیدواژه کانونی:</strong> ${escapeHtml(item.focus_keyword)}</p><p><strong>تاریخ تولید:</strong> ${escapeHtml(item.created_at)}</p><label style="display:block;margin:14px 0 6px;font-weight:600">محتوا</label><textarea id="wila-history-content" class="wila-input" rows="16" style="width:100%;direction:rtl">${escapeHtml(item.content)}</textarea>${item.featured_image_prompt ? `<label style="display:block;margin:14px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea class="wila-input" rows="4" style="width:100%;direction:ltr;text-align:left">${escapeHtml(item.featured_image_prompt)}</textarea>` : ''}<div style="margin-top:12px"><button id="wila-copy-history-content" class="wila-btn wila-btn-primary">کپی محتوا</button></div>`
+        };
+        this.render();
+      } catch (e) { alert('خطا: ' + e.message); }
     },
 
     startBatchScan: async function () {
@@ -380,6 +404,7 @@
           <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
           ${this.state.generatedContent ? `<div style="margin-top:20px"><label style="display:block;margin-bottom:6px;font-weight:600">محتوای نهایی HTML</label><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea>${this.state.featuredImagePrompt ? `<label style="display:block;margin:16px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea id="wila-featured-image-prompt" class="wila-input" rows="5" style="width:100%;direction:ltr;text-align:left">${esc(this.state.featuredImagePrompt)}</textarea>` : ''}<div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی تمام محتوا</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس در وبلاگ</button></div></div>`:''}
+          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر، همراه تاریخ تولید، در این بخش نگهداری می‌شود.</p><table class="wila-table"><thead><tr><th>عنوان</th><th>کلیدواژه</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td>${esc(item.focus_keyword)}</td><td>${esc(item.created_at)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button></td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div>
         </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
@@ -643,6 +668,14 @@
       if (copyBtn) copyBtn.addEventListener('click', () => this.copyGeneratedContent());
       const draftBtn = this.root.querySelector('#wila-create-draft');
       if (draftBtn) draftBtn.addEventListener('click', () => this.createDraft());
+      this.root.querySelectorAll('.wila-history-view').forEach(btn => btn.addEventListener('click', e => this.showContentHistoryItem(e.currentTarget.getAttribute('data-id'))));
+      const copyHistoryBtn = this.root.querySelector('#wila-copy-history-content');
+      if (copyHistoryBtn) copyHistoryBtn.addEventListener('click', async () => {
+        const field = this.root.querySelector('#wila-history-content');
+        if (!field) return;
+        try { await navigator.clipboard.writeText(field.value); alert('محتوا کپی شد.'); }
+        catch (e) { field.select(); document.execCommand('copy'); alert('محتوا کپی شد.'); }
+      });
 
       // اتصال رویدادها برای حفظ دائمی مقادیر فرم برنامه‌ریز در state
       const planTitle = document.getElementById('wila-plan-title');
