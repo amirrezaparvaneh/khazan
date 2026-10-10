@@ -45,7 +45,8 @@ class WILA_Scanner {
 
         // ۲. دریافت تمام دسته‌بندی‌های عمومی (دسته‌بندی بلاگ آکامد، دسته محصول و...)
         $taxonomies = get_taxonomies(array('public' => true), 'names');
-        unset($taxonomies['post_tag'], $taxonomies['nav_menu']);
+        // دسته‌بندی پیش‌فرض نوشته‌های بلاگ یک صفحه مستقل در معماری این سایت نیست.
+        unset($taxonomies['post_tag'], $taxonomies['nav_menu'], $taxonomies['category']);
 
         $terms = get_terms(array(
             'taxonomy'   => array_values($taxonomies),
@@ -168,6 +169,7 @@ class WILA_Scanner {
         }
 
         $taxonomies = get_taxonomies(array('public' => true), 'names');
+        unset($taxonomies['post_tag'], $taxonomies['nav_menu'], $taxonomies['category']);
         $path = wp_parse_url($clean_url, PHP_URL_PATH);
         
         if ($path) {

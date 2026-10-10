@@ -153,9 +153,16 @@ class WILA_REST_Controller {
         $scanner = new WILA_Scanner();
         $orphans = $this->calculate_orphans($scanner->get_all_scannable_items());
         
+        $priorities = array('product_cat' => 1, 'product' => 2, 'post' => 3, 'page' => 4);
         foreach ($orphans['list'] as &$item) {
             $item['type_label'] = $this->get_type_label($item['type']);
+            $item['priority'] = isset($priorities[$item['type']]) ? $priorities[$item['type']] : 3;
         }
+        unset($item);
+        usort($orphans['list'], function ($a, $b) {
+            if ($a['priority'] !== $b['priority']) return $a['priority'] - $b['priority'];
+            return strcasecmp($a['title'], $b['title']);
+        });
         return rest_ensure_response($orphans['list']);
     }
 
@@ -239,6 +246,27 @@ class WILA_REST_Controller {
 
     private function content_generator_params($request) {
         $params = $request->get_json_params();
+        $internal_links = isset($params['internal_links']) && is_array($params['internal_links']) ? array_map(function ($link) {
+            return array('anchor' => isset($link['anchor']) ? sanitize_text_field($link['anchor']) : '', 'url' => isset($link['url']) ? esc_url_raw($link['url']) : '');
+        }, $params['internal_links']) : array();
+        $use_orphan_links = !empty($params['use_orphan_links']);
+
+        if ($use_orphan_links && empty($internal_links)) {
+            $scanner = new WILA_Scanner();
+            $orphans = $this->calculate_orphans($scanner->get_all_scannable_items());
+            $priorities = array('product_cat' => 1, 'product' => 2, 'post' => 3, 'page' => 4);
+            usort($orphans['list'], function ($a, $b) use ($priorities) {
+                $a_priority = isset($priorities[$a['type']]) ? $priorities[$a['type']] : 3;
+                $b_priority = isset($priorities[$b['type']]) ? $priorities[$b['type']] : 3;
+                return $a_priority === $b_priority ? strcasecmp($a['title'], $b['title']) : $a_priority - $b_priority;
+            });
+            foreach ($orphans['list'] as $orphan) {
+                if (!empty($orphan['url']) && !empty($orphan['title'])) {
+                    $internal_links[] = array('anchor' => $orphan['title'], 'url' => esc_url_raw($orphan['url']), 'orphan' => true);
+                }
+            }
+        }
+
         return array(
             'h1_title' => isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : '',
             'focus_keyword' => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
@@ -246,9 +274,10 @@ class WILA_REST_Controller {
             'word_count' => isset($params['word_count']) ? max(300, min(10000, absint($params['word_count']))) : 1200,
             'content_type' => isset($params['content_type']) ? sanitize_text_field($params['content_type']) : '',
             'funnel_stage' => isset($params['funnel_stage']) ? sanitize_text_field($params['funnel_stage']) : '',
-            'internal_links' => isset($params['internal_links']) && is_array($params['internal_links']) ? array_map(function ($link) {
-                return array('anchor' => isset($link['anchor']) ? sanitize_text_field($link['anchor']) : '', 'url' => isset($link['url']) ? esc_url_raw($link['url']) : '');
-            }, $params['internal_links']) : array(),
+            'internal_links' => $internal_links,
+            'use_orphan_links' => $use_orphan_links,
+            'homepage_keywords' => get_option('wila_homepage_keywords', ''),
+            'homepage_url' => home_url('/'),
         );
     }
 

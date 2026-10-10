@@ -44,7 +44,7 @@
       },
       plannerResult: null,
       isPlanning: false,
-      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '' },
+      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '', useOrphanLinks: true },
       contentOutline: null,
       generatedContent: '',
       isGeneratingContent: false,
@@ -134,7 +134,7 @@
         const parts = item.split(/\s*:\s*/);
         return { anchor: parts.shift() || '', url: parts.join(':') || '' };
       }).filter(link => link.anchor && /^https?:\/\//i.test(link.url));
-      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks };
+      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks, use_orphan_links: f.useOrphanLinks && !internalLinks.length };
     },
 
     generateOutline: async function () {
@@ -325,7 +325,7 @@
     },
 
     render: function () {
-      const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal, aiSettings, plannerForm, plannerResult, isPlanning } = this.state;
+      const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal, aiSettings, plannerForm, plannerResult, isPlanning, isGeneratingContent } = this.state;
       let contentHtml = '';
 
       if (activeTab === 'overview') {
@@ -365,6 +365,7 @@
           <label style="display:block;margin:10px 0 4px;font-weight:600">نوع محتوا</label><select data-generator-field="contentType" class="wila-select" style="width:100%">${['پست وبلاگ','صفحه دسته‌بندی','صفحه محصول','صفحه فرود/لندینگ','تشخیص خودکار بر پایه اینتنت'].map(x=>`<option ${f.contentType===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">فاز قیف</label><select data-generator-field="funnelStage" class="wila-select" style="width:100%">${['TOFU (آگاهی)','MOFU (بررسی)','BOFU (خرید/تبدیل)','تشخیص خودکار'].map(x=>`<option ${f.funnelStage===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">نقشه لینک داخلی</label><textarea data-generator-field="internalLinks" class="wila-input" rows="4" style="width:100%" placeholder="انکرتکست: https://example.com/page\nیا با ویرگول جدا کنید">${esc(f.internalLinks)}</textarea>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-use-orphan-links" ${f.useOrphanLinks ? 'checked' : ''}> اگر نقشه لینک خالی است، صفحات یتیم مرتبط را خودکار و استراتژیک لینک‌سازی کن</label><p style="margin:5px 0;color:#64748b;font-size:.8rem">افزونه فقط صفحه‌های یتیم مرتبط را انتخاب می‌کند و انکرتکست را بر اساس مقصد می‌سازد.</p>
           <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
           ${this.state.generatedContent ? `<div style="margin-top:20px"><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea><div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی مستقیم</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس پست در وردپرس</button></div></div>`:''}
@@ -489,19 +490,17 @@
           </div>`;
       } else if (activeTab === 'orphans') {
         const priorityGroups = [
-          { id: 'product_cat', title: 'اولویت ۱: دسته‌بندی محصولات', desc: 'هاب‌های اصلی توزیع اعتبار و هدایت مشتری.', items: [] },
-          { id: 'product', title: 'اولویت ۲: محصولات', desc: 'صفحات تبدیل (Conversion) که نیاز به لینک ورودی دارند.', items: [] },
-          { id: 'category', title: 'اولویت ۳: دسته‌‌بندی مقالات', desc: 'هاب‌های محتوایی (Pillar Pages) سایت.', items: [] },
-          { id: 'posts', title: 'اولویت ۴: مقالات و محتواهای سفارشی', desc: 'تقویت‌کننده کلمات کلیدی طولانی (Long-tail).', items: [] },
-          { id: 'page', title: 'اولویت ۵: برگه‌های عمومی', desc: 'صفحاتی که نیاز کمتری به لینک متنی دارند.', items: [] }
+          { id: 'product_cat', title: 'اولویت ۱: دسته‌بندی محصولات', desc: 'هاب‌های تجاری و مهم‌ترین مسیر توزیع اعتبار.', items: [] },
+          { id: 'product', title: 'اولویت ۲: محصولات ووکامرس', desc: 'صفحات تبدیل که باید از محتوای مرتبط لینک ورودی بگیرند.', items: [] },
+          { id: 'articles', title: 'اولویت ۳: مقالات بلاگ', desc: 'محتوای آموزشی و لانگ‌تیل؛ شامل نوشته‌ها و نوع‌های محتوای سفارشی.', items: [] },
+          { id: 'page', title: 'اولویت ۴: برگه‌های عمومی', desc: 'صفحات خدمات و اطلاعات عمومی با نیاز لینک‌سازی متناسب.', items: [] }
         ];
 
         this.state.orphans.forEach(item => {
           if (item.type === 'product_cat') priorityGroups[0].items.push(item);
           else if (item.type === 'product') priorityGroups[1].items.push(item);
-          else if (item.type === 'category') priorityGroups[2].items.push(item);
-          else if (item.type === 'page') priorityGroups[4].items.push(item);
-          else priorityGroups[3].items.push(item);
+          else if (item.type === 'page') priorityGroups[3].items.push(item);
+          else priorityGroups[2].items.push(item);
         });
 
         let orphansHtml = '';
@@ -608,7 +607,8 @@
 
     bindEvents: function () {
       this.root.querySelectorAll('.wila-tab-btn').forEach(btn => btn.addEventListener('click', e => {
-        this.state.activeTab = e.target.getAttribute('data-tab');
+        this.state.activeTab = e.currentTarget.getAttribute('data-tab');
+        if (!this.state.activeTab) return;
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         this.render();
@@ -622,6 +622,8 @@
 
       this.root.querySelectorAll('[data-generator-field]').forEach(el => el.addEventListener('input', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
       this.root.querySelectorAll('select[data-generator-field]').forEach(el => el.addEventListener('change', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
+      const useOrphanLinks = this.root.querySelector('#wila-use-orphan-links');
+      if (useOrphanLinks) useOrphanLinks.addEventListener('change', e => { this.state.generatorForm.useOrphanLinks = e.target.checked; });
       const outlineBtn = this.root.querySelector('#wila-generate-outline');
       if (outlineBtn) outlineBtn.addEventListener('click', () => this.generateOutline());
       const fullBtn = this.root.querySelector('#wila-generate-full');
