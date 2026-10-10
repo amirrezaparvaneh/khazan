@@ -96,17 +96,19 @@ class WILA_AvalAI_Client {
         }
     }
 
-    private function send_ai_request($prompt, $suggestions_request = false) {
+    private function send_ai_request($prompt, $suggestions_request = false, $json_response = true) {
         if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
 
         $url = 'https://api.avalai.ir/v1/chat/completions';
         $body = array(
             'model' => $this->model,
             'messages' => array(array('role' => 'user', 'content' => $prompt)),
-            'response_format' => array('type' => 'json_object'),
             'temperature' => 0.2,
             'max_tokens' => $suggestions_request ? 2048 : 12000,
         );
+        if ($json_response) {
+            $body['response_format'] = array('type' => 'json_object');
+        }
 
         $response = wp_remote_post($url, array(
             'headers' => array(
@@ -284,11 +286,67 @@ class WILA_AvalAI_Client {
     public function generate_full_content($params, $outline) {
         $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
-            "فقط یک شیء JSON معتبر و کامل برگردان؛ هیچ توضیح، Markdown یا متن بیرون از JSON ننویس. کلیدهای دقیق فقط content و featured_image_prompt باشند. content باید HTML کامل بدنه محتوا باشد؛ H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. مقدار content را کوتاه نکن و آن را در یک رشته JSON معتبر با escape صحیح کوتیشن‌ها و خط‌های جدید قرار بده. featured_image_prompt فقط یک پرامپت انگلیسی بسیار دقیق برای تصویر شاخص باشد: موضوع و فضای مقاله را نشان بده، عنوان فارسی مقاله را دقیقاً در مرکز تصویر با فونت Vazirmatn/Vazir خوانا و تمیز بنویس، برای متن از هر چهار طرف حاشیه امن کافی بگذار، ترکیب‌بندی مینیمال، بدون متن درهم‌ریخته یا نوشته اضافه، نسبت 16:9.";
-        $result = $this->decode_ai_json($this->send_ai_request($prompt));
-        if (is_wp_error($result)) return $result;
-        if (empty($result['content']) || !is_string($result['content'])) return new WP_Error('invalid_content_response', 'محتوای معتبر از AvalAI دریافت نشد.');
-        return array('content' => $result['content'], 'featured_image_prompt' => isset($result['featured_image_prompt']) ? sanitize_textarea_field($result['featured_image_prompt']) : '');
+            "محتوای کامل HTML را تولید کن. H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. پاسخ خود را دقیقاً با این دو بخش و برچسب‌ها برگردان:\n" .
+            "===WILA_CONTENT_START===\n[HTML کامل بدنه محتوا]\n===WILA_CONTENT_END===\n" .
+            "===WILA_FEATURED_IMAGE_PROMPT_START===\n[یک پرامپت انگلیسی دقیق برای تصویر شاخص با عنوان فارسی مقاله در مرکز، فونت Vazirmatn/Vazir، حاشیه امن چهارطرفه و نسبت 16:9]\n===WILA_FEATURED_IMAGE_PROMPT_END===";
+        $raw = $this->send_ai_request($prompt, false, false);
+        if (is_wp_error($raw)) return $raw;
+
+        return $this->parse_full_content_payload($raw);
+    }
+
+    private function parse_full_content_payload($raw) {
+        $raw = trim((string) $raw);
+        $content = '';
+        $featured_prompt = '';
+
+        if (preg_match('/===WILA_CONTENT_START===\s*(.*?)\s*===WILA_CONTENT_END===/is', $raw, $m)) {
+            $content = trim($m[1]);
+        } elseif (preg_match('/===WILA_CONTENT_START===\s*(.*)/is', $raw, $m)) {
+            $content = trim($m[1]);
+            // اگر برچسب تصویر شاخص بعد از آن آمده باشد، آن را جدا کن
+            if (preg_match('/(.*?)(?:===WILA_FEATURED_IMAGE_PROMPT_START===|$)/is', $content, $cm)) {
+                $content = trim($cm[1]);
+            }
+        }
+
+        if (preg_match('/===WILA_FEATURED_IMAGE_PROMPT_START===\s*(.*?)\s*===WILA_FEATURED_IMAGE_PROMPT_END===/is', $raw, $m)) {
+            $featured_prompt = trim($m[1]);
+        } elseif (preg_match('/===WILA_FEATURED_IMAGE_PROMPT_START===\s*(.*)/is', $raw, $m)) {
+            $featured_prompt = trim($m[1]);
+            if (preg_match('/(.*?)(?:===WILA_CONTENT_START===|$)/is', $featured_prompt, $fm)) {
+                $featured_prompt = trim($fm[1]);
+            }
+        }
+
+        // پشتیبانی فال‌بک در صورتی که مدل خروجی JSON داده باشد
+        if (empty($content)) {
+            $clean = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $raw);
+            $json = json_decode(trim($clean), true);
+            if (is_array($json) && !empty($json['content'])) {
+                $content = trim($json['content']);
+                if (!empty($json['featured_image_prompt'])) {
+                    $featured_prompt = trim($json['featured_image_prompt']);
+                }
+            }
+        }
+
+        // پشتیبانی فال‌بک در صورتی که مدل مستقیماً HTML بازگردانده باشد
+        if (empty($content)) {
+            $clean = preg_replace('/^```(?:html)?\s*|\s*```$/i', '', $raw);
+            if (strpos($clean, '<p') !== false || strpos($clean, '<h') !== false || strpos($clean, '<div') !== false) {
+                $content = trim($clean);
+            }
+        }
+
+        if (empty($content)) {
+            return new WP_Error('invalid_content_response', 'محتوای HTML از AvalAI دریافت نشد. لطفاً مجدداً امتحان کنید.');
+        }
+
+        return array(
+            'content' => $content,
+            'featured_image_prompt' => sanitize_textarea_field($featured_prompt),
+        );
     }
 
     private function decode_ai_json($response) {
@@ -303,7 +361,13 @@ class WILA_AvalAI_Client {
         $start = strpos($response, '{');
         $end = strrpos($response, '}');
         if ($start !== false && $end !== false && $end > $start) {
-            $parsed = json_decode(substr($response, $start, $end - $start + 1), true);
+            $slice = substr($response, $start, $end - $start + 1);
+            $parsed = json_decode($slice, true);
+            if (is_array($parsed)) return $parsed;
+
+            $cleaned = preg_replace('/,\s*([\}\]])/', '$1', $slice);
+            $cleaned = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $cleaned);
+            $parsed = json_decode($cleaned, true);
             if (is_array($parsed)) return $parsed;
         }
 
