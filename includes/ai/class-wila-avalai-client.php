@@ -282,11 +282,11 @@ class WILA_AvalAI_Client {
     }
 
     public function generate_full_content($params, $outline) {
-        $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\nفقط JSON معتبر با کلید content برگردان. مقدار content باید HTML کامل بدنه محتوا باشد؛ H1 نساز. همه هدینگ‌های تاییدشده را رعایت کن.";
+        $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\nفقط JSON معتبر با کلیدهای content و featured_image_prompt برگردان. content باید HTML کامل بدنه محتوا باشد؛ H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. featured_image_prompt فقط یک پرامپت انگلیسی بسیار دقیق برای تصویر شاخص باشد: موضوع و فضای مقاله را نشان بده، عنوان فارسی مقاله را دقیقاً در مرکز تصویر با فونت Vazirmatn/Vazir خوانا و تمیز بنویس، برای متن از هر چهار طرف حاشیه امن کافی بگذار، ترکیب‌بندی مینیمال، بدون متن درهم‌ریخته یا نوشته اضافه، نسبت 16:9.";
         $result = $this->decode_ai_json($this->send_ai_request($prompt));
         if (is_wp_error($result)) return $result;
         if (empty($result['content']) || !is_string($result['content'])) return new WP_Error('invalid_content_response', 'محتوای معتبر از AvalAI دریافت نشد.');
-        return $result['content'];
+        return array('content' => $result['content'], 'featured_image_prompt' => isset($result['featured_image_prompt']) ? sanitize_textarea_field($result['featured_image_prompt']) : '');
     }
 
     private function decode_ai_json($response) {

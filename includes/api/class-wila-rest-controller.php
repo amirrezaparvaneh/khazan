@@ -294,7 +294,7 @@ class WILA_REST_Controller {
         $outline = isset($body['outline']) && is_array($body['outline']) ? $body['outline'] : array();
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
         $result = (new WILA_AvalAI_Client())->generate_full_content($params, $outline);
-        return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'content' => $result));
+        return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt']));
     }
 
     public function create_content_draft($request) {
@@ -302,7 +302,14 @@ class WILA_REST_Controller {
         $title = isset($params['title']) ? sanitize_text_field($params['title']) : '';
         $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
         if (empty($title) || empty($content)) return new WP_Error('missing_draft_content', 'عنوان و محتوای پیش‌نویس الزامی هستند.', array('status' => 400));
-        $post_id = wp_insert_post(array('post_title' => $title, 'post_content' => $content, 'post_status' => 'draft', 'post_type' => 'post'), true);
+        $blog_post_type = apply_filters('wila_blog_post_type', 'blog');
+        if (!post_type_exists($blog_post_type)) {
+            return new WP_Error('blog_post_type_not_found', 'نوع محتوای «وبلاگ» یافت نشد. با فیلتر wila_blog_post_type نام post type وبلاگ را تنظیم کنید.', array('status' => 400));
+        }
+        if (!current_user_can(get_post_type_object($blog_post_type)->cap->create_posts)) {
+            return new WP_Error('cannot_create_blog_draft', 'اجازه ایجاد پیش‌نویس در بخش وبلاگ را ندارید.', array('status' => 403));
+        }
+        $post_id = wp_insert_post(array('post_title' => $title, 'post_content' => $content, 'post_status' => 'draft', 'post_type' => $blog_post_type), true);
         if (is_wp_error($post_id)) return $post_id;
         return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'edit_url' => get_edit_post_link($post_id, 'raw')));
     }

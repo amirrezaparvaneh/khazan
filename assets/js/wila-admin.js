@@ -47,6 +47,7 @@
       generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '', useOrphanLinks: true },
       contentOutline: null,
       generatedContent: '',
+      featuredImagePrompt: '',
       isGeneratingContent: false,
       modal: { isOpen: false, title: '', contentHtml: '' },
     },
@@ -140,21 +141,31 @@
     generateOutline: async function () {
       const p = this.getGeneratorPayload();
       if (!p.h1_title.trim() || !p.focus_keyword.trim()) return alert('عنوان و کلیدواژه کانونی الزامی هستند.');
-      this.state.isGeneratingContent = true; this.state.contentOutline = null; this.state.generatedContent = ''; this.render();
+      this.state.isGeneratingContent = true; this.state.contentOutline = null; this.state.generatedContent = ''; this.state.featuredImagePrompt = ''; this.render();
       try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; }
       catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
     generateFullContent: async function () {
       this.state.isGeneratingContent = true; this.render();
-      try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; }
+      try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; this.state.featuredImagePrompt = r.featured_image_prompt || ''; }
       catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
-    copyGeneratedContent: async function () { try { await navigator.clipboard.writeText(this.state.generatedContent); alert('محتوا کپی شد.'); } catch (e) { alert('کپی محتوا ناموفق بود.'); } },
+    copyGeneratedContent: async function () {
+      const contentField = this.root.querySelector('#wila-generated-content');
+      const content = contentField ? contentField.value : this.state.generatedContent;
+      try { await navigator.clipboard.writeText(content); alert('تمام محتوای HTML کپی شد.'); }
+      catch (e) {
+        if (contentField) { contentField.select(); document.execCommand('copy'); alert('تمام محتوای HTML کپی شد.'); }
+        else alert('کپی محتوا ناموفق بود.');
+      }
+    },
 
     createDraft: async function () {
-      try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content: this.state.generatedContent }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
+      const contentField = this.root.querySelector('#wila-generated-content');
+      const content = contentField ? contentField.value : this.state.generatedContent;
+      try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
       catch (e) { alert('خطا: ' + e.message); }
     },
 
@@ -368,7 +379,7 @@
           <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-use-orphan-links" ${f.useOrphanLinks ? 'checked' : ''}> اگر نقشه لینک خالی است، صفحات یتیم مرتبط را خودکار و استراتژیک لینک‌سازی کن</label><p style="margin:5px 0;color:#64748b;font-size:.8rem">افزونه فقط صفحه‌های یتیم مرتبط را انتخاب می‌کند و انکرتکست را بر اساس مقصد می‌سازد.</p>
           <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
-          ${this.state.generatedContent ? `<div style="margin-top:20px"><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea><div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی مستقیم</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس پست در وردپرس</button></div></div>`:''}
+          ${this.state.generatedContent ? `<div style="margin-top:20px"><label style="display:block;margin-bottom:6px;font-weight:600">محتوای نهایی HTML</label><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea>${this.state.featuredImagePrompt ? `<label style="display:block;margin:16px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea id="wila-featured-image-prompt" class="wila-input" rows="5" style="width:100%;direction:ltr;text-align:left">${esc(this.state.featuredImagePrompt)}</textarea>` : ''}<div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی تمام محتوا</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس در وبلاگ</button></div></div>`:''}
         </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
