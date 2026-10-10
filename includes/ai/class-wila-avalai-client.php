@@ -286,19 +286,37 @@ class WILA_AvalAI_Client {
     public function generate_full_content($params, $outline) {
         $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
-            "محتوای کامل HTML را تولید کن. H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. پاسخ خود را دقیقاً با این دو بخش و برچسب‌ها برگردان:\n" .
+            "برای سئوی این محتوا این داده‌ها را نیز تولید کن: یک عنوان سئو فارسی ۵۰ تا ۶۰ کاراکتر، توضیحات متای فارسی ۱۴۰ تا ۱۶۰ کاراکتر، و ۳ تا ۶ مترادف/عبارت کلیدی مرتبط که با ویرگول جدا شوند. این موارد باید دقیقاً بر اساس موضوع و کلیدواژه کانونی باشند.\n" .
+            "در متن، با توجه به طول محتوا ۱ لینک خارجی برای مقاله زیر ۱۰۰۰ کلمه و حداکثر ۲ لینک برای محتوای طولانی‌تر قرار بده. فقط منابع معتبر اولیه/رسمی، دانشگاهی یا سازمان‌های استاندارد مرتبط را انتخاب کن. URL را واقعی و دقیق استفاده کن؛ منبع یا URL نامطمئن/ساختگی ایجاد نکن، در صورت اطمینان نداشتن لینک خارجی نگذار.\n" .
+            "محتوای کامل HTML را تولید کن. H1 نساز و همه هدینگ‌های تاییدشده را رعایت کن. پاسخ خود را دقیقاً با این بخش‌ها و برچسب‌ها برگردان:\n" .
             "===WILA_CONTENT_START===\n[HTML کامل بدنه محتوا]\n===WILA_CONTENT_END===\n" .
-            "===WILA_FEATURED_IMAGE_PROMPT_START===\n[یک پرامپت انگلیسی دقیق برای تصویر شاخص با عنوان فارسی مقاله در مرکز، فونت Vazirmatn/Vazir، حاشیه امن چهارطرفه و نسبت 16:9]\n===WILA_FEATURED_IMAGE_PROMPT_END===";
+            "===WILA_FEATURED_IMAGE_PROMPT_START===\n[یک پرامپت انگلیسی دقیق برای تصویر شاخص با عنوان فارسی مقاله در مرکز، فونت Vazirmatn/Vazir، حاشیه امن چهارطرفه و نسبت 16:9]\n===WILA_FEATURED_IMAGE_PROMPT_END===\n" .
+            "===WILA_SLUG_START===\n[یک اسلاگ انگلیسی کوتاه و دقیق، فقط با حروف کوچک لاتین و خط تیره، بدون تاریخ/کلمات زائد؛ مرتبط با موضوع و کلیدواژه اصلی]\n===WILA_SLUG_END===\n" .
+            "===WILA_SEO_TITLE_START===\n[عنوان سئو فارسی با طول ۵۰ تا ۶۰ کاراکتر]\n===WILA_SEO_TITLE_END===\n" .
+            "===WILA_META_DESCRIPTION_START===\n[توضیحات متا فارسی با طول ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===\n" .
+            "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف مرتبط با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
         $raw = $this->send_ai_request($prompt, false, false);
         if (is_wp_error($raw)) return $raw;
 
-        return $this->parse_full_content_payload($raw);
+        $result = $this->parse_full_content_payload($raw, $params);
+        if (is_wp_error($result)) return $result;
+        if ($result['slug'] === '') {
+            $result['slug'] = sanitize_title(remove_accents($params['h1_title']));
+        }
+        if ($result['slug'] === '') {
+            $result['slug'] = sanitize_title(remove_accents($params['focus_keyword']));
+        }
+        return $result;
     }
 
-    private function parse_full_content_payload($raw) {
+    private function parse_full_content_payload($raw, $params) {
         $raw = trim((string) $raw);
         $content = '';
         $featured_prompt = '';
+        $slug = '';
+        $seo_title = '';
+        $meta_description = '';
+        $keyword_synonyms = '';
 
         if (preg_match('/===WILA_CONTENT_START===\s*(.*?)\s*===WILA_CONTENT_END===/is', $raw, $m)) {
             $content = trim($m[1]);
@@ -319,6 +337,11 @@ class WILA_AvalAI_Client {
             }
         }
 
+        if (preg_match('/===WILA_SLUG_START===\s*(.*?)\s*===WILA_SLUG_END===/is', $raw, $m)) $slug = trim($m[1]);
+        if (preg_match('/===WILA_SEO_TITLE_START===\s*(.*?)\s*===WILA_SEO_TITLE_END===/is', $raw, $m)) $seo_title = trim($m[1]);
+        if (preg_match('/===WILA_META_DESCRIPTION_START===\s*(.*?)\s*===WILA_META_DESCRIPTION_END===/is', $raw, $m)) $meta_description = trim($m[1]);
+        if (preg_match('/===WILA_KEYWORD_SYNONYMS_START===\s*(.*?)\s*===WILA_KEYWORD_SYNONYMS_END===/is', $raw, $m)) $keyword_synonyms = trim($m[1]);
+
         // پشتیبانی فال‌بک در صورتی که مدل خروجی JSON داده باشد
         if (empty($content)) {
             $clean = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $raw);
@@ -328,6 +351,10 @@ class WILA_AvalAI_Client {
                 if (!empty($json['featured_image_prompt'])) {
                     $featured_prompt = trim($json['featured_image_prompt']);
                 }
+                if (!empty($json['slug'])) $slug = trim($json['slug']);
+                if (!empty($json['seo_title'])) $seo_title = trim($json['seo_title']);
+                if (!empty($json['meta_description'])) $meta_description = trim($json['meta_description']);
+                if (!empty($json['keyword_synonyms'])) $keyword_synonyms = trim($json['keyword_synonyms']);
             }
         }
 
@@ -343,10 +370,57 @@ class WILA_AvalAI_Client {
             return new WP_Error('invalid_content_response', 'محتوای HTML از AvalAI دریافت نشد. لطفاً مجدداً امتحان کنید.');
         }
 
+        $slug = sanitize_title($slug);
+        if ($slug === '') {
+            $slug = sanitize_title(remove_accents($params['h1_title']));
+        }
+        if ($slug === '') {
+            $slug = sanitize_title(remove_accents($params['focus_keyword']));
+        }
+
+        $external_links = $this->extract_external_links($content);
         return array(
             'content' => $content,
             'featured_image_prompt' => sanitize_textarea_field($featured_prompt),
+            'slug' => $slug,
+            'seo_title' => sanitize_text_field($seo_title ?: $params['h1_title']),
+            'meta_description' => sanitize_textarea_field($meta_description),
+            'keyword_synonyms' => sanitize_text_field($keyword_synonyms),
+            'internal_link_count' => $this->count_content_links($content, true),
+            'external_link_count' => count($external_links),
+            'external_links' => $external_links,
         );
+    }
+
+    private function parse_content_anchors($content) {
+        $anchors = array();
+        if (!preg_match_all('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', $content, $matches, PREG_SET_ORDER)) return $anchors;
+        foreach ($matches as $match) {
+            $anchors[] = array('url' => html_entity_decode($match[2], ENT_QUOTES, 'UTF-8'), 'anchor' => sanitize_text_field(wp_strip_all_tags($match[3])));
+        }
+        return $anchors;
+    }
+
+    private function count_content_links($content, $internal) {
+        $site_host = strtolower(wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $count = 0;
+        foreach ($this->parse_content_anchors($content) as $link) {
+            $host = strtolower(wp_parse_url($link['url'], PHP_URL_HOST) ?: $site_host);
+            if (($host === $site_host) === $internal) $count++;
+        }
+        return $count;
+    }
+
+    private function extract_external_links($content) {
+        $links = array();
+        $site_host = strtolower(wp_parse_url(home_url('/'), PHP_URL_HOST));
+        foreach ($this->parse_content_anchors($content) as $link) {
+            $host = strtolower(wp_parse_url($link['url'], PHP_URL_HOST) ?: '');
+            if ($host && $host !== $site_host && in_array(wp_parse_url($link['url'], PHP_URL_SCHEME), array('http', 'https'), true)) {
+                $links[] = array('url' => esc_url_raw($link['url']), 'anchor' => $link['anchor']);
+            }
+        }
+        return $links;
     }
 
     private function decode_ai_json($response) {
@@ -380,8 +454,10 @@ class WILA_AvalAI_Client {
             "الزامات قطعی: E-E-A-T را با تجربه دست‌اول قابل‌باور، تخصص و اعتبار پیاده کن؛ موجودیت‌های مهم و روابط معنایی آن‌ها را کامل پوشش بده؛ پاسخ مستقیم نیت جستجو را در پاراگراف‌های نخست بده؛ برای AEO پاسخ‌های کوتاه، روشن و قابل‌استخراج بنویس. از ادعاهای بی‌منبع و keyword stuffing پرهیز کن.\n" .
             "هدینگ‌های H2 و H3 را مطابق سفر مشتری و FAQ منطقی بچین. فارسی روان، پاراگراف کوتاه، فهرست و جدول فقط در صورت مفیدبودن بنویس. اگر homepage_keywords در مشخصات موجود است، در محتوای مناسب و طبیعی یک یا چند کلیدواژه اصلی صفحه اول را برای لینک داخلی به URL صفحه اول سایت به‌کار ببر؛ از تکرار اجباری و keyword stuffing پرهیز کن.\n" .
             "نقشه لینک داخلی داده‌شده را دقیقاً با HTML <a href=\"URL\">انکرتکست</a> و فقط در جمله طبیعی وارد کن. از انکرتکست عمومی پرهیز کن و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه بگذار.\n" .
+            "برای تقویت اعتبار و استناد، متناسب با طول مقاله ۱ لینک خارجی معتبر (محتوای کوتاه) یا حداکثر ۲ لینک خارجی (محتوای بلند) از منابع رسمی، دانشگاهی، دولتی یا سازمان‌های شناخته‌شده اضافه کن. فقط URL واقعی و شناخته‌شده‌ای را لینک بده که به آن اطمینان داری؛ لینک ساختگی یا دامنه/صفحه حدسی نساز. در صورت نبود منبع قابل اتکا، لینک خارجی نده. از لینک‌های خارجی با rel=\"nofollow\" استفاده نکن مگر مقصد تجاری یا تبلیغاتی باشد.\n" .
             "اگر use_orphan_links فعال است، فهرست internal_links شامل همه صفحات یتیم افزونه و به‌ترتیب اولویت است: دسته‌بندی محصول، محصول، مقاله بلاگ، برگه عمومی. از همه نامزدهای مرتبط با موضوع و نیت محتوا، به‌ترتیب اولویت استفاده کن تا یتیمی صفحات به‌تدریج رفع شود؛ فقط موارد نامرتبط را حذف کن. برای هر مورد منتخب، انکرتکست دقیق و توصیف‌کننده مقصد بساز، URL همان مورد را استفاده کن و لینک را طبیعی در متن بگذار. سقف یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه قطعی است؛ اگر نامزدهای مرتبط بیشترند، برای محتواهای بعدی نگه‌شان دار.\n" .
-            "در جای لازم برای تصویر، دقیقاً این HTML را درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> seo-content-strategy.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.";
+            "در جای لازم برای تصویر، دقیقاً این HTML را درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> seo-content-strategy.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.\n" .
+            "الزام لینک خارجی: متناسب با حجم محتوا، حتماً ۱ الی ۲ لینک خارجی بسیار معتبر و متنوع (مانند مراجع علمی، استانداردهای رسمی، ویکی‌پدیا، یا منابع تراز اول حوزه) به صورت طبیعی در متن با تگ <a href=\"URL\" target=\"_blank\" rel=\"noopener noreferrer\"> قرار بده. از ارجاع به رقبا یا لینک‌های اسپم و نامعتبر پرهیز کن.";
     }
 
     private function build_blueprint_prompt($params, $candidates) {

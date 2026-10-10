@@ -56,13 +56,34 @@ class WILA_DB {
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
             title VARCHAR(255) NOT NULL,
             focus_keyword VARCHAR(255) NOT NULL DEFAULT '',
+            slug VARCHAR(200) NOT NULL DEFAULT '',
             content LONGTEXT NOT NULL,
             featured_image_prompt TEXT NOT NULL,
+            internal_link_count INT UNSIGNED NOT NULL DEFAULT 0,
+            external_link_count INT UNSIGNED NOT NULL DEFAULT 0,
+            external_links LONGTEXT NOT NULL,
+            seo_title VARCHAR(255) NOT NULL DEFAULT '',
+            meta_description TEXT NOT NULL,
+            keyword_synonyms TEXT NOT NULL,
             created_at DATETIME NOT NULL,
             PRIMARY KEY (id),
             KEY created_at_idx (created_at)
         ) $charset_collate;";
         dbDelta($history_sql);
+
+        $history_columns = $wpdb->get_col("SHOW COLUMNS FROM {$history_table}", 0);
+        $history_column_sql = array(
+            'slug' => "ALTER TABLE {$history_table} ADD slug VARCHAR(200) NOT NULL DEFAULT '' AFTER focus_keyword",
+            'internal_link_count' => "ALTER TABLE {$history_table} ADD internal_link_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER featured_image_prompt",
+            'external_link_count' => "ALTER TABLE {$history_table} ADD external_link_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER internal_link_count",
+            'external_links' => "ALTER TABLE {$history_table} ADD external_links LONGTEXT NOT NULL AFTER external_link_count",
+            'seo_title' => "ALTER TABLE {$history_table} ADD seo_title VARCHAR(255) NOT NULL DEFAULT '' AFTER external_links",
+            'meta_description' => "ALTER TABLE {$history_table} ADD meta_description TEXT NOT NULL AFTER seo_title",
+            'keyword_synonyms' => "ALTER TABLE {$history_table} ADD keyword_synonyms TEXT NOT NULL AFTER meta_description",
+        );
+        foreach ($history_column_sql as $column => $sql) {
+            if (!in_array($column, $history_columns, true)) $wpdb->query($sql);
+        }
 
         update_option('wila_db_installed_version', WILA_VERSION);
     }

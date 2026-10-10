@@ -304,25 +304,32 @@ class WILA_REST_Controller {
         $wpdb->insert($history_table, array(
             'title' => $params['h1_title'],
             'focus_keyword' => $params['focus_keyword'],
+            'slug' => $result['slug'],
             'content' => $result['content'],
             'featured_image_prompt' => $result['featured_image_prompt'],
+            'internal_link_count' => $result['internal_link_count'],
+            'external_link_count' => $result['external_link_count'],
+            'external_links' => wp_json_encode($result['external_links'], JSON_UNESCAPED_UNICODE),
+            'seo_title' => $result['seo_title'],
+            'meta_description' => $result['meta_description'],
+            'keyword_synonyms' => $result['keyword_synonyms'],
             'created_at' => current_time('mysql'),
-        ), array('%s', '%s', '%s', '%s', '%s'));
+        ), array('%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s'));
 
-        return rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt']));
+        return rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
     }
 
     public function get_content_history() {
         global $wpdb;
         $table = WILA_DB::get_content_history_table_name();
-        $items = $wpdb->get_results("SELECT id, title, focus_keyword, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, internal_link_count, external_link_count, seo_title, meta_description, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
         return rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
     public function get_content_history_item($request) {
         global $wpdb;
         $table = WILA_DB::get_content_history_table_name();
-        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, content, featured_image_prompt, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
+        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, slug, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
         if (!$item) return new WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
         return rest_ensure_response(array('success' => true, 'item' => $item));
     }
@@ -331,6 +338,7 @@ class WILA_REST_Controller {
         $params = $request->get_json_params();
         $title = isset($params['title']) ? sanitize_text_field($params['title']) : '';
         $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
+        $slug = isset($params['slug']) ? sanitize_title($params['slug']) : '';
         if (empty($title) || empty($content)) return new WP_Error('missing_draft_content', 'عنوان و محتوای پیش‌نویس الزامی هستند.', array('status' => 400));
         $blog_post_type = apply_filters('wila_blog_post_type', 'blog');
         if (!post_type_exists($blog_post_type)) {
@@ -339,9 +347,19 @@ class WILA_REST_Controller {
         if (!current_user_can(get_post_type_object($blog_post_type)->cap->create_posts)) {
             return new WP_Error('cannot_create_blog_draft', 'اجازه ایجاد پیش‌نویس در بخش وبلاگ را ندارید.', array('status' => 403));
         }
-        $post_id = wp_insert_post(array('post_title' => $title, 'post_content' => $content, 'post_status' => 'draft', 'post_type' => $blog_post_type), true);
+        $post_id = wp_insert_post(array('post_title' => $title, 'post_content' => $content, 'post_status' => 'draft', 'post_type' => $blog_post_type, 'post_name' => $slug), true);
         if (is_wp_error($post_id)) return $post_id;
-        return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'edit_url' => get_edit_post_link($post_id, 'raw')));
+
+        $focus_keyword = isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '';
+        $synonyms = isset($params['keyword_synonyms']) ? sanitize_text_field($params['keyword_synonyms']) : '';
+        $seo_title = isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title;
+        $meta_description = isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '';
+        if ($focus_keyword !== '') update_post_meta($post_id, '_yoast_wpseo_focuskw', $focus_keyword);
+        if ($synonyms !== '') update_post_meta($post_id, '_yoast_wpseo_keywordsynonyms', $synonyms);
+        if ($seo_title !== '') update_post_meta($post_id, '_yoast_wpseo_title', $seo_title);
+        if ($meta_description !== '') update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_description);
+
+        return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'slug' => get_post_field('post_name', $post_id), 'edit_url' => get_edit_post_link($post_id, 'raw')));
     }
 
     public function test_avalai_connection($request) {
