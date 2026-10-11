@@ -173,7 +173,7 @@
       const p = this.getGeneratorPayload();
       if (!p.h1_title.trim() || !p.focus_keyword.trim()) return alert('عنوان و کلیدواژه کانونی الزامی هستند.');
       this.state.isGeneratingContent = true; this.state.contentOutline = null; this.state.generatedContent = ''; this.state.featuredImagePrompt = ''; this.state.generatedSlug = ''; this.state.generatedSeoTitle = ''; this.state.generatedMetaDescription = ''; this.state.generatedKeywordSynonyms = ''; this.state.generatedInternalLinkCount = 0; this.state.generatedExternalLinkCount = 0; this.state.generatedExternalLinks = []; this.render();
-      try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; }
+      try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; this.state.generatedSlug = r.outline.slug || ''; this.state.generatedSeoTitle = r.outline.seo_title || ''; this.state.generatedMetaDescription = r.outline.meta_description || ''; this.state.generatedKeywordSynonyms = r.outline.keyword_synonyms || ''; }
       catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
@@ -181,6 +181,33 @@
       this.state.isGeneratingContent = true; this.render();
       try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; this.state.featuredImagePrompt = r.featured_image_prompt || ''; this.state.generatedSlug = r.slug || ''; this.state.generatedSeoTitle = r.seo_title || ''; this.state.generatedMetaDescription = r.meta_description || ''; this.state.generatedKeywordSynonyms = r.keyword_synonyms || ''; this.state.generatedInternalLinkCount = Number(r.internal_link_count || 0); this.state.generatedExternalLinkCount = Number(r.external_link_count || 0); this.state.generatedExternalLinks = Array.isArray(r.external_links) ? r.external_links : []; }
       catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
+    },
+
+    contentQualityReport: function (html, keyword) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      doc.querySelectorAll('script,style,.wila-image-placeholder').forEach(node => node.remove());
+      const normalize = text => text.replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/\s+/g, ' ').trim();
+      const words = text => normalize(text).match(/[\p{L}\p{N}]+(?:\u200c[\p{L}\p{N}]+)*/gu) || [];
+      let section = 0, maxSection = 0;
+      const walk = node => {
+        if (node.nodeType === 3) { section += words(node.textContent).length; return; }
+        if (/^H[23]$/.test(node.nodeName)) { maxSection = Math.max(maxSection, section); section = 0; return; }
+        node.childNodes.forEach(walk);
+      };
+      walk(doc.body); maxSection = Math.max(maxSection, section);
+      doc.querySelectorAll('p,li,div,h2,h3,br,tr').forEach(node => node.appendChild(doc.createTextNode('\n')));
+      const text = doc.body.textContent;
+      const sentences = text.split(/[.!?؟؛\n]+/u).map(words).filter(w => w.length);
+      const count = words(text).length;
+      const long = sentences.filter(w => w.length > 25).length;
+      const percent = sentences.length ? Math.round(100 * long / sentences.length) : 0;
+      const repeated = sentences.some((w, i) => i > 1 && w[0] === sentences[i - 1][0] && w[0] === sentences[i - 2][0]);
+      const tokens = words(text), key = words(keyword);
+      let occurrences = 0;
+      if (key.length) for (let i = 0; i <= tokens.length - key.length; i++) {
+        if (key.every((word, j) => word === tokens[i + j])) { occurrences++; i += key.length - 1; }
+      }
+      return `<p><strong>گزارش تقریبی خوانایی، مستقل از Yoast</strong></p><ul><li>تعداد واژه: ${count}؛ جمله‌های بیش از ۲۵ واژه: ${percent}٪ ${percent > 25 ? '— نیازمند کوتاه‌سازی' : ''}</li><li>آغاز مشابه سه جمله متوالی: ${repeated ? 'نیازمند اصلاح' : 'یافت نشد'}</li><li>طولانی‌ترین بخش بدون زیرعنوان: ${maxSection} واژه ${maxSection > 300 ? '— زیرعنوان اضافه کنید' : ''}</li><li>تکرار عبارت دقیق: ${occurrences}؛ هدف راهنمای متناسب با طول: ${Math.max(1, Math.ceil(count / 100))} (بدون تکرار اجباری)</li></ul><p>ساختار مجهول فارسی (هدف حداکثر ۱۰٪)، صحت منابع، انتیتی و E-E-A-T باید دستی بررسی شوند. این گزارش امتیاز Yoast یا تضمین رتبه نیست.</p>`;
     },
 
     copyGeneratedContent: async function () {
@@ -412,7 +439,8 @@
           <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-use-orphan-links" ${f.useOrphanLinks ? 'checked' : ''}> اگر نقشه لینک خالی است، صفحات یتیم مرتبط را خودکار و استراتژیک لینک‌سازی کن</label><p style="margin:5px 0;color:#64748b;font-size:.8rem">افزونه فقط صفحه‌های یتیم مرتبط را انتخاب می‌کند و انکرتکست را بر اساس مقصد می‌سازد.</p>
           <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
-          ${this.state.generatedContent ? `<div style="margin-top:20px"><label style="display:block;margin:0 0 6px;font-weight:600">اسلاگ انگلیسی و سئو</label><input id="wila-generated-slug" class="wila-input" style="width:100%;direction:ltr;text-align:left" value="${esc(this.state.generatedSlug)}"><label style="display:block;margin:16px 0 6px;font-weight:600">محتوای نهایی HTML</label><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea>${this.state.featuredImagePrompt ? `<label style="display:block;margin:16px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea id="wila-featured-image-prompt" class="wila-input" rows="5" style="width:100%;direction:ltr;text-align:left">${esc(this.state.featuredImagePrompt)}</textarea>` : ''}<div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی تمام محتوا</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس در وبلاگ</button></div></div>`:''}
+          ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p><p>نامک: ${esc(this.state.contentOutline.slug)}</p><p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
+          ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است. نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
           <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر، همراه تاریخ تولید، در این بخش نگهداری می‌شود.</p><table class="wila-table"><thead><tr><th>عنوان</th><th>کلیدواژه</th><th>اسلاگ</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td>${esc(item.focus_keyword)}</td><td><code dir="ltr">${esc(item.slug || '')}</code></td><td>${esc(item.created_at)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button></td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div>
         </div>`;
       } else if (activeTab === 'planner') {
@@ -675,6 +703,15 @@
       if (outlineBtn) outlineBtn.addEventListener('click', () => this.generateOutline());
       const fullBtn = this.root.querySelector('#wila-generate-full');
       if (fullBtn) fullBtn.addEventListener('click', () => this.generateFullContent());
+      const generatedFields = { 'wila-generated-content': 'generatedContent', 'wila-generated-slug': 'generatedSlug', 'wila-seo-title': 'generatedSeoTitle', 'wila-meta-description': 'generatedMetaDescription', 'wila-keyword-synonyms': 'generatedKeywordSynonyms' };
+      Object.entries(generatedFields).forEach(([id, key]) => {
+        const input = this.root.querySelector('#' + id);
+        if (input) input.addEventListener('input', () => {
+          this.state[key] = input.value;
+          const report = this.root.querySelector('#wila-quality-report');
+          if (report) report.innerHTML = this.contentQualityReport(this.state.generatedContent, this.state.generatorForm.focusKeyword);
+        });
+      });
       const copyBtn = this.root.querySelector('#wila-copy-content');
       if (copyBtn) copyBtn.addEventListener('click', () => this.copyGeneratedContent());
       const draftBtn = this.root.querySelector('#wila-create-draft');

@@ -338,7 +338,10 @@ class WILA_REST_Controller {
         $params = $request->get_json_params();
         $title = isset($params['title']) ? sanitize_text_field($params['title']) : '';
         $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
-        $slug = isset($params['slug']) ? sanitize_title($params['slug']) : '';
+        $slug = isset($params['slug']) ? strtolower(trim(sanitize_text_field($params['slug']))) : '';
+        if (!preg_match('/^[a-z]+(?:-[a-z0-9]+)*$/D', $slug)) {
+            return new WP_Error('invalid_english_slug', 'نامک انگلیسی مرتبط را با حروف لاتین و خط تیره وارد کنید.', array('status' => 400));
+        }
         if (empty($title) || empty($content)) return new WP_Error('missing_draft_content', 'عنوان و محتوای پیش‌نویس الزامی هستند.', array('status' => 400));
         $blog_post_type = apply_filters('wila_blog_post_type', 'blog');
         if (!post_type_exists($blog_post_type)) {

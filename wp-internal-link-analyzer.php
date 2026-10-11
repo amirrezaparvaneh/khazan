@@ -41,6 +41,8 @@ final class WP_Internal_Link_Analyzer {
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-avalai-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
+        require_once WILA_PLUGIN_DIR . 'includes/class-wila-seo-repair.php';
+        new WILA_SEO_Repair();
     }
 
     private function init_hooks() {
