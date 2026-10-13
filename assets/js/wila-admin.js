@@ -44,7 +44,11 @@
       },
       plannerResult: null,
       isPlanning: false,
-      generatorForm: { h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, contentType: 'پست وبلاگ', funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
+      generatorForm: { contentKind: 'article', targetId: 0, h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
+      targets: [],
+      targetsLoading: false,
+      targetsError: '',
+      isApplying: false,
       contentOutline: null,
       generatedContent: '',
       featuredImagePrompt: '',
@@ -118,7 +122,7 @@
         this.state.modal = {
           isOpen: true,
           title: escapeHtml(item.title),
-          contentHtml: `<p><strong>کلیدواژه کانونی:</strong> ${escapeHtml(item.focus_keyword)}</p><p><strong>اسلاگ:</strong> <code dir="ltr">${escapeHtml(item.slug || '')}</code></p><p><strong>تاریخ تولید:</strong> ${escapeHtml(item.created_at)}</p><label style="display:block;margin:14px 0 6px;font-weight:600">محتوا</label><textarea id="wila-history-content" class="wila-input" rows="16" style="width:100%;direction:rtl">${escapeHtml(item.content)}</textarea>${item.featured_image_prompt ? `<label style="display:block;margin:14px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea class="wila-input" rows="4" style="width:100%;direction:ltr;text-align:left">${escapeHtml(item.featured_image_prompt)}</textarea>` : ''}<div style="margin-top:12px"><button id="wila-copy-history-content" class="wila-btn wila-btn-primary">کپی محتوا</button></div>`
+          contentHtml: `<p><strong>کلیدواژه کانونی:</strong> ${escapeHtml(item.focus_keyword)}</p>${item.slug ? `<p><strong>اسلاگ:</strong> <code dir="ltr">${escapeHtml(item.slug)}</code></p>` : ''}<p><strong>تاریخ تولید:</strong> ${escapeHtml(item.created_at)}</p><label style="display:block;margin:14px 0 6px;font-weight:600">محتوا</label><textarea id="wila-history-content" class="wila-input" rows="16" style="width:100%;direction:rtl">${escapeHtml(item.content)}</textarea>${item.featured_image_prompt ? `<label style="display:block;margin:14px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea class="wila-input" rows="4" style="width:100%;direction:ltr;text-align:left">${escapeHtml(item.featured_image_prompt)}</textarea>` : ''}<div style="margin-top:12px"><button id="wila-copy-history-content" class="wila-btn wila-btn-primary">کپی محتوا</button></div>`
         };
         this.render();
       } catch (e) { alert('خطا: ' + e.message); }
@@ -162,17 +166,75 @@
 
     getGeneratorPayload: function () {
       const f = this.state.generatorForm;
+      const isArticle = f.contentKind === 'article';
       const internalLinks = f.internalLinks.split(/\n|,/).map(item => item.trim()).filter(Boolean).map(item => {
         const parts = item.split(/\s*:\s*/);
         return { anchor: parts.shift() || '', url: parts.join(':') || '' };
       }).filter(link => link.anchor && /^https?:\/\//i.test(link.url));
-      return { h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, content_type: f.contentType, funnel_stage: f.funnelStage, internal_links: internalLinks, description: f.description, use_orphan_links: f.useOrphanLinks && !internalLinks.length };
+      return { content_kind: f.contentKind, target_id: isArticle ? 0 : f.targetId, h1_title: f.h1Title, focus_keyword: f.focusKeyword, long_tail: f.longTail, word_count: f.wordCount, funnel_stage: f.funnelStage, internal_links: internalLinks, description: f.description, use_orphan_links: f.useOrphanLinks && !internalLinks.length };
+    },
+
+    resetGenerated: function () {
+      const st = this.state;
+      st.contentOutline = null; st.generatedContent = ''; st.featuredImagePrompt = ''; st.generatedSlug = ''; st.generatedSeoTitle = '';
+      st.generatedMetaDescription = ''; st.generatedKeywordSynonyms = ''; st.generatedInternalLinkCount = 0; st.generatedExternalLinkCount = 0; st.generatedExternalLinks = [];
+    },
+
+    kindLabel: function (kind) {
+      return { article: 'مقاله', product: 'محصول', product_cat: 'دسته‌بندی محصول' }[kind] || 'مقاله';
+    },
+
+    setContentKind: function (kind) {
+      const f = this.state.generatorForm;
+      if (f.contentKind === kind) return;
+      f.contentKind = kind; f.targetId = 0; f.h1Title = ''; f.focusKeyword = '';
+      this.state.targets = []; this.state.targetsError = '';
+      this.resetGenerated();
+      if (kind !== 'article') this.fetchTargets('');
+      this.render();
+    },
+
+    fetchTargets: async function (search) {
+      const kind = this.state.generatorForm.contentKind;
+      if (kind === 'article') return;
+      this.state.targetsLoading = true; this.state.targetsError = '';
+      this.updateTargetOptions();
+      try {
+        const r = await this.apiFetch(`/content/targets?kind=${encodeURIComponent(kind)}&search=${encodeURIComponent(search || '')}`);
+        if (kind !== this.state.generatorForm.contentKind) return;
+        if (!r.success) throw new Error(r.message || 'فهرست دریافت نشد.');
+        this.state.targets = r.items || [];
+      } catch (e) { this.state.targets = []; this.state.targetsError = e.message; }
+      this.state.targetsLoading = false;
+      this.updateTargetOptions();
+    },
+
+    updateTargetOptions: function () {
+      const list = this.root && this.root.querySelector('#wila-target-select');
+      if (!list) return;
+      const { targets, targetsLoading, targetsError, generatorForm } = this.state;
+      if (targetsLoading) list.innerHTML = '<option disabled>در حال بارگذاری...</option>';
+      else if (targetsError) list.innerHTML = `<option disabled>${escapeHtml(targetsError)}</option>`;
+      else if (!targets.length) list.innerHTML = '<option disabled>موردی یافت نشد.</option>';
+      else list.innerHTML = targets.map(t => `<option value="${t.id}" ${Number(generatorForm.targetId) === Number(t.id) ? 'selected' : ''}>${escapeHtml(t.title)}${t.status && t.status !== 'publish' ? ' (پیش‌نویس)' : ''}</option>`).join('');
+    },
+
+    selectTarget: function (id) {
+      const f = this.state.generatorForm;
+      const target = this.state.targets.find(t => Number(t.id) === Number(id));
+      if (!target) return;
+      f.targetId = target.id;
+      f.h1Title = target.title.split(' › ').pop();
+      f.focusKeyword = f.h1Title;
+      this.resetGenerated();
+      this.render();
     },
 
     generateOutline: async function () {
       const p = this.getGeneratorPayload();
+      if (p.content_kind !== 'article' && !p.target_id) return alert(`ابتدا ${this.kindLabel(p.content_kind)} مورد نظر را از فهرست انتخاب کنید.`);
       if (!p.h1_title.trim() || !p.focus_keyword.trim()) return alert('عنوان و کلیدواژه کانونی الزامی هستند.');
-      this.state.isGeneratingContent = true; this.state.contentOutline = null; this.state.generatedContent = ''; this.state.featuredImagePrompt = ''; this.state.generatedSlug = ''; this.state.generatedSeoTitle = ''; this.state.generatedMetaDescription = ''; this.state.generatedKeywordSynonyms = ''; this.state.generatedInternalLinkCount = 0; this.state.generatedExternalLinkCount = 0; this.state.generatedExternalLinks = []; this.render();
+      this.state.isGeneratingContent = true; this.resetGenerated(); this.render();
       try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; this.state.generatedSlug = r.outline.slug || ''; this.state.generatedSeoTitle = r.outline.seo_title || ''; this.state.generatedMetaDescription = r.outline.meta_description || ''; this.state.generatedKeywordSynonyms = r.outline.keyword_synonyms || ''; }
       catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
@@ -225,6 +287,24 @@
       const content = contentField ? contentField.value : this.state.generatedContent;
       try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content, slug: (this.root.querySelector('#wila-generated-slug') || {}).value || this.state.generatedSlug, focus_keyword: this.state.generatorForm.focusKeyword, keyword_synonyms: (this.root.querySelector('#wila-keyword-synonyms') || {}).value || this.state.generatedKeywordSynonyms, seo_title: (this.root.querySelector('#wila-seo-title') || {}).value || this.state.generatedSeoTitle, meta_description: (this.root.querySelector('#wila-meta-description') || {}).value || this.state.generatedMetaDescription }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
       catch (e) { alert('خطا: ' + e.message); }
+    },
+
+    applyToTarget: async function () {
+      const f = this.state.generatorForm;
+      const val = id => (this.root.querySelector('#' + id) || {}).value;
+      const label = this.kindLabel(f.contentKind);
+      if (!f.targetId || this.state.isApplying) return;
+      if (!confirm(`محتوای فعلی ${label} «${f.h1Title}» با این محتوا جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
+      this.state.isApplying = true; this.render();
+      try {
+        const r = await this.apiFetch('/content/apply', { method: 'POST', body: JSON.stringify({
+          content_kind: f.contentKind, target_id: f.targetId, content: val('wila-generated-content') ?? this.state.generatedContent,
+          focus_keyword: f.focusKeyword, keyword_synonyms: val('wila-keyword-synonyms') ?? this.state.generatedKeywordSynonyms,
+          seo_title: val('wila-seo-title') ?? this.state.generatedSeoTitle, meta_description: val('wila-meta-description') ?? this.state.generatedMetaDescription
+        }) });
+        if (!r.success) throw new Error(r.message || 'انتشار انجام نشد.');
+        window.location.assign(r.edit_url);
+      } catch (e) { alert('خطا: ' + e.message); this.state.isApplying = false; this.render(); }
     },
 
     runLinkPlanner: async function () {
@@ -428,20 +508,23 @@
       } else if (activeTab === 'generator') {
         const f = this.state.generatorForm;
         const esc = escapeHtml;
+        const isArticle = f.contentKind === 'article';
+        const kindLabel = this.kindLabel(f.contentKind);
+        const seoLen = [...(this.state.generatedSeoTitle || '')].length;
         const field = (key, label, type = 'text') => `<label style="display:block;margin:10px 0 4px;font-weight:600">${label}</label><input data-generator-field="${key}" type="${type}" class="wila-input" style="width:100%" value="${esc(f[key])}">`;
         contentHtml = `<div class="wila-card" style="max-width:900px"><h3>تولیدکننده محتوای هوشمند سئو</h3><p>طرح را تایید کنید، سپس محتوای HTML تولید و به پیش‌نویس وردپرس منتقل کنید.</p>
-          ${field('h1Title','عنوان اصلی / H1')}${field('focusKeyword','کلیدواژه کانونی')}${field('longTail','کلیدواژه‌های لانگ‌تیل')}${field('wordCount','تعداد کلمات','number')}
+          <label style="display:block;margin:10px 0 4px;font-weight:600">نوع محتوا</label><div style="display:flex;gap:8px;flex-wrap:wrap">${[['article','مقاله'],['product','محصول'],['product_cat','دسته‌بندی محصول']].map(([k, l]) => `<button type="button" class="wila-btn ${f.contentKind === k ? 'wila-btn-primary' : 'wila-btn-outline'} wila-kind-btn" data-kind="${k}">${l}</button>`).join('')}</div>
+          ${isArticle ? field('h1Title','عنوان اصلی / H1') : `<label style="display:block;margin:14px 0 4px;font-weight:600">انتخاب ${kindLabel} از فهرست</label><input id="wila-target-search" type="search" class="wila-input" style="width:100%;margin-bottom:6px" placeholder="جستجو در ${kindLabel}ها..."><select id="wila-target-select" class="wila-select" size="8" style="width:100%;height:auto"></select><p style="margin:5px 0;color:#64748b;font-size:.8rem">${f.targetId ? `انتخاب‌شده: <strong>${esc(f.h1Title)}</strong>` : `یک ${kindLabel} را انتخاب کنید؛ اطلاعات واقعی آن به هوش مصنوعی داده می‌شود.`}</p>`}${field('focusKeyword','کلیدواژه کانونی')}${field('longTail','کلیدواژه‌های لانگ‌تیل')}${field('wordCount','تعداد کلمات','number')}
           <label style="display:block;margin:10px 0 4px;font-weight:600">توضیحات و الزامات اختصاصی محتوا</label><textarea data-generator-field="description" class="wila-input" rows="5" style="width:100%" placeholder="نکات، منابع، محصولات یا بخش‌هایی که باید حتماً در محتوا پوشش داده شوند...">${esc(f.description)}</textarea>
-          ${this.state.generatedContent ? `<div style="margin-top:20px"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><span class="wila-badge wila-badge-success">لینک داخلی: ${toPersianDigits(this.state.generatedInternalLinkCount)}</span><span class="wila-badge wila-badge-neutral">لینک خارجی: ${toPersianDigits(this.state.generatedExternalLinkCount)}</span></div><label style="display:block;margin:0 0 6px;font-weight:600">اسلاگ انگلیسی و سئو</label><input id="wila-generated-slug" class="wila-input" style="width:100%;direction:ltr;text-align:left" value="${esc(this.state.generatedSlug)}"><label style="display:block;margin:16px 0 6px;font-weight:600">عنوان سئو (Yoast)</label><input id="wila-seo-title" class="wila-input" style="width:100%" value="${esc(this.state.generatedSeoTitle)}"><label style="display:block;margin:16px 0 6px;font-weight:600">توضیحات متا (Yoast)</label><textarea id="wila-meta-description" class="wila-input" rows="3" style="width:100%">${esc(this.state.generatedMetaDescription)}</textarea><label style="display:block;margin:16px 0 6px;font-weight:600">مترادف‌ها و عبارات کلیدی (Yoast)</label><input id="wila-keyword-synonyms" class="wila-input" style="width:100%" value="${esc(this.state.generatedKeywordSynonyms)}"><label style="display:block;margin:16px 0 6px;font-weight:600">محتوای نهایی HTML</label><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea>${this.state.generatedExternalLinks.length ? `<p style="margin:12px 0 4px;font-weight:600">منابع خارجی پیشنهادی</p><ul>${this.state.generatedExternalLinks.map(link => `<li><a href="${esc(link.url)}" target="_blank" rel="noopener">${esc(link.anchor || link.url)}</a></li>`).join('')}</ul>` : ''}${this.state.featuredImagePrompt ? `<label style="display:block;margin:16px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea id="wila-featured-image-prompt" class="wila-input" rows="5" style="width:100%;direction:ltr;text-align:left">${esc(this.state.featuredImagePrompt)}</textarea>` : ''}<div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی تمام محتوا</button> <button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس در وبلاگ</button></div></div>` : ''}
-          <label style="display:block;margin:10px 0 4px;font-weight:600">نوع محتوا</label><select data-generator-field="contentType" class="wila-select" style="width:100%">${['پست وبلاگ','صفحه دسته‌بندی','صفحه محصول','صفحه فرود/لندینگ','تشخیص خودکار بر پایه اینتنت'].map(x=>`<option ${f.contentType===x?'selected':''}>${x}</option>`).join('')}</select>
+          ${this.state.generatedContent ? `<div style="margin-top:20px"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"><span class="wila-badge wila-badge-success">لینک داخلی: ${toPersianDigits(this.state.generatedInternalLinkCount)}</span><span class="wila-badge wila-badge-neutral">لینک خارجی: ${toPersianDigits(this.state.generatedExternalLinkCount)}</span></div>${isArticle ? `<label style="display:block;margin:0 0 6px;font-weight:600">اسلاگ انگلیسی و سئو</label><input id="wila-generated-slug" class="wila-input" style="width:100%;direction:ltr;text-align:left" value="${esc(this.state.generatedSlug)}">` : ''}<label style="display:block;margin:16px 0 6px;font-weight:600">عنوان سئو (Yoast) <span id="wila-seo-title-len" style="font-weight:400;font-size:.8rem;color:${seoLen >= 50 && seoLen <= 60 ? '#16a34a' : '#d97706'}">${toPersianDigits(seoLen)} کاراکتر (ایده‌آل ۵۰ تا ۶۰)</span></label><input id="wila-seo-title" class="wila-input" style="width:100%" value="${esc(this.state.generatedSeoTitle)}"><label style="display:block;margin:16px 0 6px;font-weight:600">توضیحات متا (Yoast)</label><textarea id="wila-meta-description" class="wila-input" rows="3" style="width:100%">${esc(this.state.generatedMetaDescription)}</textarea><label style="display:block;margin:16px 0 6px;font-weight:600">مترادف‌ها و عبارات کلیدی (Yoast)</label><input id="wila-keyword-synonyms" class="wila-input" style="width:100%" value="${esc(this.state.generatedKeywordSynonyms)}"><label style="display:block;margin:16px 0 6px;font-weight:600">محتوای نهایی HTML</label><textarea id="wila-generated-content" class="wila-input" rows="18" style="width:100%;direction:rtl">${esc(this.state.generatedContent)}</textarea>${this.state.generatedExternalLinks.length ? `<p style="margin:12px 0 4px;font-weight:600">منابع خارجی پیشنهادی</p><ul>${this.state.generatedExternalLinks.map(link => `<li><a href="${esc(link.url)}" target="_blank" rel="noopener">${esc(link.anchor || link.url)}</a></li>`).join('')}</ul>` : ''}${this.state.featuredImagePrompt ? `<label style="display:block;margin:16px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea id="wila-featured-image-prompt" class="wila-input" rows="5" style="width:100%;direction:ltr;text-align:left">${esc(this.state.featuredImagePrompt)}</textarea>` : ''}<div style="margin-top:10px"><button id="wila-copy-content" class="wila-btn wila-btn-outline">کپی تمام محتوا</button> ${isArticle ? '<button id="wila-create-draft" class="wila-btn wila-btn-primary">ایجاد پیش‌نویس در وبلاگ</button>' : `<button id="wila-apply-target" class="wila-btn wila-btn-primary" ${this.state.isApplying ? 'disabled' : ''}>${this.state.isApplying ? 'در حال انتشار...' : `انتشار در صفحه ${kindLabel}`}</button>`}</div></div>` : ''}
           <label style="display:block;margin:10px 0 4px;font-weight:600">فاز قیف</label><select data-generator-field="funnelStage" class="wila-select" style="width:100%">${['TOFU (آگاهی)','MOFU (بررسی)','BOFU (خرید/تبدیل)','تشخیص خودکار'].map(x=>`<option ${f.funnelStage===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">نقشه لینک داخلی</label><textarea data-generator-field="internalLinks" class="wila-input" rows="4" style="width:100%" placeholder="انکرتکست: https://example.com/page\nیا با ویرگول جدا کنید">${esc(f.internalLinks)}</textarea>
           <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-use-orphan-links" ${f.useOrphanLinks ? 'checked' : ''}> اگر نقشه لینک خالی است، صفحات یتیم مرتبط را خودکار و استراتژیک لینک‌سازی کن</label><p style="margin:5px 0;color:#64748b;font-size:.8rem">افزونه فقط صفحه‌های یتیم مرتبط را انتخاب می‌کند و انکرتکست را بر اساس مقصد می‌سازد.</p>
           <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
-          ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p><p>نامک: ${esc(this.state.contentOutline.slug)}</p><p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
-          ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است. نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
-          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر، همراه تاریخ تولید، در این بخش نگهداری می‌شود.</p><table class="wila-table"><thead><tr><th>عنوان</th><th>کلیدواژه</th><th>اسلاگ</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td>${esc(item.focus_keyword)}</td><td><code dir="ltr">${esc(item.slug || '')}</code></td><td>${esc(item.created_at)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button></td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div>
+          ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p>${isArticle ? `<p>نامک: ${esc(this.state.contentOutline.slug)}</p>` : ''}<p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
+          ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
+          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر، همراه تاریخ تولید، در این بخش نگهداری می‌شود.</p><table class="wila-table"><thead><tr><th>عنوان</th><th>کلیدواژه</th><th>نوع</th><th>اسلاگ</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td>${esc(item.focus_keyword)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td><code dir="ltr">${esc(item.slug || '')}</code></td><td>${esc(item.created_at)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button></td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div>
         </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
@@ -699,6 +782,25 @@
       this.root.querySelectorAll('select[data-generator-field]').forEach(el => el.addEventListener('change', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
       const useOrphanLinks = this.root.querySelector('#wila-use-orphan-links');
       if (useOrphanLinks) useOrphanLinks.addEventListener('change', e => { this.state.generatorForm.useOrphanLinks = e.target.checked; });
+      this.root.querySelectorAll('.wila-kind-btn').forEach(btn => btn.addEventListener('click', e => this.setContentKind(e.currentTarget.getAttribute('data-kind'))));
+      const targetSelect = this.root.querySelector('#wila-target-select');
+      if (targetSelect) {
+        this.updateTargetOptions();
+        targetSelect.addEventListener('change', e => this.selectTarget(e.target.value));
+      }
+      const targetSearch = this.root.querySelector('#wila-target-search');
+      if (targetSearch) targetSearch.addEventListener('input', e => {
+        clearTimeout(this.targetSearchTimer);
+        const q = e.target.value.trim();
+        this.targetSearchTimer = setTimeout(() => this.fetchTargets(q), 350);
+      });
+      const applyBtn = this.root.querySelector('#wila-apply-target');
+      if (applyBtn) applyBtn.addEventListener('click', () => this.applyToTarget());
+      const seoTitleInput = this.root.querySelector('#wila-seo-title');
+      if (seoTitleInput) seoTitleInput.addEventListener('input', () => {
+        const len = [...seoTitleInput.value].length, badge = this.root.querySelector('#wila-seo-title-len');
+        if (badge) { badge.textContent = `${toPersianDigits(len)} کاراکتر (ایده‌آل ۵۰ تا ۶۰)`; badge.style.color = len >= 50 && len <= 60 ? '#16a34a' : '#d97706'; }
+      });
       const outlineBtn = this.root.querySelector('#wila-generate-outline');
       if (outlineBtn) outlineBtn.addEventListener('click', () => this.generateOutline());
       const fullBtn = this.root.querySelector('#wila-generate-full');

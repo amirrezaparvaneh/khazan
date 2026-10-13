@@ -1,0 +1,231 @@
+<?php
+/**
+ * مدیریت مقصدهای تولید محتوا (محصول و دسته‌بندی محصول): فهرست، زمینه برای هوش مصنوعی و انتشار مستقیم
+ *
+ * @package WP_Internal_Link_Analyzer
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class WILA_Content_Targets {
+
+    const KIND_ARTICLE  = 'article';
+    const KIND_PRODUCT  = 'product';
+    const KIND_CATEGORY = 'product_cat';
+
+    public static function normalize_kind($kind) {
+        $kind = sanitize_key($kind);
+        return in_array($kind, array(self::KIND_PRODUCT, self::KIND_CATEGORY), true) ? $kind : self::KIND_ARTICLE;
+    }
+
+    public static function is_target_kind($kind) {
+        return $kind === self::KIND_PRODUCT || $kind === self::KIND_CATEGORY;
+    }
+
+    public static function kind_label($kind) {
+        $labels = array(
+            self::KIND_ARTICLE  => 'مقاله',
+            self::KIND_PRODUCT  => 'محصول',
+            self::KIND_CATEGORY => 'دسته‌بندی محصول',
+        );
+        return isset($labels[$kind]) ? $labels[$kind] : $labels[self::KIND_ARTICLE];
+    }
+
+    private static function kind_available($kind) {
+        if ($kind === self::KIND_PRODUCT) return post_type_exists('product');
+        if ($kind === self::KIND_CATEGORY) return taxonomy_exists('product_cat');
+        return true;
+    }
+
+    /**
+     * فهرست محصولات یا دسته‌بندی‌ها برای انتخاب در رابط کاربری
+     */
+    public static function list_targets($kind, $search = '') {
+        if (!self::is_target_kind($kind) || !self::kind_available($kind)) {
+            return new WP_Error('target_kind_unavailable', 'ووکامرس یا نوع محتوای درخواستی در این سایت فعال نیست.', array('status' => 400));
+        }
+
+        $items = array();
+        if ($kind === self::KIND_PRODUCT) {
+            $args = array(
+                'post_type'      => 'product',
+                'post_status'    => array('publish', 'draft', 'pending', 'private'),
+                'posts_per_page' => 300,
+                'orderby'        => 'title',
+                'order'          => 'ASC',
+                'fields'         => 'ids',
+            );
+            if ($search !== '') $args['s'] = $search;
+            foreach (get_posts($args) as $post_id) {
+                $items[] = array('id' => (int) $post_id, 'title' => get_the_title($post_id), 'url' => get_permalink($post_id), 'status' => get_post_status($post_id));
+            }
+            return $items;
+        }
+
+        $terms = get_terms(array('taxonomy' => 'product_cat', 'hide_empty' => false, 'number' => 300, 'search' => $search, 'orderby' => 'name'));
+        if (is_wp_error($terms)) return $terms;
+        foreach ($terms as $term) {
+            $link = get_term_link($term);
+            $items[] = array('id' => (int) $term->term_id, 'title' => self::term_path_label($term), 'url' => is_wp_error($link) ? '' : $link, 'status' => 'publish');
+        }
+        return $items;
+    }
+
+    private static function term_path_label($term) {
+        $names = array($term->name);
+        $parent = (int) $term->parent;
+        $guard = 0;
+        while ($parent && $guard++ < 5) {
+            $parent_term = get_term($parent, $term->taxonomy);
+            if (!$parent_term || is_wp_error($parent_term)) break;
+            array_unshift($names, $parent_term->name);
+            $parent = (int) $parent_term->parent;
+        }
+        return implode(' › ', $names);
+    }
+
+    /**
+     * داده‌های واقعی مقصد که به هوش مصنوعی داده می‌شود تا چیزی ساخته نشود
+     */
+    public static function get_context($kind, $id) {
+        $id = absint($id);
+        if (!$id || !self::is_target_kind($kind) || !self::kind_available($kind)) {
+            return new WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
+        }
+        return $kind === self::KIND_PRODUCT ? self::product_context($id) : self::category_context($id);
+    }
+
+    private static function plain($html, $words) {
+        return wp_strip_all_tags(wp_trim_words(strip_shortcodes((string) $html), $words, '…'));
+    }
+
+    private static function product_context($id) {
+        $post = get_post($id);
+        if (!$post || $post->post_type !== 'product') {
+            return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
+        }
+        $context = array(
+            'kind'              => self::KIND_PRODUCT,
+            'id'                => $id,
+            'title'             => get_the_title($id),
+            'url'               => get_permalink($id),
+            'short_description' => self::plain($post->post_excerpt, 80),
+            'current_content'   => self::plain($post->post_content, 120),
+            'categories'        => wp_list_pluck((array) get_the_terms($id, 'product_cat'), 'name'),
+        );
+        if (function_exists('wc_get_product')) {
+            $product = wc_get_product($id);
+            if ($product) {
+                if ($product->get_sku()) $context['sku'] = $product->get_sku();
+                if ($product->get_price() !== '') $context['price'] = wp_strip_all_tags(html_entity_decode(wc_price($product->get_price())));
+                $attributes = array();
+                foreach ($product->get_attributes() as $attribute) {
+                    if (!is_object($attribute) || !method_exists($attribute, 'get_name')) continue;
+                    $name  = $attribute->get_name();
+                    $value = $product->get_attribute($name);
+                    if ($value !== '') $attributes[wc_attribute_label($name)] = $value;
+                }
+                if ($attributes) $context['attributes'] = $attributes;
+            }
+        }
+        return $context;
+    }
+
+    private static function category_context($id) {
+        $term = get_term($id, 'product_cat');
+        if (!$term || is_wp_error($term)) {
+            return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
+        }
+        $link = get_term_link($term);
+        $children = get_terms(array('taxonomy' => 'product_cat', 'parent' => $id, 'hide_empty' => false, 'number' => 20, 'fields' => 'names'));
+        $products = get_posts(array(
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => 12,
+            'fields'         => 'ids',
+            'tax_query'      => array(array('taxonomy' => 'product_cat', 'field' => 'term_id', 'terms' => $id)),
+        ));
+        $context = array(
+            'kind'            => self::KIND_CATEGORY,
+            'id'              => $id,
+            'title'           => $term->name,
+            'url'             => is_wp_error($link) ? '' : $link,
+            'current_content' => self::plain($term->description, 120),
+            'product_count'   => (int) $term->count,
+            'sample_products' => array_map('get_the_title', $products),
+            'subcategories'   => is_wp_error($children) ? array() : array_values($children),
+        );
+        if ($term->parent) {
+            $parent = get_term($term->parent, 'product_cat');
+            if ($parent && !is_wp_error($parent)) $context['parent_category'] = $parent->name;
+        }
+        return $context;
+    }
+
+    /**
+     * جاگذاری محتوای تولیدشده در صفحه مقصد؛ نسخه قبلی برای بازگردانی نگه داشته می‌شود
+     */
+    public static function apply($kind, $id, $data) {
+        $id = absint($id);
+        $content = isset($data['content']) ? wp_kses_post($data['content']) : '';
+        if (!$id || !self::is_target_kind($kind) || !self::kind_available($kind) || trim($content) === '') {
+            return new WP_Error('missing_apply_content', 'مقصد و محتوای انتشار الزامی هستند.', array('status' => 400));
+        }
+
+        $seo = array(
+            'title'    => isset($data['seo_title']) ? sanitize_text_field($data['seo_title']) : '',
+            'desc'     => isset($data['meta_description']) ? sanitize_textarea_field($data['meta_description']) : '',
+            'focuskw'  => isset($data['focus_keyword']) ? sanitize_text_field($data['focus_keyword']) : '',
+            'synonyms' => isset($data['keyword_synonyms']) ? sanitize_text_field($data['keyword_synonyms']) : '',
+        );
+
+        return $kind === self::KIND_PRODUCT ? self::apply_to_product($id, $content, $seo) : self::apply_to_category($id, $content, $seo);
+    }
+
+    private static function apply_to_product($id, $content, $seo) {
+        $post = get_post($id);
+        if (!$post || $post->post_type !== 'product') {
+            return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
+        }
+        if (!current_user_can('edit_post', $id)) {
+            return new WP_Error('cannot_edit_target', 'اجازه ویرایش این محصول را ندارید.', array('status' => 403));
+        }
+        update_post_meta($id, '_wila_previous_content', $post->post_content);
+        $result = wp_update_post(array('ID' => $id, 'post_content' => $content), true);
+        if (is_wp_error($result)) return $result;
+
+        $meta = array('title' => '_yoast_wpseo_title', 'desc' => '_yoast_wpseo_metadesc', 'focuskw' => '_yoast_wpseo_focuskw', 'synonyms' => '_yoast_wpseo_keywordsynonyms');
+        foreach ($meta as $key => $meta_key) {
+            if ($seo[$key] !== '') update_post_meta($id, $meta_key, $seo[$key]);
+        }
+        return array('target_id' => $id, 'edit_url' => get_edit_post_link($id, 'raw'), 'view_url' => get_permalink($id));
+    }
+
+    private static function apply_to_category($id, $content, $seo) {
+        $term = get_term($id, 'product_cat');
+        if (!$term || is_wp_error($term)) {
+            return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
+        }
+        if (!current_user_can('edit_term', $id)) {
+            return new WP_Error('cannot_edit_target', 'اجازه ویرایش این دسته‌بندی را ندارید.', array('status' => 403));
+        }
+        update_term_meta($id, '_wila_previous_description', $term->description);
+        $result = wp_update_term($id, 'product_cat', array('description' => $content));
+        if (is_wp_error($result)) return $result;
+
+        // Yoast keeps taxonomy SEO data in a single option keyed by taxonomy and term id.
+        if (defined('WPSEO_VERSION')) {
+            $option = get_option('wpseo_taxonomy_meta', array());
+            if (!is_array($option)) $option = array();
+            $keys = array('title' => 'wpseo_title', 'desc' => 'wpseo_desc', 'focuskw' => 'wpseo_focuskw', 'synonyms' => 'wpseo_keywordsynonyms');
+            foreach ($keys as $key => $meta_key) {
+                if ($seo[$key] !== '') $option['product_cat'][$id][$meta_key] = $seo[$key];
+            }
+            update_option('wpseo_taxonomy_meta', $option);
+        }
+        $link = get_term_link($term);
+        return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, 'product_cat', 'product'), 'view_url' => is_wp_error($link) ? '' : $link);
+    }
+}

@@ -57,6 +57,8 @@ class WILA_DB {
             title VARCHAR(255) NOT NULL,
             focus_keyword VARCHAR(255) NOT NULL DEFAULT '',
             slug VARCHAR(200) NOT NULL DEFAULT '',
+            content_kind VARCHAR(20) NOT NULL DEFAULT 'article',
+            target_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
             content LONGTEXT NOT NULL,
             featured_image_prompt TEXT NOT NULL,
             internal_link_count INT UNSIGNED NOT NULL DEFAULT 0,
@@ -74,6 +76,8 @@ class WILA_DB {
         $history_columns = $wpdb->get_col("SHOW COLUMNS FROM {$history_table}", 0);
         $history_column_sql = array(
             'slug' => "ALTER TABLE {$history_table} ADD slug VARCHAR(200) NOT NULL DEFAULT '' AFTER focus_keyword",
+            'content_kind' => "ALTER TABLE {$history_table} ADD content_kind VARCHAR(20) NOT NULL DEFAULT 'article' AFTER slug",
+            'target_id' => "ALTER TABLE {$history_table} ADD target_id BIGINT(20) UNSIGNED NOT NULL DEFAULT 0 AFTER content_kind",
             'internal_link_count' => "ALTER TABLE {$history_table} ADD internal_link_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER featured_image_prompt",
             'external_link_count' => "ALTER TABLE {$history_table} ADD external_link_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER internal_link_count",
             'external_links' => "ALTER TABLE {$history_table} ADD external_links LONGTEXT NOT NULL AFTER external_link_count",

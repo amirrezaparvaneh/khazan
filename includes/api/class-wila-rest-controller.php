@@ -31,6 +31,8 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/content/outline', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_content_outline'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/generate', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_full_content'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/draft', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'create_content_draft'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/targets', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_targets'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/apply', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'apply_content_to_target'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history_item'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_avalai_connection'), 'permission_callback' => array($this, 'check_permission')));
@@ -248,6 +250,12 @@ class WILA_REST_Controller {
 
     private function content_generator_params($request) {
         $params = $request->get_json_params();
+        $content_kind = WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        $target = null;
+        if (WILA_Content_Targets::is_target_kind($content_kind)) {
+            $target = WILA_Content_Targets::get_context($content_kind, isset($params['target_id']) ? $params['target_id'] : 0);
+            if (is_wp_error($target)) return $target;
+        }
         $internal_links = isset($params['internal_links']) && is_array($params['internal_links']) ? array_map(function ($link) {
             return array('anchor' => isset($link['anchor']) ? sanitize_text_field($link['anchor']) : '', 'url' => isset($link['url']) ? esc_url_raw($link['url']) : '');
         }, $params['internal_links']) : array();
@@ -263,18 +271,27 @@ class WILA_REST_Controller {
                 return $a_priority === $b_priority ? strcasecmp($a['title'], $b['title']) : $a_priority - $b_priority;
             });
             foreach ($orphans['list'] as $orphan) {
+                if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $content_kind) continue;
                 if (!empty($orphan['url']) && !empty($orphan['title'])) {
                     $internal_links[] = array('anchor' => $orphan['title'], 'url' => esc_url_raw($orphan['url']), 'orphan' => true);
                 }
             }
         }
 
-        return array(
-            'h1_title' => isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : '',
+        if ($target) {
+            $internal_links = array_values(array_filter($internal_links, function ($link) use ($target) {
+                return untrailingslashit($link['url']) !== untrailingslashit($target['url']);
+            }));
+        }
+
+        $result = array(
+            'content_kind' => $content_kind,
+            'target_id' => $target ? $target['id'] : 0,
+            'h1_title' => $target ? $target['title'] : (isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : ''),
             'focus_keyword' => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
             'long_tail' => isset($params['long_tail']) ? sanitize_text_field($params['long_tail']) : '',
             'word_count' => isset($params['word_count']) ? max(300, min(10000, absint($params['word_count']))) : 1200,
-            'content_type' => isset($params['content_type']) ? sanitize_text_field($params['content_type']) : '',
+            'content_type' => WILA_Content_Targets::kind_label($content_kind),
             'funnel_stage' => isset($params['funnel_stage']) ? sanitize_text_field($params['funnel_stage']) : '',
             'description' => isset($params['description']) ? sanitize_textarea_field($params['description']) : '',
             'internal_links' => $internal_links,
@@ -282,10 +299,26 @@ class WILA_REST_Controller {
             'homepage_keywords' => get_option('wila_homepage_keywords', ''),
             'homepage_url' => home_url('/'),
         );
+        if ($target) $result['target'] = $target;
+        return $result;
+    }
+
+    public function get_content_targets($request) {
+        $kind = WILA_Content_Targets::normalize_kind($request->get_param('kind'));
+        $items = WILA_Content_Targets::list_targets($kind, sanitize_text_field((string) $request->get_param('search')));
+        return is_wp_error($items) ? $items : rest_ensure_response(array('success' => true, 'items' => $items));
+    }
+
+    public function apply_content_to_target($request) {
+        $params = $request->get_json_params();
+        $kind = WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        $result = WILA_Content_Targets::apply($kind, isset($params['target_id']) ? $params['target_id'] : 0, is_array($params) ? $params : array());
+        return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 
     public function generate_content_outline($request) {
         $params = $this->content_generator_params($request);
+        if (is_wp_error($params)) return $params;
         if (empty($params['h1_title']) || empty($params['focus_keyword'])) return new WP_Error('missing_content_details', 'عنوان و کلیدواژه کانونی الزامی هستند.', array('status' => 400));
         $result = (new WILA_AvalAI_Client())->generate_content_outline($params);
         return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'outline' => $result));
@@ -293,6 +326,7 @@ class WILA_REST_Controller {
 
     public function generate_full_content($request) {
         $params = $this->content_generator_params($request);
+        if (is_wp_error($params)) return $params;
         $body = $request->get_json_params();
         $outline = isset($body['outline']) && is_array($body['outline']) ? $body['outline'] : array();
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
@@ -305,6 +339,8 @@ class WILA_REST_Controller {
             'title' => $params['h1_title'],
             'focus_keyword' => $params['focus_keyword'],
             'slug' => $result['slug'],
+            'content_kind' => $params['content_kind'],
+            'target_id' => $params['target_id'],
             'content' => $result['content'],
             'featured_image_prompt' => $result['featured_image_prompt'],
             'internal_link_count' => $result['internal_link_count'],
@@ -314,22 +350,22 @@ class WILA_REST_Controller {
             'meta_description' => $result['meta_description'],
             'keyword_synonyms' => $result['keyword_synonyms'],
             'created_at' => current_time('mysql'),
-        ), array('%s', '%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s'));
+        ), array('%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s'));
 
-        return rest_ensure_response(array('success' => true, 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
+        return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
     }
 
     public function get_content_history() {
         global $wpdb;
         $table = WILA_DB::get_content_history_table_name();
-        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, internal_link_count, external_link_count, seo_title, meta_description, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, content_kind, target_id, internal_link_count, external_link_count, seo_title, meta_description, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
         return rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
     public function get_content_history_item($request) {
         global $wpdb;
         $table = WILA_DB::get_content_history_table_name();
-        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, slug, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
+        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, slug, content_kind, target_id, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
         if (!$item) return new WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
         return rest_ensure_response(array('success' => true, 'item' => $item));
     }

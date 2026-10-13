@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WILA_VERSION', '1.3.0');
+define('WILA_VERSION', '1.4.0');
 define('WILA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WILA_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('WILA_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -39,6 +39,7 @@ final class WP_Internal_Link_Analyzer {
     private function includes() {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
+        require_once WILA_PLUGIN_DIR . 'includes/class-wila-content-targets.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-avalai-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-seo-repair.php';
