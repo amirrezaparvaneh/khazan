@@ -126,7 +126,7 @@ class WILA_Bulk_Generator {
             }
             $context['related_products'] = WILA_Content_Targets::related_products($product_id, 2);
             foreach ($context['related_products'] as $related) {
-                $internal_links[] = array('anchor' => $related['title'], 'url' => $related['url']);
+                $internal_links[] = array('anchor' => $related['anchor'], 'url' => $related['url']);
             }
         } else {
             $context['parent_categories'] = array();

@@ -197,9 +197,28 @@ class WILA_Content_Targets {
         $related = array();
         foreach ($ids as $related_id) {
             if (get_post_status($related_id) !== 'publish') continue;
-            $related[] = array('title' => get_the_title($related_id), 'url' => get_permalink($related_id));
+            $related[] = array(
+                'title'  => get_the_title($related_id),
+                'anchor' => self::product_link_anchor($related_id),
+                'url'    => get_permalink($related_id),
+            );
         }
         return $related;
+    }
+
+    /**
+     * انکرتکست لینک به یک محصول: کلیدواژه کانونی ذخیره‌شده (RankMath یا Yoast) یا نسخه کوتاه‌شده نام محصول
+     */
+    public static function product_link_anchor($id) {
+        $focus = '';
+        foreach (array('rank_math_focus_keyword', '_yoast_wpseo_focuskw') as $meta_key) {
+            $value = trim((string) get_post_meta($id, $meta_key, true));
+            if ($value === '') continue;
+            // RankMath ذخیره می‌کند «کلیدواژه اصلی، مترادف‌ها»؛ فقط کلیدواژه اصلی لازم است.
+            $focus = trim(explode(',', $value)[0]);
+            break;
+        }
+        return $focus !== '' ? $focus : WILA_Content_Rules::short_keyword(get_the_title($id));
     }
 
     private static function category_context($id) {

@@ -40,6 +40,8 @@ final class WP_Internal_Link_Analyzer {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-content-targets.php';
+        require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-content-rules.php';
+        require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-html-sanitizer.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-avalai-client.php';
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-bulk-generator.php';
         require_once WILA_PLUGIN_DIR . 'includes/api/class-wila-rest-controller.php';

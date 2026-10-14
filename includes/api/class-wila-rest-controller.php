@@ -314,7 +314,8 @@ class WILA_REST_Controller {
             foreach ($orphans['list'] as $orphan) {
                 if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $content_kind) continue;
                 if (!empty($orphan['url']) && !empty($orphan['title'])) {
-                    $internal_links[] = array('anchor' => $orphan['title'], 'url' => esc_url_raw($orphan['url']), 'orphan' => true);
+                    $anchor = $orphan['type'] === WILA_Content_Targets::product_post_type() ? WILA_Content_Targets::product_link_anchor($orphan['id']) : $orphan['title'];
+                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true);
                 }
             }
         }
