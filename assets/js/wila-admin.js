@@ -123,7 +123,7 @@
       isPlanning: false,
       generatorForm: { contentKind: 'article', targetId: 0, h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
       seoFix: { kind: 'product', search: '', targetId: 0, targets: [], targetsLoading: false, targetsError: '', current: null, currentLoading: false, errors: '', result: null, running: false, applying: false },
-      bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, onlyNew: false, matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
+      bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
       targets: [],
       targetsLoading: false,
       targetsError: '',
@@ -624,7 +624,7 @@
         res.matches.forEach((m, i) => {
           b.rows[i].match = m;
           // ردیف‌های تولیدشده یا آپلودشده قبلی به‌طور پیش‌فرض انتخاب نمی‌شوند
-          if (m.matched && !m.generated && !m.history && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
+          if (m.matched && !m.generated && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
         });
         const already = res.matches.filter(m => m.matched && m.generated).length;
         const uploaded = res.matches.filter(m => m.history).length;
@@ -639,8 +639,10 @@
       const b = this.state.bulk;
       return b.rows.map((r, i) => i).filter(i => {
         const m = b.rows[i].match;
-        // «فقط جدیدها»: ردیف‌هایی که قبلاً آپلود یا تولید شده‌اند پنهان می‌شوند
-        if (b.onlyNew && m && (m.history || m.generated)) return false;
+        // فیلتر وضعیت فقط روی «محتوا تولید شده» است؛ ردیف‌های صرفاً آپلودشده در انتظار تولید محسوب می‌شوند
+        const generated = !!(m && m.generated);
+        if (b.status === 'pending' && generated) return false;
+        if (b.status === 'generated' && !generated) return false;
         const matched = !!(m && m.matched);
         return b.view === 'missing' ? !matched : matched;
       });
@@ -649,7 +651,8 @@
     // ردیف‌های مجاز برای «انتخاب همه»: متصل‌شده و بدون سابقه تولید (موارد قبلاً تولیدشده فقط دستی انتخاب می‌شوند)
     bulkSelectableIndexes: function () {
       const b = this.state.bulk;
-      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && !(b.rows[i].match && (b.rows[i].match.generated || b.rows[i].match.history)));
+      // در فیلتر «قبلاً تولیدشده‌ها» همه ردیف‌های قابل‌مشاهده برای تولید مجدد قابل انتخابند
+      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && (b.status === 'generated' || !(b.rows[i].match && b.rows[i].match.generated)));
     },
 
     // ردیف متصل‌شده، یا ردیف یافت‌نشده وقتی «ایجاد خودکار محصول پیش‌نویس» روشن است
@@ -1049,7 +1052,13 @@
           <div class="khazan-toolbar">
             <div class="khazan-field khazan-field-file"><label>فایل CSV</label>
               <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="wila-input" ${locked}></div>
-            ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>حالت درج محتوا</label>
+            ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>فیلتر وضعیت تولید محتوا</label>
+              <select id="wila-bulk-status" class="wila-select">
+                <option value="all" ${b.status === 'all' ? 'selected' : ''}>همه ردیف‌ها</option>
+                <option value="pending" ${b.status === 'pending' ? 'selected' : ''}>فقط در انتظار تولید محتوا (بدون محتوا)</option>
+                <option value="generated" ${b.status === 'generated' ? 'selected' : ''}>قبلاً تولیدشده‌ها</option>
+              </select></div>
+            <div class="khazan-field"><label>حالت درج محتوا</label>
               <select id="wila-bulk-mode" class="wila-select" ${locked}>
                 <option value="replace" ${b.mode === 'replace' ? 'selected' : ''}>جایگزینی کامل توضیحات محصول</option>
                 <option value="append" ${b.mode === 'append' ? 'selected' : ''}>افزودن به انتهای توضیحات فعلی</option>
@@ -1061,7 +1070,6 @@
             <div class="khazan-toggle-grid">
               <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره عنوان سئو، توضیحات متا و کلیدواژه در Yoast و Rank Math</small></span></label>
               <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
-              <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-onlynew" ${b.onlyNew ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>🆕 فقط موارد جدید</strong><small>پنهان کردن محصولات تولیدشده یا آپلودشده قبلی</small></span></label>
               <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>
             </div>
             <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 ${toPersianDigits(matchedCount)} از ${toPersianDigits(b.rows.length)} ردیف متصل شد</span><span class="khazan-status-pill khazan-status-alt">☑️ ${toPersianDigits(selectedCount)} ردیف انتخاب شده</span></div>
@@ -1460,8 +1468,8 @@
       });
       const sfRun = this.root.querySelector('#wila-seofix-run'); if (sfRun) sfRun.addEventListener('click', () => this.runSeoFix());
       const sfApply = this.root.querySelector('#wila-seofix-apply'); if (sfApply) sfApply.addEventListener('click', () => this.applySeoFix());
-      const bulkOnlyNew = this.root.querySelector('#wila-bulk-onlynew');
-      if (bulkOnlyNew) bulkOnlyNew.addEventListener('change', e => { bulk.onlyNew = e.target.checked; this.render(); });
+      const bulkStatus = this.root.querySelector('#wila-bulk-status');
+      if (bulkStatus) bulkStatus.addEventListener('change', e => { bulk.status = e.target.value; this.render(); });
       const bulkCreate = this.root.querySelector('#wila-bulk-create');
       if (bulkCreate) bulkCreate.addEventListener('change', e => {
         bulk.createMissing = e.target.checked;
