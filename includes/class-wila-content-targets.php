@@ -257,6 +257,61 @@ class WILA_Content_Targets {
     }
 
     /**
+     * محتوای فعلی صفحه مقصد به‌همراه متاهای سئوی آن؛ ورودی رفع خطای سئو و نمایش در پنل
+     */
+    public static function current_content($kind, $id) {
+        $id = absint($id);
+        if (!$id || !self::is_target_kind($kind) || !self::kind_available($kind)) {
+            return new WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
+        }
+        return $kind === self::KIND_PRODUCT ? self::current_product($id) : self::current_category($id);
+    }
+
+    private static function current_product($id) {
+        $post = get_post($id);
+        if (!$post || $post->post_type !== self::product_post_type()) {
+            return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
+        }
+        // RankMath کلیدواژه اصلی و مترادف‌ها را در یک فهرست دارد؛ Yoast مترادف‌ها را JSON ذخیره می‌کند.
+        $rank_list = WILA_Seo_Meta::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
+        $yoast_synonyms = json_decode((string) get_post_meta($id, '_yoast_wpseo_keywordsynonyms', true), true);
+        $focus = $rank_list ? $rank_list[0] : (string) get_post_meta($id, '_yoast_wpseo_focuskw', true);
+        $synonyms = $rank_list ? array_slice($rank_list, 1) : (is_array($yoast_synonyms) ? $yoast_synonyms : array());
+        $title = (string) get_post_meta($id, 'rank_math_title', true);
+        if ($title === '') $title = (string) get_post_meta($id, '_yoast_wpseo_title', true);
+        $desc = (string) get_post_meta($id, 'rank_math_description', true);
+        if ($desc === '') $desc = (string) get_post_meta($id, '_yoast_wpseo_metadesc', true);
+        return array(
+            'title'   => get_the_title($id),
+            'url'     => get_permalink($id),
+            'content' => $post->post_content,
+            'seo'     => array('title' => $title, 'desc' => $desc, 'focuskw' => $focus, 'synonyms' => implode(', ', $synonyms)),
+        );
+    }
+
+    private static function current_category($id) {
+        $term = get_term($id, self::category_taxonomy());
+        if (!$term || is_wp_error($term)) {
+            return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
+        }
+        $option = get_option('wpseo_taxonomy_meta', array());
+        $meta = is_array($option) && isset($option[self::category_taxonomy()][$id]) ? (array) $option[self::category_taxonomy()][$id] : array();
+        $synonyms = json_decode((string) ($meta['wpseo_keywordsynonyms'] ?? ''), true);
+        $link = get_term_link($term);
+        return array(
+            'title'   => $term->name,
+            'url'     => is_wp_error($link) ? '' : $link,
+            'content' => $term->description,
+            'seo'     => array(
+                'title'    => (string) ($meta['wpseo_title'] ?? ''),
+                'desc'     => (string) ($meta['wpseo_desc'] ?? ''),
+                'focuskw'  => (string) ($meta['wpseo_focuskw'] ?? ''),
+                'synonyms' => implode(', ', is_array($synonyms) ? $synonyms : array()),
+            ),
+        );
+    }
+
+    /**
      * جاگذاری محتوای تولیدشده در صفحه مقصد؛ نسخه قبلی برای بازگردانی نگه داشته می‌شود
      */
     public static function apply($kind, $id, $data) {
@@ -282,18 +337,8 @@ class WILA_Content_Targets {
      * ذخیره متای سئو محصول در یوست و رنک‌مث (فقط مقادیر غیرخالی)
      */
     public static function write_post_seo($id, $seo) {
-        $focus_all = trim($seo['focuskw'] . ($seo['synonyms'] !== '' ? ', ' . $seo['synonyms'] : ''), ', ');
-        $meta = array(
-            '_yoast_wpseo_title'           => $seo['title'],
-            '_yoast_wpseo_metadesc'        => $seo['desc'],
-            '_yoast_wpseo_focuskw'         => $seo['focuskw'],
-            '_yoast_wpseo_keywordsynonyms' => $seo['synonyms'],
-            'rank_math_title'              => $seo['title'],
-            'rank_math_description'        => $seo['desc'],
-            'rank_math_focus_keyword'      => $focus_all,
-        );
-        foreach ($meta as $meta_key => $value) {
-            if ($value !== '') update_post_meta($id, $meta_key, $value);
+        foreach (WILA_Seo_Meta::post_meta_map($seo) as $meta_key => $value) {
+            update_post_meta($id, $meta_key, $value);
         }
     }
 
@@ -352,9 +397,8 @@ class WILA_Content_Targets {
         if (defined('WPSEO_VERSION')) {
             $option = get_option('wpseo_taxonomy_meta', array());
             if (!is_array($option)) $option = array();
-            $keys = array('title' => 'wpseo_title', 'desc' => 'wpseo_desc', 'focuskw' => 'wpseo_focuskw', 'synonyms' => 'wpseo_keywordsynonyms');
-            foreach ($keys as $key => $meta_key) {
-                if ($seo[$key] !== '') $option[self::category_taxonomy()][$id][$meta_key] = $seo[$key];
+            foreach (WILA_Seo_Meta::term_meta_map($seo) as $meta_key => $value) {
+                $option[self::category_taxonomy()][$id][$meta_key] = $value;
             }
             update_option('wpseo_taxonomy_meta', $option);
         }

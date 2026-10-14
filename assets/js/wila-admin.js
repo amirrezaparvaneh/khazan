@@ -57,6 +57,7 @@
       plannerResult: null,
       isPlanning: false,
       generatorForm: { contentKind: 'article', targetId: 0, h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
+      seoFix: { kind: 'product', search: '', targetId: 0, targets: [], targetsLoading: false, targetsError: '', current: null, currentLoading: false, errors: '', result: null, running: false, applying: false },
       bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'draft', injectSeo: true, autoLinks: true, createMissing: false, matching: false, running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
       targets: [],
       targetsLoading: false,
@@ -359,6 +360,90 @@
       const content = contentField ? contentField.value : this.state.generatedContent;
       try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content, slug: (this.root.querySelector('#wila-generated-slug') || {}).value || this.state.generatedSlug, focus_keyword: this.state.generatorForm.focusKeyword, keyword_synonyms: (this.root.querySelector('#wila-keyword-synonyms') || {}).value || this.state.generatedKeywordSynonyms, seo_title: (this.root.querySelector('#wila-seo-title') || {}).value || this.state.generatedSeoTitle, meta_description: (this.root.querySelector('#wila-meta-description') || {}).value || this.state.generatedMetaDescription }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
       catch (e) { app.toast('خطا: ' + e.message); }
+    },
+
+    // ---- رفع خطای هدفمند سئو: فقط ایرادهای گزارش‌شده اصلاح می‌شوند ----
+    setSeoFixKind: function (kind) {
+      const sf = this.state.seoFix;
+      if (sf.kind === kind) return;
+      Object.assign(sf, { kind, targetId: 0, current: null, result: null, targets: [], targetsError: '', search: '' });
+      this.render();
+      this.fetchSeoFixTargets('');
+    },
+
+    fetchSeoFixTargets: async function (search) {
+      const sf = this.state.seoFix, kind = sf.kind;
+      sf.targetsLoading = true; sf.targetsError = ''; this.updateSeoFixOptions();
+      try {
+        const r = await this.apiFetch(`/content/targets?kind=${encodeURIComponent(kind)}&search=${encodeURIComponent(search || '')}`);
+        if (kind !== sf.kind) return;
+        if (!r.success) throw new Error(r.message || 'فهرست دریافت نشد.');
+        sf.targets = r.items || [];
+      } catch (e) { sf.targets = []; sf.targetsError = e.message; }
+      sf.targetsLoading = false;
+      this.updateSeoFixOptions();
+    },
+
+    updateSeoFixOptions: function () {
+      const list = this.root && this.root.querySelector('#wila-seofix-select');
+      if (!list) return;
+      const { targets, targetsLoading, targetsError, targetId } = this.state.seoFix;
+      if (targetsLoading) list.innerHTML = '<option disabled>در حال بارگذاری...</option>';
+      else if (targetsError) list.innerHTML = `<option disabled>${escapeHtml(targetsError)}</option>`;
+      else if (!targets.length) list.innerHTML = '<option disabled>موردی یافت نشد.</option>';
+      else list.innerHTML = targets.map(t => `<option value="${t.id}" ${Number(targetId) === Number(t.id) ? 'selected' : ''}>${escapeHtml(t.title)}</option>`).join('');
+    },
+
+    selectSeoFixTarget: function (id) {
+      const sf = this.state.seoFix;
+      sf.targetId = Number(id); sf.result = null; sf.current = null;
+      this.loadSeoFixCurrent();
+    },
+
+    loadSeoFixCurrent: async function () {
+      const sf = this.state.seoFix;
+      sf.currentLoading = true; this.render();
+      try {
+        const r = await this.apiFetch(`/content/current?content_kind=${encodeURIComponent(sf.kind)}&target_id=${encodeURIComponent(sf.targetId)}`);
+        if (!r.success) throw new Error(r.message || 'محتوا دریافت نشد.');
+        sf.current = r;
+      } catch (e) { sf.current = null; app.toast('خطا: ' + e.message); }
+      sf.currentLoading = false;
+      this.render();
+    },
+
+    runSeoFix: async function () {
+      const sf = this.state.seoFix;
+      if (!sf.targetId || !sf.errors.trim() || sf.running) return;
+      sf.running = true; sf.result = null; this.render();
+      try {
+        const r = await this.apiFetch('/content/seo-fix', { method: 'POST', body: JSON.stringify({ content_kind: sf.kind, target_id: sf.targetId, errors: sf.errors }) });
+        if (!r.success) throw new Error(r.message || 'رفع خطا انجام نشد.');
+        sf.result = r;
+        app.toast(r.changed ? 'اصلاح‌ها آماده بررسی است.' : 'هوش مصنوعی تغییری پیشنهاد نکرد.');
+      } catch (e) { app.toast('خطا: ' + e.message); }
+      sf.running = false;
+      this.render();
+    },
+
+    applySeoFix: async function () {
+      const sf = this.state.seoFix;
+      const val = id => (this.root.querySelector('#' + id) || {}).value || '';
+      const content = val('wila-seofix-result');
+      if (!content.trim() || !sf.targetId || sf.applying) return;
+      if (!confirm('متن فعلی این صفحه با نسخه اصلاح‌شده جایگزین می‌شود (نسخه قبلی نگه داشته می‌شود). ادامه می‌دهید؟')) return;
+      sf.applying = true; this.render();
+      try {
+        const r = await this.apiFetch('/content/apply', { method: 'POST', body: JSON.stringify({ content_kind: sf.kind, target_id: sf.targetId, content, mode: 'replace', seo_title: val('wila-seofix-title'), meta_description: val('wila-seofix-meta') }) });
+        if (!r.success) throw new Error(r.message || 'جایگزینی انجام نشد.');
+        app.toast('اصلاح‌ها در صفحه ذخیره شد.');
+        sf.result = null;
+        sf.applying = false;
+        await this.loadSeoFixCurrent();
+        return;
+      } catch (e) { app.toast('خطا: ' + e.message); }
+      sf.applying = false;
+      this.render();
     },
 
     applyToTarget: async function () {
@@ -816,6 +901,42 @@
           ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
           <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
         </div>`;
+      } else if (activeTab === 'seofix') {
+        const sf = this.state.seoFix;
+        const cur = sf.current, res = sf.result;
+        const busy = sf.running || sf.applying;
+        const kindLabel = this.kindLabel(sf.kind);
+        contentHtml = `<div class="wila-card" style="max-width:900px">
+          <h3 style="margin-top:0">🛠 رفع خطای هوشمند سئو با هوش مصنوعی</h3>
+          <p style="color:#64748b;font-size:.85rem">برای محتوایی که از قبل روی صفحه است، خطاهای Yoast یا RankMath را اینجا بچسبانید. هوش مصنوعی فقط همان موارد را روی متن فعلی اصلاح می‌کند و بقیه متن دست‌نخورده می‌ماند. پیش از جایگزینی، نتیجه را بررسی کنید.</p>
+          <label style="display:block;margin:10px 0 4px;font-weight:600">نوع صفحه</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">${[['product', 'محصول'], ['product_cat', 'دسته‌بندی محصول']].map(([k, l]) => `<button type="button" class="wila-btn ${sf.kind === k ? 'wila-btn-primary' : 'wila-btn-outline'} wila-seofix-kind" data-kind="${k}" ${busy ? 'disabled' : ''}>${l}</button>`).join('')}</div>
+          <label style="display:block;margin:14px 0 4px;font-weight:600">انتخاب ${kindLabel}</label>
+          <input id="wila-seofix-search" type="search" class="wila-input" style="width:100%;margin-bottom:6px" placeholder="جستجو در ${kindLabel}ها..." value="${escapeHtml(sf.search || '')}">
+          <select id="wila-seofix-select" class="wila-select" size="6" style="width:100%;height:auto" ${busy ? 'disabled' : ''}></select>
+          ${sf.currentLoading ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : cur ? `
+            <div style="margin-top:16px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:.85rem;line-height:1.9">
+              <div><strong>صفحه:</strong> <a href="${escapeHtml(cur.url)}" target="_blank" rel="noopener">${escapeHtml(cur.title)}</a></div>
+              <div><strong>عنوان سئو:</strong> ${escapeHtml(cur.seo.title || '—')}</div>
+              <div><strong>متا:</strong> ${escapeHtml(cur.seo.desc || '—')}</div>
+              <div><strong>کلیدواژه کانونی:</strong> ${escapeHtml(cur.seo.focuskw || '—')}${cur.seo.synonyms ? ` — <strong>مترادف‌ها:</strong> ${escapeHtml(cur.seo.synonyms)}` : ''}</div>
+            </div>
+            <details style="margin-top:10px"><summary>نمایش متن فعلی</summary><textarea readonly class="wila-input" rows="10" style="width:100%;direction:ltr;text-align:left;margin-top:8px">${escapeHtml(cur.content)}</textarea></details>` : ''}
+          ${cur ? `<label style="display:block;margin:16px 0 4px;font-weight:600">خطاهای گزارش‌شده توسط افزونه سئو</label>
+          <textarea id="wila-seofix-errors" class="wila-input" rows="5" style="width:100%" placeholder="مثلاً: کلیدواژه در مقدمه نیست / متای طولانی است / تعداد لینک خارجی کم است" ${busy ? 'disabled' : ''}>${escapeHtml(sf.errors)}</textarea>
+          <button id="wila-seofix-run" class="wila-btn wila-btn-primary" style="margin-top:12px" ${!sf.errors.trim() || busy ? 'disabled' : ''}>${sf.running ? 'در حال رفع خطا...' : 'رفع خطاهای سئو'}</button>` : ''}
+          ${res ? `<div style="margin-top:20px">
+            <div style="margin-bottom:10px"><span class="wila-badge ${res.changed ? 'wila-badge-success' : 'wila-badge-neutral'}">${res.changed ? 'تغییرات آماده بررسی است' : 'تغییری پیشنهاد نشد'}</span></div>
+            ${res.notes ? `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;font-size:.85rem;white-space:pre-line;margin-bottom:12px">${escapeHtml(res.notes)}</div>` : ''}
+            <label style="display:block;margin:10px 0 4px;font-weight:600">عنوان سئو پیشنهادی (خالی یعنی بدون تغییر)</label>
+            <input id="wila-seofix-title" class="wila-input" style="width:100%" value="${escapeHtml(res.seo_title || '')}">
+            <label style="display:block;margin:10px 0 4px;font-weight:600">متای پیشنهادی (خالی یعنی بدون تغییر)</label>
+            <textarea id="wila-seofix-meta" class="wila-input" rows="2" style="width:100%">${escapeHtml(res.meta_description || '')}</textarea>
+            <label style="display:block;margin:10px 0 4px;font-weight:600">متن اصلاح‌شده (HTML)</label>
+            <textarea id="wila-seofix-result" class="wila-input" rows="16" style="width:100%;direction:rtl">${escapeHtml(res.content)}</textarea>
+            <button id="wila-seofix-apply" class="wila-btn wila-btn-primary" style="margin-top:12px" ${busy ? 'disabled' : ''}>${sf.applying ? 'در حال جایگزینی...' : 'جایگزینی متن در صفحه'}</button>
+          </div>` : ''}
+        </div>`;
       } else if (activeTab === 'bulk') {
         const b = this.state.bulk;
         const visible = this.bulkVisibleIndexes();
@@ -1098,6 +1219,7 @@
           <button class="wila-tab-btn ${activeTab === 'planner' ? 'active' : ''}" data-tab="planner">🎯 برنامه‌‌ریز لینک</button>
           <button class="wila-tab-btn ${activeTab === 'generator' ? 'active' : ''}" data-tab="generator">تولیدکننده محتوا</button>
           <button class="wila-tab-btn ${activeTab === 'bulk' ? 'active' : ''}" data-tab="bulk">تولید انبوه (CSV)</button>
+          <button class="wila-tab-btn ${activeTab === 'seofix' ? 'active' : ''}" data-tab="seofix">🛠 رفع خطای سئو</button>
           <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر پیوندها</button>
           <button class="wila-tab-btn ${activeTab === 'orphans' ? 'active' : ''}" data-tab="orphans">صفحات یتیم</button>
           <button class="wila-tab-btn ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">تنظیمات</button>
@@ -1121,6 +1243,7 @@
         if (!this.state.activeTab) return;
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
+        if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         this.render();
       }));
 
@@ -1162,6 +1285,27 @@
       const bulkFilter = this.root.querySelector('#wila-bulk-filter'); if (bulkFilter) bulkFilter.addEventListener('change', e => { bulk.filter = e.target.value; this.render(); });
       const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
       const bulkLinks = this.root.querySelector('#wila-bulk-links'); if (bulkLinks) bulkLinks.addEventListener('change', e => { bulk.autoLinks = e.target.checked; });
+      const sf = this.state.seoFix;
+      this.root.querySelectorAll('.wila-seofix-kind').forEach(btn => btn.addEventListener('click', e => this.setSeoFixKind(e.currentTarget.getAttribute('data-kind'))));
+      const sfSelect = this.root.querySelector('#wila-seofix-select');
+      if (sfSelect) {
+        this.updateSeoFixOptions();
+        sfSelect.addEventListener('change', e => this.selectSeoFixTarget(e.target.value));
+      }
+      const sfSearch = this.root.querySelector('#wila-seofix-search');
+      if (sfSearch) sfSearch.addEventListener('input', e => {
+        clearTimeout(this.seoFixSearchTimer);
+        sf.search = e.target.value.trim();
+        this.seoFixSearchTimer = setTimeout(() => this.fetchSeoFixTargets(sf.search), 350);
+      });
+      const sfErrors = this.root.querySelector('#wila-seofix-errors');
+      if (sfErrors) sfErrors.addEventListener('input', e => {
+        sf.errors = e.target.value;
+        const runBtn = this.root.querySelector('#wila-seofix-run');
+        if (runBtn) runBtn.disabled = !sf.errors.trim() || sf.running;
+      });
+      const sfRun = this.root.querySelector('#wila-seofix-run'); if (sfRun) sfRun.addEventListener('click', () => this.runSeoFix());
+      const sfApply = this.root.querySelector('#wila-seofix-apply'); if (sfApply) sfApply.addEventListener('click', () => this.applySeoFix());
       const bulkCreate = this.root.querySelector('#wila-bulk-create');
       if (bulkCreate) bulkCreate.addEventListener('change', e => {
         bulk.createMissing = e.target.checked;

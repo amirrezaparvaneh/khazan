@@ -34,6 +34,8 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/content/generate', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_full_content'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/draft', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'create_content_draft'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/targets', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_targets'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/current', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_current_content'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/seo-fix', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'fix_seo_errors'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/apply', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'apply_content_to_target'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/bulk/match', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'bulk_match_products'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/bulk/process', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'bulk_process_product'), 'permission_callback' => array($this, 'check_permission')));
@@ -372,6 +374,24 @@ class WILA_REST_Controller {
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 
+    public function get_current_content($request) {
+        $kind = WILA_Content_Targets::normalize_kind($request->get_param('content_kind'));
+        $result = WILA_Content_Targets::current_content($kind, $request->get_param('target_id'));
+        return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
+    }
+
+    public function fix_seo_errors($request) {
+        $params = $request->get_json_params();
+        $kind = WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        $errors = isset($params['errors']) ? sanitize_textarea_field(mb_substr((string) $params['errors'], 0, 3000)) : '';
+        if (trim($errors) === '') return new WP_Error('missing_seo_errors', 'متن خطاهای سئو را وارد کنید.', array('status' => 400));
+        $current = WILA_Content_Targets::current_content($kind, isset($params['target_id']) ? $params['target_id'] : 0);
+        if (is_wp_error($current)) return $current;
+        if (trim(wp_strip_all_tags($current['content'])) === '') return new WP_Error('empty_content', 'این صفحه محتوایی ندارد؛ ابتدا محتوا تولید کنید.', array('status' => 400));
+        $result = (new WILA_AvalAI_Client())->generate_seo_fix($kind, $current, $errors);
+        return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
+    }
+
     public function apply_content_to_target($request) {
         $params = $request->get_json_params();
         $kind = WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
@@ -446,10 +466,12 @@ class WILA_REST_Controller {
         $synonyms = isset($params['keyword_synonyms']) ? sanitize_text_field($params['keyword_synonyms']) : '';
         $seo_title = isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title;
         $meta_description = isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '';
-        if ($focus_keyword !== '') update_post_meta($post_id, '_yoast_wpseo_focuskw', $focus_keyword);
-        if ($synonyms !== '') update_post_meta($post_id, '_yoast_wpseo_keywordsynonyms', $synonyms);
-        if ($seo_title !== '') update_post_meta($post_id, '_yoast_wpseo_title', $seo_title);
-        if ($meta_description !== '') update_post_meta($post_id, '_yoast_wpseo_metadesc', $meta_description);
+        WILA_Content_Targets::write_post_seo($post_id, array(
+            'title'    => $seo_title,
+            'desc'     => $meta_description,
+            'focuskw'  => $focus_keyword,
+            'synonyms' => $synonyms,
+        ));
 
         return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'slug' => get_post_field('post_name', $post_id), 'edit_url' => get_edit_post_link($post_id, 'raw')));
     }

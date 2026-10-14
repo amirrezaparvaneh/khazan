@@ -39,6 +39,7 @@ final class WP_Internal_Link_Analyzer {
     private function includes() {
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-db.php';
         require_once WILA_PLUGIN_DIR . 'includes/scanner/class-wila-scanner.php';
+        require_once WILA_PLUGIN_DIR . 'includes/class-wila-seo-meta.php';
         require_once WILA_PLUGIN_DIR . 'includes/class-wila-content-targets.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-content-rules.php';
         require_once WILA_PLUGIN_DIR . 'includes/ai/class-wila-html-sanitizer.php';

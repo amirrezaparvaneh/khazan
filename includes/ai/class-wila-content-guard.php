@@ -12,8 +12,7 @@ if (!defined('ABSPATH')) {
 class WILA_Content_Guard {
 
     const WRAPPER_CLASS = 'aka-desc-wrapper';
-    const MAX_KEYWORD_OCCURRENCES = 8;
-    const FALLBACK_REFERENCE_URL = 'https://fa.wikipedia.org/wiki/Special:Search?search=';
+    const MAX_KEYWORD_OCCURRENCES = 7;
 
     /**
      * پوشش کل محتوا با کلاس اختصاصی سایت؛ اجرای دوباره روی محتوای پوشش‌داده‌شده تاثیری ندارد
@@ -63,6 +62,24 @@ class WILA_Content_Guard {
     }
 
     /**
+     * یکی از سایت‌های مرجع را به‌صورت ثابت برای هر کلیدواژه انتخاب می‌کند تا لینک‌ها بین حوزه‌ها پخش شوند.
+     * الگوها با فیلتر wila_reference_url_templates قابل تغییرند؛ هر الگو باید %s برای عبارت جستجو داشته باشد.
+     */
+    public static function pick_reference_url($term) {
+        $templates = apply_filters('wila_reference_url_templates', array(
+            'https://fa.wikipedia.org/wiki/Special:Search?search=%s',
+            'https://en.wikipedia.org/w/index.php?search=%s',
+            'https://scholar.google.com/scholar?q=%s',
+        ), $term);
+        $templates = array_values(array_filter((array) $templates, function ($template) {
+            return is_string($template) && strpos($template, '%s') !== false;
+        }));
+        if (!$templates) return '';
+        $template = $templates[crc32($term) % count($templates)];
+        return esc_url_raw(sprintf($template, rawurlencode($term)));
+    }
+
+    /**
      * نخستین تکرار متن بیرون از لینک و هدینگ را لینک می‌کند؛ اگر پیدا نشد null برمی‌گرداند
      */
     private static function link_first_text_occurrence($html, $term) {
@@ -77,7 +94,7 @@ class WILA_Content_Guard {
             if ($skip_depth > 0) continue;
             $pos = mb_strpos($token, $term);
             if ($pos === false) continue;
-            $url = self::FALLBACK_REFERENCE_URL . rawurlencode($term);
+            $url = self::pick_reference_url($term);
             $link = '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">' . $term . '</a>';
             $tokens[$i] = mb_substr($token, 0, $pos) . $link . mb_substr($token, $pos + mb_strlen($term));
             return implode('', $tokens);
@@ -91,9 +108,7 @@ class WILA_Content_Guard {
     public static function cap_keyword_density($html, $keyword, $synonyms, $max = self::MAX_KEYWORD_OCCURRENCES) {
         $keyword = trim((string) $keyword);
         if ($keyword === '') return $html;
-        $alternatives = array_values(array_filter(array_map('trim', preg_split('/[,،]/u', (string) $synonyms)), function ($item) use ($keyword) {
-            return $item !== '' && $item !== $keyword;
-        }));
+        $alternatives = WILA_Seo_Meta::split_keywords($synonyms, $keyword);
 
         $tokens = preg_split('~(<[^>]+>)~', $html, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
         // تکرار داخل لینک‌ها حذف نمی‌شود تا لینک خراب نشود؛ پس بودجه متن عادی از سقف کم می‌شود.
