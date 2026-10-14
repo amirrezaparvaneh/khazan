@@ -576,6 +576,11 @@
       return v !== '' && (/✅|✔|✓|☑/.test(v) || ['true', '1', 'yes', 'y', 'x', 'بله', 'تایید', 'تأیید', 'تایید شده'].includes(v));
     },
 
+    // دکمه سه‌بعدی؛ متن همیشه داخل لایه .btn-top قرار می‌گیرد
+    btn3d: function (id, variant, text, attrs) {
+      return `<button type="button" id="${id}" class="khazan-3d-btn ${variant}" ${attrs || ''}><span class="btn-top">${text}</span><span class="btn-bottom"></span><span class="btn-base"></span></button>`;
+    },
+
     formatFileSize: function (bytes) {
       if (!bytes) return '';
       return bytes < 1024 * 1024 ? toPersianDigits((bytes / 1024).toFixed(1)) + ' کیلوبایت' : toPersianDigits((bytes / 1024 / 1024).toFixed(2)) + ' مگابایت';
@@ -1087,8 +1092,8 @@
               return `<tr><td><input type="checkbox" class="khazan-checkbox wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${badge}</td>${b.view === 'found' ? `<td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td>` : ''}<td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-bulk-single" data-index="${i}" ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}>${m && (m.generated || r.run === 'done') ? '⚙️ تولید مجدد' : '▶ تولید این ردیف'}</button></td></tr>`;
             }).join('') : `<tr><td colspan="7" style="text-align:center;padding:20px;color:#78716c">${b.view === 'found' ? 'محصول متصل‌شده‌ای برای نمایش وجود ندارد.' : 'همه ردیف‌ها به محصولات سایت متصل شده‌اند.'}</td></tr>`}</tbody></table></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-              <button id="wila-bulk-start" class="wila-btn wila-btn-primary" ${b.running ? 'disabled' : ''}>${b.running ? 'در حال پردازش...' : 'شروع تولید انبوه'}</button>
-              ${b.running ? `<button id="wila-bulk-pause" class="wila-btn wila-btn-outline">${b.paused ? 'ادامه' : 'مکث'}</button><button id="wila-bulk-stop" class="wila-btn wila-btn-outline" style="color:#dc2626">توقف</button>` : ''}
+              ${this.btn3d('wila-bulk-start', 'btn-primary', b.running ? 'در حال پردازش...' : 'شروع تولید انبوه', b.running ? 'disabled' : '')}
+              ${b.running ? this.btn3d('wila-bulk-pause', 'btn-warning', b.paused ? 'ادامه' : 'مکث') + this.btn3d('wila-bulk-stop', 'btn-danger', 'توقف') : ''}
             </div>
             <div id="wila-bulk-progress" style="margin-top:14px">${this.bulkProgressHtml()}</div>
             <div id="wila-bulk-log" style="margin-top:10px;max-height:220px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.8rem;line-height:1.9">${this.bulkLogHtml()}</div>
