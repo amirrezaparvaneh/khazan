@@ -15,9 +15,8 @@ if (!defined('ABSPATH')) {
 final class ReportController extends BaseController {
 
     public function get_dashboard_summary() {
-        global $wpdb;
-        $table = \WILA_DB::get_table_name();
-        $scanner = new \WILA_Scanner();
+        $links = new \Khazan\Repository\LinkRepository();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $all_items = $scanner->get_all_scannable_items();
 
         $breakdown = array();
@@ -35,7 +34,7 @@ final class ReportController extends BaseController {
         }
 
         // Keep the dashboard usable when the index table is unavailable.
-        if (!$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)))) {
+        if (!$links->table_exists()) {
             return rest_ensure_response(array(
                 'total_items'  => count($all_items),
                 'total_links'  => 0,
@@ -44,7 +43,7 @@ final class ReportController extends BaseController {
             ));
         }
 
-        $total_links = (int) $wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+        $total_links = $links->total_links();
         $orphans = \Khazan\Services\Links\OrphanFinder::calculate($all_items);
 
         return rest_ensure_response(array(
@@ -56,18 +55,17 @@ final class ReportController extends BaseController {
     }
 
     public function get_items_report($request) {
-        global $wpdb;
-        $table = \WILA_DB::get_table_name();
+        $links = new \Khazan\Repository\LinkRepository();
         $filter = sanitize_text_field($request->get_param('type'));
-        $scanner = new \WILA_Scanner();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $items = $scanner->get_all_scannable_items();
         $report = array();
 
         foreach ($items as $item) {
             if (!empty($filter) && $filter !== 'all' && $item['type'] !== $filter) continue;
             
-            $out = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE source_id = %d AND source_type = %s", $item['id'], $item['type']));
-            $in  = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$table} WHERE target_id = %d AND target_type = %s", $item['id'], $item['type']));
+            $out = $links->outgoing_count($item['id'], $item['type']);
+            $in  = $links->incoming_count($item['id'], $item['type']);
             
             $report[] = array(
                 'id'         => $item['id'], 
@@ -84,13 +82,12 @@ final class ReportController extends BaseController {
     }
 
     public function get_item_details($request) {
-        global $wpdb;
-        $table = \WILA_DB::get_table_name();
+        $links = new \Khazan\Repository\LinkRepository();
         $id = absint($request->get_param('id'));
         $type = sanitize_text_field($request->get_param('type'));
         
-        $out = $wpdb->get_results($wpdb->prepare("SELECT target_url, target_type, anchor_text, rel_attribute FROM {$table} WHERE source_id = %d AND source_type = %s", $id, $type), ARRAY_A);
-        $in  = $wpdb->get_results($wpdb->prepare("SELECT source_title, source_url, source_type, anchor_text, rel_attribute FROM {$table} WHERE target_id = %d AND target_type = %s", $id, $type), ARRAY_A);
+        $out = $links->outgoing_links($id, $type);
+        $in  = $links->incoming_links($id, $type);
         
         foreach ($in as &$link) {
             $link['type_label'] = $this->get_type_label($link['source_type']);
@@ -100,7 +97,7 @@ final class ReportController extends BaseController {
     }
 
     public function get_orphan_items() {
-        $scanner = new \WILA_Scanner();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $orphans = \Khazan\Services\Links\OrphanFinder::calculate($scanner->get_all_scannable_items());
         
         $priorities = array('product_cat' => 1, 'product' => 2, 'post' => 3, 'page' => 4);

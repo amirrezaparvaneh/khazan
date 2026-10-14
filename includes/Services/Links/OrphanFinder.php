@@ -14,9 +14,7 @@ if (!defined('ABSPATH')) {
 final class OrphanFinder {
 
     public static function calculate($items) {
-        global $wpdb;
-        $table = \WILA_DB::get_table_name();
-        $targets = $wpdb->get_results("SELECT DISTINCT target_id, target_type FROM {$table} WHERE target_id IS NOT NULL", ARRAY_A);
+        $targets = (new \Khazan\Repository\LinkRepository())->linked_targets();
         $map = array();
         foreach ($targets as $t) {
             $map[$t['target_type'] . '_' . $t['target_id']] = true;

@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 final class QueueController extends BaseController {
 
     public function get_scan_queue() {
-        $scanner = new \WILA_Scanner();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $items = $scanner->get_all_scannable_items();
         return rest_ensure_response(array('success' => true, 'total' => count($items), 'items' => $items));
     }
@@ -26,7 +26,7 @@ final class QueueController extends BaseController {
         $type    = isset($params['type']) ? sanitize_text_field($params['type']) : 'post';
         if (!$item_id) return new \WP_Error('invalid_id', 'شناسه نامعتبر.', array('status' => 400));
         
-        $scanner = new \WILA_Scanner();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $result  = $scanner->scan_item($item_id, $type);
         return rest_ensure_response(array('success' => true, 'item_id' => $item_id, 'links_found' => isset($result['links_found']) ? $result['links_found'] : 0));
     }

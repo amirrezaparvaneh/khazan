@@ -50,7 +50,7 @@ final class ProductMatcher {
                 : array('matched' => false);
         }
         // سابقه آپلود قبلی برای هر ردیف؛ ردیف‌های تازه همین حالا ثبت می‌شوند
-        $history = \WILA_Bulk_History::sync($history_keys, $file_name);
+        $history = (new \Khazan\Repository\BulkHistoryRepository())->sync($history_keys, $file_name);
         foreach ($matches as $i => $match) {
             $matches[$i]['history'] = isset($history[$i]) ? $history[$i] : null;
         }

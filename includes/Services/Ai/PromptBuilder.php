@@ -39,7 +39,7 @@ final class PromptBuilder {
 
     public function outline($params) {
         $kind = $this->kind($params);
-        $prompt = $this->content_system($params) . "\n" . \WILA_Content_Rules::seo_title_rules($kind);
+        $prompt = $this->content_system($params) . "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
         if ($kind === \WILA_Content_Targets::KIND_ARTICLE) {
             $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
             $prompt .= '\nدر همین JSON فیلدهای seo_title، meta_description، keyword_synonyms (رشته با ویرگول)، slug (انگلیسی)، entities (آرایه موجودیت‌ها) و evidence_needed (آرایه شواهد لازم برای بازبینی انسانی) را هم اضافه کن. برای هر هدینگ word_budget حداکثر ۲۲۰ تعیین کن.';
@@ -56,7 +56,7 @@ final class PromptBuilder {
 
         $prompt = $this->content_system($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
-            \WILA_Content_Rules::seo_title_rules($kind) .
+            \Khazan\Services\Content\ContentRules::seo_title_rules($kind) .
             "برای سئوی این محتوا این داده‌ها را نیز تولید کن: عنوان سئو، توضیحات متا و ۳ تا ۶ مترادف/عبارت کلیدی مرتبط که با ویرگول جدا شوند. این موارد باید دقیقاً بر اساس موضوع و کلیدواژه کانونی باشند.\n";
         if ($is_article) {
             $prompt .= "در متن، با توجه به طول محتوا ۱ لینک خارجی برای مقاله زیر ۱۰۰۰ کلمه و حداکثر ۲ لینک برای محتوای طولانی‌تر قرار بده. فقط منابع معتبر اولیه/رسمی، دانشگاهی یا سازمان‌های استاندارد مرتبط را انتخاب کن. URL را واقعی و دقیق استفاده کن؛ منبع یا URL نامطمئن/ساختگی ایجاد نکن، در صورت اطمینان نداشتن لینک خارجی نگذار.\n" .
@@ -115,12 +115,12 @@ final class PromptBuilder {
 
         $prompt = "نویسنده سئوی فارسی هستی. برای محصول زیر توضیحات HTML بنویس.\n" .
             "قواعد: فقط از داده‌ها استفاده کن؛ مشخصات، گارانتی، تخفیف، آمار و تجربه شخصی نساز. H1، لینک صفحه اول، باکس تصویر و پرامپت تصویر ننویس. جمله‌ها کوتاه و معلوم؛ هر بخش حداکثر ۲۲۰ واژه بدون H2/H3. کلیدواژه کانونی را طبیعی در ۱۰۰ واژه نخست بیاور و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها.\n" .
-            \WILA_Content_Rules::product_blueprint() . "حدود " . (int) $params['word_count'] . " واژه.\n" .
-            \WILA_Content_Rules::writing_rules($kind) .
+            \Khazan\Services\Content\ContentRules::product_blueprint() . "حدود " . (int) $params['word_count'] . " واژه.\n" .
+            \Khazan\Services\Content\ContentRules::writing_rules($kind) .
             ($links ? "لینک داخلی اجباری با <a href=\"URL\">:\n" . implode("\n", $links) . "\n" : '') . $this->locked_links_block($params['internal_links']) .
             "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
-        if ($need_title || $need_meta) $prompt .= "\n" . \WILA_Content_Rules::seo_title_rules($kind);
+        if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
         if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا با یک ایموجی]\n===WILA_SEO_TITLE_END===";
         if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===";
         if ($need_syn) $prompt .= "\n===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
@@ -195,7 +195,7 @@ final class PromptBuilder {
 
     public function content_system($params) {
         $kind = $this->kind($params);
-        if ($kind !== \WILA_Content_Targets::KIND_ARTICLE) return $this->commerce_system($params, $kind) . "\n" . \WILA_Content_Rules::writing_rules($kind);
+        if ($kind !== \WILA_Content_Targets::KIND_ARTICLE) return $this->commerce_system($params, $kind) . "\n" . \Khazan\Services\Content\ContentRules::writing_rules($kind);
         $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
         $prompt = "شما نویسنده ارشد محتوای فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا: " . $data . "\n" .
             "الزامات سئو برای طرح و مقاله: محتوای اصیل، مفید و کاربرمحور مطابق نیت جستجو بنویس؛ رتبه گوگل یا امتیاز Yoast را تضمین نکن. موجودیت‌های اصلی، ویژگی‌ها، روابط و پرسش‌های مرتبط را بدون حاشیه‌روی پوشش بده. E-E-A-T: تجربه دست‌اول، آزمایش، آمار، نقل‌قول، مدرک و هویت متخصص را هرگز نساز؛ فقط از شواهد داده‌شده استفاده کن و نبود شواهد را روشن بگو. ادعاهای حساس پزشکی/مالی/حقوقی نیازمند منبع معتبر و بازبینی متخصص‌اند. پاسخ مستقیم را در مقدمه بده.\n" .
@@ -207,7 +207,7 @@ final class PromptBuilder {
             "اگر use_orphan_links فعال است، فهرست internal_links شامل همه صفحات یتیم افزونه و به‌ترتیب اولویت است: دسته‌بندی محصول، محصول، مقاله بلاگ، برگه عمومی. از همه نامزدهای مرتبط با موضوع و نیت محتوا، به‌ترتیب اولویت استفاده کن تا یتیمی صفحات به‌تدریج رفع شود؛ فقط موارد نامرتبط را حذف کن. برای هر مورد منتخب، انکرتکست دقیق و توصیف‌کننده مقصد بساز، URL همان مورد را استفاده کن و لینک را طبیعی در متن بگذار. سقف یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه قطعی است؛ اگر نامزدهای مرتبط بیشترند، برای محتواهای بعدی نگه‌شان دار.\n" .
             "در جای لازم برای تصویر، دقیقاً این HTML را درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> seo-content-strategy.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.\n" .
             "الزام لینک خارجی: متناسب با حجم محتوا، حتماً ۱ الی ۲ لینک خارجی بسیار معتبر و متنوع (مانند مراجع علمی، استانداردهای رسمی، ویکی‌پدیا، یا منابع تراز اول حوزه) به صورت طبیعی در متن با تگ <a href=\"URL\" target=\"_blank\" rel=\"noopener noreferrer\"> قرار بده. از ارجاع به رقبا یا لینک‌های اسپم و نامعتبر پرهیز کن.";
-        return $prompt . "\n" . \WILA_Content_Rules::writing_rules($kind);
+        return $prompt . "\n" . \Khazan\Services\Content\ContentRules::writing_rules($kind);
     }
 
     private function commerce_system($params, $kind) {
@@ -217,7 +217,7 @@ final class PromptBuilder {
             "فقط از داده‌های کلید target و توضیحات کاربر استفاده کن. مشخصات فنی، قیمت، گارانتی، تخفیف، موجودی، جنس، ابعاد، آمار، نظر مشتری یا ادعای رتبه را هرگز نساز؛ اگر اطلاعاتی نیست درباره‌اش ننویس و آن را در evidence_needed بیاور. محتوای قبلی (current_content) فقط برای حفظ اطلاعات درست است و باید بازنویسی و بهبود شود، نه کپی.\n" .
             "نیت جستجو تجاری/تراکنشی است: مفید، شفاف و کاربرمحور بنویس، نه مقاله آموزشی. عبارت کانونی را طبیعی در ۱۰۰ واژه نخست، عنوان سئو و متا و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها بیاور و از keyword stuffing پرهیز کن. جمله‌ها کوتاه و معلوم، پاراگراف‌ها کوتاه و هیچ بخشی بیش از ۲۲۰ واژه بدون H2/H3 نباشد. H1 نساز و H3 بدون H2 نساز.\n";
         if ($is_product) {
-            $prompt .= \WILA_Content_Rules::product_blueprint() .
+            $prompt .= \Khazan\Services\Content\ContentRules::product_blueprint() .
                 "لینک اجباری: حتماً دست‌کم یک بار به دسته‌بندی والد این محصول (target.parent_categories) با HTML <a href=\"URL\">نام دسته یا عبارت طبیعی خرید همان دسته</a> در جمله‌ای طبیعی لینک بده. در صورت ارتباط طبیعی، حداکثر ۲ تا ۳ لینک به محصولات مرتبط (target.related_products) بده و انکرتکست هر لینک را فقط از فیلد anchor همان مورد (کلیدواژه کانونی آن محصول) بگیر، نه نام کامل محصول؛ مجبور به استفاده از همه آن‌ها نیستی.\n";
         } else {
             $prompt .= "ساختار پیشنهادی دسته‌بندی: مقدمه‌ای که دسته و محصولات آن را معرفی می‌کند، راهنمای انتخاب (معیارهای واقعی)، معرفی زیردسته‌ها (target.subcategories) با لینک به URL هرکدام و در صورت وجود، یک لینک طبیعی به دسته والد (target.parent_category)، انواع محصولات، و پرسش‌های متداول. نام محصولات نمونه (sample_products) را فقط برای مثال بیاور و ادعا درباره‌شان نساز. محتوا باید برای نمایش بالا یا پایین لیست محصولات مناسب و غیرتکراری باشد.\n";

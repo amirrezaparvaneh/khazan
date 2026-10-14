@@ -112,29 +112,24 @@ final class ContentController extends BaseController {
         $result = (new \WILA_AvalAI_Client())->generate_full_content($params, $outline);
         if (is_wp_error($result)) return $result;
 
-        \WILA_DB::insert_content_history($params, $result);
+        (new \Khazan\Repository\DatabaseRepository())->insert_content_history($params, $result);
 
         return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
     }
 
     public function get_content_history() {
-        global $wpdb;
-        $table = \WILA_DB::get_content_history_table_name();
-        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, content_kind, target_id, internal_link_count, external_link_count, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+        $items = (new \Khazan\Repository\DatabaseRepository())->list_content_history();
         return rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
     public function get_content_history_item($request) {
-        global $wpdb;
-        $table = \WILA_DB::get_content_history_table_name();
-        $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, slug, content_kind, target_id, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
+        $item = (new \Khazan\Repository\DatabaseRepository())->find_content_history($request['id']);
         if (!$item) return new \WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
         return rest_ensure_response(array('success' => true, 'item' => $item));
     }
 
     public function delete_content_history_item($request) {
-        global $wpdb;
-        $deleted = $wpdb->delete(\WILA_DB::get_content_history_table_name(), array('id' => absint($request['id'])), array('%d'));
+        $deleted = (new \Khazan\Repository\DatabaseRepository())->delete_content_history($request['id']);
         if (!$deleted) return new \WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
         return rest_ensure_response(array('success' => true));
     }

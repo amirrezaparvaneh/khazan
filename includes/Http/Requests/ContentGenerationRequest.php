@@ -71,7 +71,7 @@ final class ContentGenerationRequest {
     }
 
     private function append_orphan_links(array $links, $target, $kind) {
-        $scanner = new \WILA_Scanner();
+        $scanner = new \Khazan\Services\Scan\ScannerService();
         $orphans = OrphanFinder::calculate($scanner->get_all_scannable_items());
         $priorities = self::$orphan_priorities;
         usort($orphans['list'], function ($a, $b) use ($priorities) {

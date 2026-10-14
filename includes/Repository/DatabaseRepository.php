@@ -187,6 +187,23 @@ final class DatabaseRepository {
     }
 
     /**
+     * فهرست ۱۰۰ محتوای آخر آرشیو (بدون متن کامل)
+     */
+    public function list_content_history() {
+        $table = $this->content_history_table();
+        return $this->wpdb->get_results("SELECT id, title, focus_keyword, slug, content_kind, target_id, internal_link_count, external_link_count, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+    }
+
+    public function find_content_history($id) {
+        $table = $this->content_history_table();
+        return $this->wpdb->get_row($this->wpdb->prepare("SELECT id, title, focus_keyword, slug, content_kind, target_id, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($id)), ARRAY_A);
+    }
+
+    public function delete_content_history($id) {
+        return $this->wpdb->delete($this->content_history_table(), array('id' => absint($id)), array('%d'));
+    }
+
+    /**
      * پاکسازی تمام داده‌های جدول ایندکس
      */
     public function truncate_links() {

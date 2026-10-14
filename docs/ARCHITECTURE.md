@@ -47,8 +47,11 @@ includes/
   Services/
     Ai/        AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser
     Csv/       TextNormalizer, ProductMatcher, BulkRowProcessor
-    Seo/       SeoMetaService (بعداً: ContentGuard, HtmlSanitizer, ContentRules)
-  Repository/  SiteEntityRepository, ContentTargetRepository, DatabaseRepository
+    Seo/       SeoMetaService
+    Content/   HtmlSanitizer, ContentGuard, ContentRules
+    Scan/      ScannerService
+  Repository/  SiteEntityRepository, ContentTargetRepository, DatabaseRepository,
+               BulkHistoryRepository, LinkRepository
   Http/Requests/     ContentGenerationRequest
   Legacy کلاس‌های WILA_* تا پایان مهاجرت (بارگذاری از Plugin::$legacy_files)
 templates/     قالب‌های PHP (admin/app-root, font-preconnect, ...)
@@ -62,7 +65,6 @@ assets/js/     khazan-csv.js (جدا شد)، khazan-leaves.js، wila-admin.js (�
 2. **انجام شد (مرحله ۲):** `PromptBuilder` و `ContentParser` از `WILA_AvalAI_Client`؛ شکستن `WILA_REST_Controller` به چهار کنترلر + `OrphanFinder` + هم‌ترازی نسخه. پرامپت‌ها بایت‌به‌بایت و پارسرها خروجی‌به‌خروجی با کد قبلی مقایسه شدند و ۲۵ مسیر REST بدون تغییر ماندند.
 3. **انجام شد (مرحله ۳):** `SiteEntityRepository` (کوئری پست/ترم برای کلاینت AI؛ متدهای خصوصی کلاینت فقط ارجاع می‌دهند)، `ContentTargetRepository` (فهرست/زمینه/محتوای فعلی/اعمال/پیش‌نویس بازبینی و `create_blog_draft`)، `ContentGenerationRequest` (اعتبارسنجی ورودی تولید محتوا)، انتقال HTML متاباکس سئو به `templates/`. بدنه متدهای منتقل‌شده با نسخه قبلی مقایسه و یکسان تأیید شد؛ `WILA_Content_Targets` همان API استاتیک را نگه می‌دارد.
 4. **انجام شد (مرحله ۴):** `DatabaseRepository` (جدول‌ها، اسکیما در متدهای خصوصی، CRUD، ادغام آپشن نسخه با مهاجرت نرم)، `SeoMetaService` (نگاشت و خواندن/نوشتن متای سئوی پست و ترم برای Yoast و RankMath؛ `ContentTargetRepository` دیگر به `WILA_Seo_Meta` وابسته نیست)، `BulkRowProcessor` (اعتبارسنجی سطر، تعیین/ساخت محصول، زمینه و لینک‌ها، پارامترهای پرامپت، تولید، ادغام مقادیر شیت، ذخیره و ثبت در آرشیو). کلاس‌های قدیمی `WILA_DB`، `WILA_Seo_Meta` و `WILA_Bulk_Generator` فقط ارجاع‌دهنده‌اند (الگوی Strangler Fig). SQL جداول، متای نوشته‌شده و خروجی `process` در ۷ سناریو با نسخه قبلی مقایسه و یکسان تأیید شد.
-5. **باقی‌مانده:** `Services\Seo\*` برای `WILA_Content_Guard`, `WILA_Html_Sanitizer`, `WILA_Content_Rules`؛ `Repository` برای `WILA_Bulk_History` و کوئری‌های گزارش داخل `ReportController`؛ `Services\Scan\*` برای `WILA_Scanner`. (ایندکس/نوایندکس سئو هنوز در کد وجود ندارد و اضافه نشده است.)
-6. شکستن `wila-admin.js` به ماژول‌های تب (state/api/views).
-7. `Core\Settings` به‌عنوان منبع واحد آپشن‌ها و ثابت‌ها (timeout، سقف توکن، نام آپشن‌ها).
-8. حذف delegateهای `WILA_*` پس از انتقال همه فراخوان‌ها به کلاس‌های `Khazan\`.
+5. **انجام شد (مرحله ۵):** `Services\Content\{HtmlSanitizer,ContentGuard,ContentRules}` (قوانین نگارش، پالایش HTML، سقف تراکم کلیدواژه، نسبت کلیدواژه در هدینگ‌ها و قفل انکر لینک‌ها)، `Repository\BulkHistoryRepository`، `Repository\LinkRepository` (کوئری‌های گزارش و درج لینک‌های ایندکس) و متدهای آرشیو در `DatabaseRepository` (`list/find/delete_content_history`)، `Services\Scan\ScannerService` (اسکن، استخراج پیوند، حل URL و `find_orphans`). کنترلرهای `Http\Controllers\*` دیگر هیچ `$wpdb` یا SQL مستقیم ندارند. کلاس‌های قدیمی `WILA_Html_Sanitizer`، `WILA_Content_Guard`، `WILA_Content_Rules`، `WILA_Bulk_History` و `WILA_Scanner` فقط ارجاع‌دهنده‌اند و کد جدید مستقیماً از کلاس‌های `Khazan\` استفاده می‌کند.
+6. **باقی‌مانده:** شکستن `wila-admin.js` به ماژول‌های تب (state/api/views)؛ `Core\Settings` به‌عنوان منبع واحد آپشن‌ها و ثابت‌ها (timeout، سقف توکن، نام آپشن‌ها)؛ انتقال تنظیمات نوع‌محتوا از `WILA_Content_Targets` (`product_post_type`، `category_taxonomy`، `kind_label`) به `Core\Settings`؛ `Http\Requests\*` برای بقیه کنترلرها؛ رفع کلاس بارگذاری‌نشده `class-wila-insights.php`.
+7. حذف delegateهای `WILA_*` پس از انتقال همه فراخوان‌ها (از جمله کران‌جاب‌ها یا افزونه‌های جانبی) به کلاس‌های `Khazan\`.
