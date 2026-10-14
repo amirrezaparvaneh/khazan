@@ -307,9 +307,9 @@ class WILA_AvalAI_Client {
      */
     private function build_seo_title_rules($kind) {
         $modifiers = array(
-            WILA_Content_Targets::KIND_ARTICLE  => 'یک مزیت یا نوع محتوا مانند «راهنمای کامل»، «آموزش گام‌به‌گام» یا «روش‌ها»',
-            WILA_Content_Targets::KIND_PRODUCT  => 'یک کلمه تجاری مانند «خرید» همراه یک ویژگی یا مزیت که در مشخصات محصول تایید شده است',
-            WILA_Content_Targets::KIND_CATEGORY => 'یک کلمه تجاری مانند «خرید»، «قیمت» یا «انواع» همراه گستره محصولات همان دسته',
+            'article'  => 'یک مزیت یا نوع محتوا مانند «راهنمای کامل»، «آموزش گام‌به‌گام» یا «روش‌ها»',
+            WILA_Content_Targets::get_product_post_type()  => 'یک کلمه تجاری مانند «خرید» همراه یک ویژگی یا مزیت که در مشخصات محصول تایید شده است',
+            WILA_Content_Targets::get_product_category_taxonomy() => 'یک کلمه تجاری مانند «خرید»، «قیمت» یا «انواع» همراه گستره محصولات همان دسته',
         );
         return "[قواعد عنوان سئو]\n" .
             "۱. طول عنوان (با احتساب ایموجی و فاصله‌ها) ۵۰ تا ۶۰ کاراکتر باشد و از ۶۰ بیشتر نشود تا در نتایج گوگل بریده نشود.\n" .
@@ -322,7 +322,7 @@ class WILA_AvalAI_Client {
     public function generate_content_outline($params) {
         $kind = $this->params_kind($params);
         $prompt = $this->build_content_system_prompt($params) . "\n" . $this->build_seo_title_rules($kind);
-        if ($kind === WILA_Content_Targets::KIND_ARTICLE) {
+        if ($kind === 'article') {
             $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
             $prompt .= '\nدر همین JSON فیلدهای seo_title، meta_description، keyword_synonyms (رشته با ویرگول)، slug (انگلیسی)، entities (آرایه موجودیت‌ها) و evidence_needed (آرایه شواهد لازم برای بازبینی انسانی) را هم اضافه کن. برای هر هدینگ word_budget حداکثر ۳۰۰ تعیین کن.';
         } else {
@@ -331,7 +331,7 @@ class WILA_AvalAI_Client {
         }
         $outline = $this->decode_ai_json($this->send_ai_request($prompt));
         if (is_array($outline) && !is_wp_error($outline)) {
-            if ($kind !== WILA_Content_Targets::KIND_ARTICLE) unset($outline['slug'], $outline['image_positions']);
+            if ($kind !== 'article') unset($outline['slug'], $outline['image_positions']);
             if (isset($outline['seo_title'])) $outline['seo_title'] = $this->normalize_seo_title($outline['seo_title'], $kind);
         }
         return $outline;
@@ -353,7 +353,7 @@ class WILA_AvalAI_Client {
             }, $title);
             $title = trim(preg_replace('/\s{2,}/u', ' ', $title));
         } elseif (empty($found[0])) {
-            $defaults = array(WILA_Content_Targets::KIND_ARTICLE => '📘', WILA_Content_Targets::KIND_PRODUCT => '🛒', WILA_Content_Targets::KIND_CATEGORY => '🛍️');
+            $defaults = array('article' => '📘', WILA_Content_Targets::get_product_post_type() => '🛒', WILA_Content_Targets::get_product_category_taxonomy() => '🛍️');
             $title .= ' ' . $defaults[$kind];
         }
         return $title;
@@ -361,7 +361,7 @@ class WILA_AvalAI_Client {
 
     public function generate_full_content($params, $outline) {
         $kind = $this->params_kind($params);
-        $is_article = $kind === WILA_Content_Targets::KIND_ARTICLE;
+        $is_article = $kind === 'article';
 
         $prompt = $this->build_content_system_prompt($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
@@ -456,14 +456,14 @@ class WILA_AvalAI_Client {
         }
 
         $slug = sanitize_title($slug);
-        if ($slug === '' && $this->params_kind($params) === WILA_Content_Targets::KIND_ARTICLE) {
+        if ($slug === '' && $this->params_kind($params) === 'article') {
             $slug = sanitize_title(remove_accents($params['h1_title']));
         }
-        if ($slug === '' && $this->params_kind($params) === WILA_Content_Targets::KIND_ARTICLE) {
+        if ($slug === '' && $this->params_kind($params) === 'article') {
             $slug = sanitize_title(remove_accents($params['focus_keyword']));
         }
 
-        if ($this->params_kind($params) !== WILA_Content_Targets::KIND_ARTICLE) {
+        if ($this->params_kind($params) !== 'article') {
             // Product and category pages carry no image prompts and never link to the homepage.
             $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
             $featured_prompt = '';
@@ -552,7 +552,7 @@ class WILA_AvalAI_Client {
 
     private function build_commerce_system_prompt($params, $kind) {
         $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
-        $is_product = $kind === WILA_Content_Targets::KIND_PRODUCT;
+        $is_product = $kind === WILA_Content_Targets::get_product_post_type();
         $prompt = "شما نویسنده ارشد محتوای فروشگاهی فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا و داده‌های واقعی صفحه مقصد (کلید target): " . $data . "\n" .
             "فقط از داده‌های کلید target و توضیحات کاربر استفاده کن. مشخصات فنی، قیمت، گارانتی، تخفیف، موجودی، جنس، ابعاد، آمار، نظر مشتری یا ادعای رتبه را هرگز نساز؛ اگر اطلاعاتی نیست درباره‌اش ننویس و آن را در evidence_needed بیاور. محتوای قبلی (current_content) فقط برای حفظ اطلاعات درست است و باید بازنویسی و بهبود شود، نه کپی.\n" .
             "نیت جستجو تجاری/تراکنشی است: مفید، شفاف و کاربرمحور بنویس، نه مقاله آموزشی. عبارت کانونی را طبیعی در ۱۰۰ واژه نخست، عنوان سئو، متا و چند زیرعنوان بیاور و از keyword stuffing پرهیز کن. جمله‌ها کوتاه و معلوم، پاراگراف‌ها کوتاه و هیچ بخشی بیش از ۳۰۰ واژه بدون H2/H3 نباشد. H1 نساز و H3 بدون H2 نساز.\n";
@@ -568,7 +568,7 @@ class WILA_AvalAI_Client {
 
     private function build_content_system_prompt($params) {
         $kind = $this->params_kind($params);
-        if ($kind !== WILA_Content_Targets::KIND_ARTICLE) return $this->build_commerce_system_prompt($params, $kind);
+        if ($kind !== 'article') return $this->build_commerce_system_prompt($params, $kind);
         $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
         return "شما نویسنده ارشد محتوای فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا: " . $data . "\n" .
             "الزامات سئو برای طرح و مقاله: محتوای اصیل، مفید و کاربرمحور مطابق نیت جستجو بنویس؛ رتبه گوگل یا امتیاز Yoast را تضمین نکن. موجودیت‌های اصلی، ویژگی‌ها، روابط و پرسش‌های مرتبط را بدون حاشیه‌روی پوشش بده. E-E-A-T: تجربه دست‌اول، آزمایش، آمار، نقل‌قول، مدرک و هویت متخصص را هرگز نساز؛ فقط از شواهد داده‌شده استفاده کن و نبود شواهد را روشن بگو. ادعاهای حساس پزشکی/مالی/حقوقی نیازمند منبع معتبر و بازبینی متخصص‌اند. پاسخ مستقیم را در مقدمه بده.\n" .

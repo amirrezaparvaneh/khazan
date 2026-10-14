@@ -37,6 +37,8 @@
       scanProgress: 0,
       scanTotal: 0,
       scanCurrent: 0,
+      postTypes: [],
+      taxonomies: [],
       aiSettings: {
         provider: 'avalai',
         hasAvalAIKey: false,
@@ -114,8 +116,16 @@
           hasAvalAIKey: data.has_avalai_key,
           avalAIMaskedKey: data.avalai_masked_key || '',
           avalAIModel: data.avalai_model || 'deepseek-chat',
-          homepageKeywords: data.homepage_keywords || ''
+          homepageKeywords: data.homepage_keywords || '',
+          productPostType: data.product_post_type || 'product',
+          productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
         };
+        const pts = await this.apiFetch('/post-types');
+        this.state.postTypes = pts.items || [];
+        if (this.state.aiSettings.productPostType && this.state.postTypes.length) {
+          const taxes = await this.apiFetch(`/taxonomies/${this.state.aiSettings.productPostType}`);
+          this.state.taxonomies = taxes.items || [];
+        }
         this.render();
       } catch (e) {}
     },
@@ -488,6 +498,14 @@
       }
     },
 
+    fetchTaxonomies: async function (postType) {
+      try {
+        const taxes = await this.apiFetch(`/taxonomies/${encodeURIComponent(postType || '')}`);
+        this.state.taxonomies = taxes.items || [];
+        this.render();
+      } catch (e) {}
+    },
+
     testConnection: async function () {
       const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const resultBox = document.getElementById('wila-test-result');
@@ -776,7 +794,22 @@
         const s = aiSettings;
         contentHtml = `
           <div class="wila-card" style="max-width:700px;">
-            <div class="wila-card-header"><h3 style="font-weight:600;">تنظیمات هوش مصنوعی و سئو</h3></div>
+            <div class="wila-card-header"><h3 style="font-weight:600;">تنظیمات سامانه</h3></div>
+            
+            <div style="margin-bottom:20px; background:#fef3c7; padding:16px; border-radius:8px; border:1px solid #fcd34d;">
+              <h4 style="margin-top:0; font-size:0.95rem; color:#92400e;">نوع محتوای محصول</h4>
+              <p style="margin:0 0 10px 0; font-size:0.8rem; color:#78350f;">اگر سایت شما از نوع محتوای سفارشی برای محصولات استفاده می‌کند (مثلاً نه ووکامرس)، آن را در زیر انتخاب کنید.</p>
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">نوع محتوا (Post Type):</label>
+              <select id="wila-product-post-type-select" class="wila-select" style="width:100%;margin-bottom:10px;">
+                <option value="">انتخاب کنید...</option>
+                ${this.state.postTypes.map(pt => `<option value="${pt.value}" ${s.productPostType === pt.value ? 'selected' : ''}>${pt.label}</option>`).join('')}
+              </select>
+              <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">دسته‌بندی (Taxonomy):</label>
+              <select id="wila-product-category-taxonomy-select" class="wila-select" style="width:100%;">
+                <option value="">انتخاب کنید...</option>
+                ${this.state.taxonomies.map(t => `<option value="${t.value}" ${s.productCategoryTaxonomy === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
+              </select>
+            </div>
             
             <div style="background:#f0fdf4; padding:16px; border-radius:8px; border:1px solid #bbf7d0; margin-bottom:20px;">
               <h4 style="margin-top:0; font-size:0.95rem; color:#166534;">🌟 کلمات کلیدی اصلی صفحه اول (Homepage SEO)</h4>
@@ -917,6 +950,9 @@
 
       const testBtn = this.root.querySelector('#wila-test-api-btn');
       if (testBtn) testBtn.addEventListener('click', () => this.testConnection());
+
+      const productTypeSelect = this.root.querySelector('#wila-product-post-type-select');
+      if (productTypeSelect) productTypeSelect.addEventListener('change', e => this.fetchTaxonomies(e.target.value));
 
 
       const closeBtn = this.root.querySelector('#wila-close-modal-btn');

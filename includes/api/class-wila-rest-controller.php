@@ -25,6 +25,8 @@ class WILA_REST_Controller {
             array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_settings'), 'permission_callback' => array($this, 'check_permission')),
             array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'save_settings'), 'permission_callback' => array($this, 'check_permission'))
         ));
+        register_rest_route($this->namespace, '/post-types', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_available_post_types'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/taxonomies/(?P<post_type>[^/]+)', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_available_taxonomies'), 'permission_callback' => array($this, 'check_permission')));
 
         register_rest_route($this->namespace, '/ai/suggest', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_ai_suggestions'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/ai/planner', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'generate_content_blueprint'), 'permission_callback' => array($this, 'check_permission')));
@@ -184,8 +186,34 @@ class WILA_REST_Controller {
             'has_avalai_key' => !empty($avalai_key),
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
-            'homepage_keywords' => $homepage_keywords
+            'homepage_keywords' => $homepage_keywords,
+            'product_post_type' => WILA_Content_Targets::get_product_post_type(),
+            'product_category_taxonomy' => WILA_Content_Targets::get_product_category_taxonomy(),
         ));
+    }
+
+    public function get_available_post_types() {
+        $pts = get_post_types(array('public' => true), 'objects');
+        unset($pts['attachment']);
+        $types = array();
+        foreach ($pts as $pt) {
+            $types[] = array('value' => $pt->name, 'label' => $pt->labels->singular_name ?? $pt->name);
+        }
+        return rest_ensure_response(array('success' => true, 'items' => array_values($types)));
+    }
+
+    public function get_available_taxonomies($request) {
+        $post_type = sanitize_key($request['post_type']);
+        if (!post_type_exists($post_type)) {
+            return new WP_Error('invalid_post_type', 'نوع محتوا یافت نشد.', array('status' => 400));
+        }
+        $taxes = get_object_taxonomies($post_type, 'objects');
+        $items = array();
+        foreach ($taxes as $tax) {
+            if (!$tax->public) continue;
+            $items[] = array('value' => $tax->name, 'label' => $tax->labels->singular_name ?? $tax->name);
+        }
+        return rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
     public function save_settings($request) {
@@ -200,6 +228,14 @@ class WILA_REST_Controller {
             if (!empty($key) && strpos($key, '...') === false) {
                 update_option('wila_avalai_api_key', $key);
             }
+        }
+        if (isset($params['product_post_type'])) {
+            $pt = sanitize_key($params['product_post_type']);
+            if (post_type_exists($pt)) update_option('wila_product_post_type', $pt);
+        }
+        if (isset($params['product_category_taxonomy'])) {
+            $tax = sanitize_key($params['product_category_taxonomy']);
+            if (taxonomy_exists($tax)) update_option('wila_product_category_taxonomy', $tax);
         }
 
         return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات با موفقیت ذخیره شد.'));
