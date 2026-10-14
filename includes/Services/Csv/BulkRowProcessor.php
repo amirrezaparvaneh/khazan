@@ -144,7 +144,7 @@ final class BulkRowProcessor {
 
     private function ai() {
         if ($this->ai === null) {
-            $this->ai = new \WILA_AvalAI_Client();
+            $this->ai = new \Khazan\Services\Ai\AiService();
         }
         return $this->ai;
     }
@@ -175,7 +175,7 @@ final class BulkRowProcessor {
     }
 
     private function mark_generated($product_id, $mode) {
-        $generated = array('at' => current_time('mysql'), 'model' => \WILA_AvalAI_Client::MODEL, 'mode' => $mode);
+        $generated = array('at' => current_time('mysql'), 'model' => Settings::AI_MODEL, 'mode' => $mode);
         update_post_meta($product_id, ProductMatcher::GENERATED_META, wp_json_encode($generated));
         return $generated;
     }

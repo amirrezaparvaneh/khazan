@@ -35,13 +35,13 @@ final class QueueController extends BaseController {
         $params = $request->get_json_params();
         $rows = isset($params['rows']) && is_array($params['rows']) ? array_slice($params['rows'], 0, 1000) : array();
         $file_name = isset($params['file_name']) ? sanitize_text_field($params['file_name']) : '';
-        $result = \WILA_Bulk_Generator::match_rows($rows, $file_name);
+        $result = \Khazan\Services\Csv\ProductMatcher::match_rows($rows, $file_name);
         return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'matches' => $result));
     }
 
     public function bulk_process_product($request) {
         $params = $request->get_json_params();
-        $result = \WILA_Bulk_Generator::process(
+        $result = (new \Khazan\Services\Csv\BulkRowProcessor())->process(
             isset($params['product_id']) ? $params['product_id'] : 0,
             isset($params['row']) && is_array($params['row']) ? $params['row'] : array(),
             isset($params['options']) && is_array($params['options']) ? $params['options'] : array()

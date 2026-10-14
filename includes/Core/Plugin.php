@@ -9,6 +9,8 @@ namespace Khazan\Core;
 
 use Khazan\Admin\AdminAssets;
 use Khazan\Admin\AdminMenu;
+use Khazan\Admin\SeoRepairPanel;
+use Khazan\Http\RestRouter;
 use Khazan\Repository\DatabaseRepository;
 
 if (!defined('ABSPATH')) {
@@ -72,23 +74,17 @@ final class Plugin {
         $this->booted = true;
 
         self::load_legacy();
-        new \WILA_SEO_Repair();
-
         (new AdminMenu())->register();
         (new AdminAssets())->register();
+        (new SeoRepairPanel())->register();
+        (new RestRouter())->register();
 
         add_action('plugins_loaded', array($this, 'maybe_upgrade_database'));
-        add_action('rest_api_init', array($this, 'register_rest_routes'));
 
         return $this;
     }
 
     public function maybe_upgrade_database() {
         (new DatabaseRepository())->maybe_upgrade();
-    }
-
-    public function register_rest_routes() {
-        $controller = new \WILA_REST_Controller();
-        $controller->register_routes();
     }
 }

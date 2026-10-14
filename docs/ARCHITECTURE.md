@@ -16,10 +16,10 @@
 | assets/js/wila-admin.js | `render` | 500+ | تمام تب‌ها در یک تابع؛ فایل ۱۵۰۰+ خطی |
 
 ### نقض SRP
-- `WILA_AvalAI_Client` (~700 خط): انتقال HTTP + ساخت پرامپت + پارس پاسخ + پس‌پردازش HTML. **(مرحله ۱ و ۲: به `AvalaiHttpClient`، `PromptBuilder`، `ContentParser` و `AiResponseDecoder` شکسته شد؛ کلاس قدیمی ~۱۷۰ خط و فقط هماهنگ‌کننده است.)**
+- `WILA_AvalAI_Client` (~700 خط): انتقال HTTP + ساخت پرامپت + پارس پاسخ + پس‌پردازش HTML. **(مرحله ۱ و ۲: به `AvalaiHttpClient`، `PromptBuilder`، `ContentParser` و `AiResponseDecoder` شکسته شد؛ مرحله ۷: هماهنگ‌کننده به `Services\Ai\AiService` رفت و کلاس قدیمی فقط Wrapper است.)**
 - `WILA_REST_Controller` (~25 مسیر): اعتبارسنجی، منطق کسب‌وکار (`calculate_orphans`, `create_content_draft`) و پاسخ‌دهی. **(مرحله ۲: به `Http\Controllers\{Queue,Report,Content,Settings}Controller` شکسته شد؛ کلاس قدیمی فقط Dispatcher ثبت مسیرهاست.)**
 - `WILA_Content_Targets`: خواندن زمینه، برچسب‌ها، نوشتن محتوا، تنظیمات پست‌تایپ. **(مرحله ۳: دسترسی به داده به `Repository\ContentTargetRepository` رفت؛ کلاس قدیمی ~۱۴۰ خط با تنظیمات/نوع‌ها و delegateهای سازگاری است.)**
-- `WILA_Bulk_Generator`: تطبیق ردیف‌ها + پردازش + ساخت پیش‌نویس. **(مرحله ۱ و ۴: تطبیق به `ProductMatcher` و پردازش به `BulkRowProcessor` رفت؛ کلاس ~۴۰ خط ارجاع‌دهنده است.)**
+- `WILA_Bulk_Generator`: تطبیق ردیف‌ها + پردازش + ساخت پیش‌نویس. **(مرحله ۱ و ۴: تطبیق به `ProductMatcher` و پردازش به `BulkRowProcessor` رفت؛ کلاس ~۴۰ خط ارجاع‌دهنده است؛ مرحله ۷: `QueueController` مستقیماً از آن‌ها استفاده می‌کند.)**
 - `WILA_DB`: اسکیما + کوئری سابقه + حذف لینک‌ها. **(مرحله ۴: به `Repository\DatabaseRepository` رفت؛ `WILA_DB` فقط ارجاع‌دهنده است.)**
 - `wila-admin.js`: state، API، رندر HTML، رویدادها و پارس CSV. **(مرحله ۱: پارس CSV جدا شد؛ مرحله ۶: صف، تب‌ها و ابزارها به ماژول‌های `khazan-*.js` رفت و فایل از ~۱۵۷۰ به ~۷۶۰ خط رسید.)**
 
@@ -40,12 +40,13 @@
 ```
 wp-internal-link-analyzer.php      ثابت‌ها + Autoloader + Plugin::boot
 includes/
-  Core/        Autoloader, Plugin (Orchestrator), View, Settings (کلیدهای آپشن/متا، timeout، سقف توکن، انواع محتوا)
-  Admin/       AdminMenu, AdminAssets   (بعداً: صفحه‌ها و تنظیمات)
-  Http/Controllers/  QueueController, ReportController, ContentController, SettingsController
+  Core/        Autoloader, Plugin (Orchestrator)، View, Settings (کلیدهای آپشن/متا، timeout، سقف توکن، انواع محتوا)
+  Admin/       AdminMenu, AdminAssets, SeoRepairPanel
+  Http/        RestRouter (ثبت همه مسیرهای wila/v1)
+  Http/Controllers/  QueueController, ReportController, ContentController, SettingsController, SeoRepairController
   Services/Links/    OrphanFinder
   Services/
-    Ai/        AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser
+    Ai/        AiService (هماهنگ‌کننده)، AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser
     Csv/       TextNormalizer, ProductMatcher, BulkRowProcessor
     Seo/       SeoMetaService
     Content/   HtmlSanitizer, ContentGuard, ContentRules
@@ -55,8 +56,8 @@ includes/
   Http/Requests/     ContentGenerationRequest
   Legacy کلاس‌های WILA_* تا پایان مهاجرت (بارگذاری از Plugin::$legacy_files)
 templates/     قالب‌های PHP (admin/app-root, font-preconnect, ...)
-assets/js/     khazan-utils.js، khazan-csv.js، khazan-queue.js (state و کنترل صف)، khazan-tabs.js (ناوبری و نماهای تب‌ها)،
-               khazan-leaves.js، wila-admin.js (Entry/Orchestrator ~۷۶۰ خط: state اصلی، API و رویدادهای فرم‌ها)
+assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST و منطق وابسته به API)، khazan-queue.js (state و کنترل صف)،
+               khazan-tabs.js (ناوبری و نماهای تب‌ها)، khazan-leaves.js، wila-admin.js (Entry/Orchestrator ~۳۹۰ خط: state اصلی و رویدادهای فرم‌ها)
 ```
 
 قاعده نام‌گذاری: `Khazan\Services\Csv\ProductMatcher` ⇢ `includes/Services/Csv/ProductMatcher.php` (حروف دقیقاً هم‌نام کلاس).
@@ -71,4 +72,8 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-queue.js (state و کن�
    - `Core\Settings`: نام آپشن‌ها و متاها، نام فیلترهای عمومی، پسوند جدول‌ها، مدل/آدرس AI، `TIMEOUT_DEFAULT=20`، `TIMEOUT_LONG=35`، `TIMEOUT_BULK=180`، سقف توکن‌ها و انواع محتوا (`KIND_*`، `kind_label`، `product_post_type`، `category_taxonomy`، `kind_available`). `ContentTargetRepository`، `Services\Content\*`، `ScannerService`، `AvalaiHttpClient`، `DatabaseRepository` و کنترلرها مستقیماً به `Settings` وصل شدند؛ `WILA_Content_Targets` فقط ارجاع‌دهنده است (متدهای `product_link_anchor`، `remember_csv_focus`، `product_id_from_url` به `ContentTargetRepository` رفت).
    - فرانت‌اند: `khazan-utils.js`، `khazan-queue.js`، `khazan-tabs.js`. ماژول‌ها به‌صورت mixin روی `app` سوار می‌شوند (`Object.assign(app, KhazanQueue.methods, KhazanTabs.methods)`) تا `this` و state سراسری بدون تغییر بماند. ترتیب بارگذاری در `AdminAssets`: `utils` و `csv` ← `queue` و `tabs` ← `wila-admin`.
    - `class-wila-insights.php`: **پارک‌شده**. در `Plugin::$legacy_files` بارگذاری نمی‌شود، مسیرهای `/insights/*` ثبت نمی‌شوند و `wila-insights.js` المان `#wila-insights-root` را ندارد؛ هیچ ارجاع شکسته‌ای نیست (وابستگی‌هایش به لایه‌های ارجاع‌دهنده معتبرند). فعال‌سازی نیازمند صفحه/تب مجزا، ثبت مسیر در `Khazan\Http` و ورودی Access Token است.
-7. **باقی‌مانده:** `WILA_AvalAI_Client` هنوز کلاس سراسری است و کلاس‌های جدید (`BulkRowProcessor` و کنترلرها) آن را صدا می‌زنند → انتقال به `Khazan\Services\Ai\AiService`؛ `ContentGuard` (~۳۳۰ خط) برای تقسیم به لینک/تراکم/هدینگ؛ `Http\Requests\*` برای بقیه کنترلرها؛ بخش‌های بزرگ `wila-admin.js` (متدهای API و رویدادهای فرم‌ها) برای ماژول‌های `khazan-api.js` و `khazan-forms.js`؛ حذف Wrapperهای `WILA_*` پس از انتقال همه فراخوان‌ها.
+7. **انجام شد (مرحله ۷):**
+   - `Services\Ai\AiService`: هماهنگ‌کننده `AvalaiHttpClient`، `PromptBuilder`، `ContentParser` و `AiResponseDecoder`. هر ۹ ارجاع کلاس‌های جدید به `WILA_AvalAI_Client` (کنترلرهای محتوا و تنظیمات، `BulkRowProcessor`، `SeoRepairController`) به `AiService` منتقل شد؛ `WILA_AvalAI_Client` فقط Wrapper با ثابت `MODEL` و همان متدهای عمومی است. ارجاع `QueueController` به `WILA_Bulk_Generator` هم به `ProductMatcher` و `BulkRowProcessor` تبدیل شد (در `ContentController` چنین ارجاعی نبود).
+   - `Khazan\Http\RestRouter` همه مسیرها (شامل `/seo-repair`) را ثبت می‌کند؛ `Khazan\Admin\SeoRepairPanel` و `Http\Controllers\SeoRepairController` جایگزین `WILA_SEO_Repair` شدند. `Core\Plugin` مستقیماً `RestRouter` و `SeoRepairPanel` را وصل می‌کند؛ `WILA_REST_Controller` و `WILA_SEO_Repair` فقط Wrapper سازگاری‌اند. هیچ کلاس `Khazan\` به کلاس سراسری `WILA_*` ارجاع نمی‌دهد.
+   - `khazan-api.js`: `apiFetch` و همه ۲۳ متد وابسته به REST (fetchها، تولید محتوا، رفع سئو، تنظیمات، اسکن). ترتیب بارگذاری: `utils` و `csv` ← `api` و `queue` و `tabs` ← `wila-admin`. `wila-admin.js` از ~۷۶۰ به ~۳۹۰ خط رسید.
+8. **باقی‌مانده:** `ContentGuard` (~۳۳۰ خط) برای تقسیم به لینک/تراکم/هدینگ؛ `Http\Requests\*` برای بقیه کنترلرها؛ ماژول `khazan-forms.js` برای رویدادهای فرم‌ها و مولدها؛ مدیریت خطای شبکه یکپارچه در `apiFetch` (امروز هر متد try/catch خودش را دارد، برای حفظ رفتار دست نخورد)؛ حذف Wrapperهای `WILA_*` پس از انتقال همه فراخوان‌های بیرونی (کران‌جاب‌ها/افزونه‌های جانبی).

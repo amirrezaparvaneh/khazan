@@ -18,7 +18,7 @@ final class ContentController extends BaseController {
 
     public function generate_ai_suggestions($request) {
         $params = $request->get_json_params();
-        $avalai = new \WILA_AvalAI_Client();
+        $avalai = new \Khazan\Services\Ai\AiService();
         
         $item_id = isset($params['id']) ? absint($params['id']) : 0;
         $item_type = isset($params['type']) ? sanitize_text_field($params['type']) : '';
@@ -40,7 +40,7 @@ final class ContentController extends BaseController {
     public function generate_content_blueprint($request) {
         try {
             $params = $request->get_json_params();
-            $avalai = new \WILA_AvalAI_Client();
+            $avalai = new \Khazan\Services\Ai\AiService();
             
             $clean_params = array(
                 'h1_title'         => isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : '',
@@ -86,7 +86,7 @@ final class ContentController extends BaseController {
         $current = (new \Khazan\Repository\ContentTargetRepository())->current_content($kind, isset($params['target_id']) ? $params['target_id'] : 0);
         if (is_wp_error($current)) return $current;
         if (trim(wp_strip_all_tags($current['content'])) === '') return new \WP_Error('empty_content', 'این صفحه محتوایی ندارد؛ ابتدا محتوا تولید کنید.', array('status' => 400));
-        $result = (new \WILA_AvalAI_Client())->generate_seo_fix($kind, $current, $errors);
+        $result = (new \Khazan\Services\Ai\AiService())->generate_seo_fix($kind, $current, $errors);
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 
@@ -101,7 +101,7 @@ final class ContentController extends BaseController {
         $params = $this->content_generator_params($request);
         if (is_wp_error($params)) return $params;
         if (empty($params['h1_title']) || empty($params['focus_keyword'])) return new \WP_Error('missing_content_details', 'عنوان و کلیدواژه کانونی الزامی هستند.', array('status' => 400));
-        $result = (new \WILA_AvalAI_Client())->generate_content_outline($params);
+        $result = (new \Khazan\Services\Ai\AiService())->generate_content_outline($params);
         return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'outline' => $result));
     }
 
@@ -111,7 +111,7 @@ final class ContentController extends BaseController {
         $body = $request->get_json_params();
         $outline = isset($body['outline']) && is_array($body['outline']) ? $body['outline'] : array();
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new \WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
-        $result = (new \WILA_AvalAI_Client())->generate_full_content($params, $outline);
+        $result = (new \Khazan\Services\Ai\AiService())->generate_full_content($params, $outline);
         if (is_wp_error($result)) return $result;
 
         (new \Khazan\Repository\DatabaseRepository())->insert_content_history($params, $result);

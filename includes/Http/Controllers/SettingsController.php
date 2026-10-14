@@ -19,7 +19,7 @@ final class SettingsController extends BaseController {
     public function get_settings() {
         $provider = 'avalai';
         $avalai_key = trim(get_option(Settings::OPT_AVALAI_API_KEY, ''));
-        $avalai_client = new \WILA_AvalAI_Client();
+        $avalai_client = new \Khazan\Services\Ai\AiService();
         $homepage_keywords = get_option(Settings::OPT_HOMEPAGE_KEYWORDS, '');
 
         return rest_ensure_response(array(
@@ -89,7 +89,7 @@ final class SettingsController extends BaseController {
             $api_key = null;
         }
 
-        $client = new \WILA_AvalAI_Client();
+        $client = new \Khazan\Services\Ai\AiService();
         $result = $client->test_connection($api_key);
 
         if (is_wp_error($result)) {
