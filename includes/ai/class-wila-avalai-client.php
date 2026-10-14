@@ -394,6 +394,35 @@ class WILA_AvalAI_Client {
         return $result;
     }
 
+    /**
+     * تولید یک‌مرحله‌ای محتوای محصول از داده‌های ردیف شیت (بدون طرح میانی)
+     */
+    public function generate_bulk_product_content($params, $row) {
+        $kind = WILA_Content_Targets::KIND_PRODUCT;
+        $sheet = array(
+            'نام محصول' => $row['name'], 'توضیحات' => $row['description'], 'یادداشت' => $row['notes'],
+            'ویژگی‌های زیره' => $row['sole'], 'ویژگی‌های رویه، آستر و کفی' => $row['upper'], 'ویژگی‌های کلی' => $row['general'],
+            'کلیدواژه کانونی' => $params['focus_keyword'], 'عبارات کلیدی مترادف و فرعی' => $row['related_keywords'],
+        );
+        $prompt = $this->build_commerce_system_prompt($params, $kind) . "\n" . $this->build_seo_title_rules($kind) .
+            "داده‌های ردیف شیت (تنها منبع اطلاعات فنی؛ هر ویژگی خارج از آن را نساز):\n" . wp_json_encode($sheet, JSON_UNESCAPED_UNICODE) . "\n" .
+            "محتوای جامع محصول را به HTML تولید کن و این بخش‌ها را به‌ترتیب منطقی داشته باش: مقدمه با پاسخ مستقیم و کاربرد اصلی؛ نقد و بررسی تخصصی بر پایه ویژگی‌های زیره، رویه، آستر/کفی و ویژگی‌های کلی (مزایا و محدودیت‌های صادقانه و نیز مناسب چه افرادی است)؛ جدول مشخصات با تگ <table> که فقط ردیف‌هایی از داده‌های شیت دارد؛ ۴ تا ۶ پرسش متداول (FAQ) با پاسخ کوتاه و مبتنی بر داده؛ جمع‌بندی. " .
+            "اصول سئو ۲۰۲۶: پوشش موجودیت‌ها (جنس‌ها، اجزای کفش، کاربرد) و روابطشان، نیت جستجوی تجاری، E-E-A-T بدون ساختن تجربه شخصی، آزمایش، آمار یا گارانتی. H1 و لینک خارجی نساز و لینک اجباری دسته‌بندی/محصولات مرتبط را رعایت کن. " .
+            "برای تصویر، ۲ تا ۳ باکس در جاهای مناسب دقیقاً با این HTML درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> product-name.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.\n" .
+            "پاسخ را دقیقاً با این برچسب‌ها برگردان:\n" .
+            "===WILA_CONTENT_START===\n[HTML کامل بدنه محتوا]\n===WILA_CONTENT_END===\n" .
+            "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد، با یک ایموجی]\n===WILA_SEO_TITLE_END===\n" .
+            "===WILA_META_DESCRIPTION_START===\n[توضیحات متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===\n" .
+            "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
+        $raw = $this->send_ai_request($prompt, false, false);
+        if (is_wp_error($raw)) return $raw;
+        $result = $this->parse_full_content_payload($raw, $params);
+        if (is_wp_error($result)) return $result;
+        $result['seo_title'] = $this->normalize_seo_title($result['seo_title'], $kind);
+        $result['slug'] = '';
+        return $result;
+    }
+
     private function parse_full_content_payload($raw, $params) {
         $raw = trim((string) $raw);
         $content = '';
@@ -464,8 +493,11 @@ class WILA_AvalAI_Client {
         }
 
         if ($this->params_kind($params) !== WILA_Content_Targets::KIND_ARTICLE) {
-            // Product and category pages carry no image prompts and never link to the homepage.
-            $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
+            // Product and category pages carry no featured image prompt and never link to the homepage;
+            // image placeholders stay only when the bulk generator asks for them.
+            if (empty($params['keep_image_placeholders'])) {
+                $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
+            }
             $featured_prompt = '';
             $content = $this->strip_homepage_links($content);
         }

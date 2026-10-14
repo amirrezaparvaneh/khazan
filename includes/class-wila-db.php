@@ -93,6 +93,29 @@ class WILA_DB {
     }
 
     /**
+     * ثبت یک محتوای تولیدشده در آرشیو
+     */
+    public static function insert_content_history($params, $result) {
+        global $wpdb;
+        $wpdb->insert(self::get_content_history_table_name(), array(
+            'title' => $params['h1_title'],
+            'focus_keyword' => $params['focus_keyword'],
+            'slug' => $result['slug'],
+            'content_kind' => $params['content_kind'],
+            'target_id' => $params['target_id'],
+            'content' => $result['content'],
+            'featured_image_prompt' => $result['featured_image_prompt'],
+            'internal_link_count' => $result['internal_link_count'],
+            'external_link_count' => $result['external_link_count'],
+            'external_links' => wp_json_encode($result['external_links'], JSON_UNESCAPED_UNICODE),
+            'seo_title' => $result['seo_title'],
+            'meta_description' => $result['meta_description'],
+            'keyword_synonyms' => $result['keyword_synonyms'],
+            'created_at' => current_time('mysql'),
+        ), array('%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s'));
+    }
+
+    /**
      * پاکسازی تمام داده‌های جدول ایندکس
      */
     public static function truncate_links() {

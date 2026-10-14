@@ -35,6 +35,8 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/content/draft', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'create_content_draft'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/targets', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_targets'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/apply', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'apply_content_to_target'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/bulk/match', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'bulk_match_products'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/bulk/process', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'bulk_process_product'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array(
             array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history_item'), 'permission_callback' => array($this, 'check_permission')),
@@ -352,6 +354,23 @@ class WILA_REST_Controller {
         return is_wp_error($items) ? $items : rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
+    public function bulk_match_products($request) {
+        $params = $request->get_json_params();
+        $rows = isset($params['rows']) && is_array($params['rows']) ? array_slice($params['rows'], 0, 1000) : array();
+        $result = WILA_Bulk_Generator::match_rows($rows);
+        return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'matches' => $result));
+    }
+
+    public function bulk_process_product($request) {
+        $params = $request->get_json_params();
+        $result = WILA_Bulk_Generator::process(
+            isset($params['product_id']) ? $params['product_id'] : 0,
+            isset($params['row']) && is_array($params['row']) ? $params['row'] : array(),
+            isset($params['options']) && is_array($params['options']) ? $params['options'] : array()
+        );
+        return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
+    }
+
     public function apply_content_to_target($request) {
         $params = $request->get_json_params();
         $kind = WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
@@ -376,24 +395,7 @@ class WILA_REST_Controller {
         $result = (new WILA_AvalAI_Client())->generate_full_content($params, $outline);
         if (is_wp_error($result)) return $result;
 
-        global $wpdb;
-        $history_table = WILA_DB::get_content_history_table_name();
-        $wpdb->insert($history_table, array(
-            'title' => $params['h1_title'],
-            'focus_keyword' => $params['focus_keyword'],
-            'slug' => $result['slug'],
-            'content_kind' => $params['content_kind'],
-            'target_id' => $params['target_id'],
-            'content' => $result['content'],
-            'featured_image_prompt' => $result['featured_image_prompt'],
-            'internal_link_count' => $result['internal_link_count'],
-            'external_link_count' => $result['external_link_count'],
-            'external_links' => wp_json_encode($result['external_links'], JSON_UNESCAPED_UNICODE),
-            'seo_title' => $result['seo_title'],
-            'meta_description' => $result['meta_description'],
-            'keyword_synonyms' => $result['keyword_synonyms'],
-            'created_at' => current_time('mysql'),
-        ), array('%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s', '%s'));
+        WILA_DB::insert_content_history($params, $result);
 
         return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
     }

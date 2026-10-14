@@ -176,10 +176,26 @@ class WILA_Content_Targets {
         return array_slice($categories, 0, 3);
     }
 
-    private static function related_products($id) {
-        if (!function_exists('wc_get_related_products')) return array();
+    public static function related_products($id, $limit = 5) {
+        $ids = array();
+        if (function_exists('wc_get_related_products')) {
+            $ids = wc_get_related_products($id, $limit);
+        } else {
+            $term_ids = wp_get_post_terms($id, self::category_taxonomy(), array('fields' => 'ids'));
+            if (!is_wp_error($term_ids) && $term_ids) {
+                $ids = get_posts(array(
+                    'post_type'      => self::product_post_type(),
+                    'post_status'    => 'publish',
+                    'posts_per_page' => $limit,
+                    'post__not_in'   => array($id),
+                    'fields'         => 'ids',
+                    'no_found_rows'  => true,
+                    'tax_query'      => array(array('taxonomy' => self::category_taxonomy(), 'field' => 'term_id', 'terms' => $term_ids)),
+                ));
+            }
+        }
         $related = array();
-        foreach (wc_get_related_products($id, 5) as $related_id) {
+        foreach ($ids as $related_id) {
             if (get_post_status($related_id) !== 'publish') continue;
             $related[] = array('title' => get_the_title($related_id), 'url' => get_permalink($related_id));
         }
@@ -238,10 +254,50 @@ class WILA_Content_Targets {
             'synonyms' => isset($data['keyword_synonyms']) ? sanitize_text_field($data['keyword_synonyms']) : '',
         );
 
-        return $kind === self::KIND_PRODUCT ? self::apply_to_product($id, $content, $seo) : self::apply_to_category($id, $content, $seo);
+        $mode = isset($data['mode']) ? sanitize_key($data['mode']) : 'replace';
+        if ($kind === self::KIND_PRODUCT) return self::apply_to_product($id, $content, $seo, $mode);
+        return self::apply_to_category($id, $content, $seo);
     }
 
-    private static function apply_to_product($id, $content, $seo) {
+    /**
+     * ذخیره متای سئو محصول در یوست و رنک‌مث (فقط مقادیر غیرخالی)
+     */
+    public static function write_post_seo($id, $seo) {
+        $focus_all = trim($seo['focuskw'] . ($seo['synonyms'] !== '' ? ', ' . $seo['synonyms'] : ''), ', ');
+        $meta = array(
+            '_yoast_wpseo_title'           => $seo['title'],
+            '_yoast_wpseo_metadesc'        => $seo['desc'],
+            '_yoast_wpseo_focuskw'         => $seo['focuskw'],
+            '_yoast_wpseo_keywordsynonyms' => $seo['synonyms'],
+            'rank_math_title'              => $seo['title'],
+            'rank_math_description'        => $seo['desc'],
+            'rank_math_focus_keyword'      => $focus_all,
+        );
+        foreach ($meta as $meta_key => $value) {
+            if ($value !== '') update_post_meta($id, $meta_key, $value);
+        }
+    }
+
+    /**
+     * ذخیره محتوا به‌صورت پیش‌نویس بازبینی (نسخه جدید از همان نوع محتوا)؛ صفحه زنده دست‌نخورده می‌ماند
+     */
+    public static function create_review_draft($id, $content, $seo) {
+        $post = get_post($id);
+        if (!$post || $post->post_type !== self::product_post_type()) {
+            return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
+        }
+        $type = get_post_type_object($post->post_type);
+        if (!$type || !current_user_can($type->cap->create_posts)) {
+            return new WP_Error('cannot_create_draft', 'اجازه ایجاد پیش‌نویس را ندارید.', array('status' => 403));
+        }
+        $draft_id = wp_insert_post(array('post_type' => $post->post_type, 'post_status' => 'draft', 'post_title' => '[بازبینی] ' . $post->post_title, 'post_content' => $content), true);
+        if (is_wp_error($draft_id)) return $draft_id;
+        update_post_meta($draft_id, '_wila_source_product', $id);
+        self::write_post_seo($draft_id, $seo);
+        return array('target_id' => $draft_id, 'edit_url' => get_edit_post_link($draft_id, 'raw'), 'view_url' => '');
+    }
+
+    private static function apply_to_product($id, $content, $seo, $mode = 'replace') {
         $post = get_post($id);
         if (!$post || $post->post_type !== self::product_post_type()) {
             return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
@@ -249,14 +305,13 @@ class WILA_Content_Targets {
         if (!current_user_can('edit_post', $id)) {
             return new WP_Error('cannot_edit_target', 'اجازه ویرایش این محصول را ندارید.', array('status' => 403));
         }
+        if ($mode === 'draft') return self::create_review_draft($id, $content, $seo);
         update_post_meta($id, '_wila_previous_content', $post->post_content);
-        $result = wp_update_post(array('ID' => $id, 'post_content' => $content), true);
+        $new_content = $mode === 'append' ? $post->post_content . "\n\n" . $content : $content;
+        $result = wp_update_post(array('ID' => $id, 'post_content' => $new_content), true);
         if (is_wp_error($result)) return $result;
 
-        $meta = array('title' => '_yoast_wpseo_title', 'desc' => '_yoast_wpseo_metadesc', 'focuskw' => '_yoast_wpseo_focuskw', 'synonyms' => '_yoast_wpseo_keywordsynonyms');
-        foreach ($meta as $key => $meta_key) {
-            if ($seo[$key] !== '') update_post_meta($id, $meta_key, $seo[$key]);
-        }
+        self::write_post_seo($id, $seo);
         return array('target_id' => $id, 'edit_url' => get_edit_post_link($id, 'raw'), 'view_url' => get_permalink($id));
     }
 

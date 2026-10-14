@@ -57,6 +57,7 @@
       plannerResult: null,
       isPlanning: false,
       generatorForm: { contentKind: 'article', targetId: 0, h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
+      bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'draft', injectSeo: true, autoLinks: true, matching: false, running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
       targets: [],
       targetsLoading: false,
       targetsError: '',
@@ -378,6 +379,142 @@
       } catch (e) { app.toast('خطا: ' + e.message); this.state.isApplying = false; this.render(); }
     },
 
+    // ---------- تولید انبوه از شیت (CSV) ----------
+    parseCsv: function (text) {
+      text = String(text).replace(/^﻿/, '');
+      const first = text.split(/\r?\n/)[0] || '';
+      const count = d => (first.match(new RegExp(d === '\t' ? '\t' : '\\' + d, 'g')) || []).length;
+      const delim = [',', ';', '\t'].sort((a, b) => count(b) - count(a))[0];
+      const rows = []; let row = [], cell = '', quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (quoted) {
+          if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+          else if (ch === '"') quoted = false;
+          else cell += ch;
+        } else if (ch === '"') quoted = true;
+        else if (ch === delim) { row.push(cell); cell = ''; }
+        else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+        else cell += ch;
+      }
+      if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+      return rows.filter(r => r.some(c => String(c).trim() !== ''));
+    },
+
+    mapCsvHeader: function (header) {
+      const h = String(header).replace(/‌/g, ' ').replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, '').replace(/[ي]/g, 'ی').replace(/[ك]/g, 'ک').trim();
+      const rules = [
+        ['approved', /تایید|تأیید|approved/i], ['seo_title', /عنوان\s*سئو|seo\s*title/i], ['meta_description', /متا|meta/i],
+        ['focus_keyword', /کانونی|focus/i], ['related_keywords', /مترادف|فرعی|related/i], ['slug', /نامک|slug|لینک/i],
+        ['name', /نام\s*محصول|name|product/i], ['notes', /یادداشت|note/i], ['sole', /زیره|sole/i],
+        ['upper', /رویه|آستر|کفی|upper/i], ['general', /کلی|general/i], ['description', /توضیحات|description/i]
+      ];
+      const hit = rules.find(([, re]) => re.test(h));
+      return hit ? hit[0] : null;
+    },
+
+    isApprovedValue: function (value) {
+      const v = String(value || '').trim().toLowerCase();
+      return v !== '' && (/✅|✔|✓|☑/.test(v) || ['true', '1', 'yes', 'y', 'x', 'بله', 'تایید', 'تأیید', 'تایید شده'].includes(v));
+    },
+
+    loadBulkFile: async function (file) {
+      if (!file) return;
+      const b = this.state.bulk;
+      try {
+        const table = this.parseCsv(await file.text());
+        if (table.length < 2) throw new Error('فایل خالی است یا ردیف داده ندارد.');
+        const map = table[0].map(h => this.mapCsvHeader(h));
+        if (!map.includes('name') && !map.includes('slug')) throw new Error('ستون «نام محصول» یا «نامک» در فایل پیدا نشد.');
+        b.rows = table.slice(1).map(cells => {
+          const row = { approved: false, run: '', match: null };
+          map.forEach((key, idx) => { if (key) row[key] = (cells[idx] || '').trim(); });
+          row.approved = this.isApprovedValue(row.approved);
+          return row;
+        }).filter(r => r.name || r.slug);
+        b.fileName = file.name; b.selected = {}; b.log = []; b.filter = 'all'; b.matching = true;
+        this.render();
+        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || '' })) }) });
+        if (!res.success) throw new Error(res.message || 'تطبیق انجام نشد.');
+        const hasApproval = map.includes('approved');
+        res.matches.forEach((m, i) => {
+          b.rows[i].match = m;
+          if (m.matched && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
+        });
+        app.toast(`${toPersianDigits(res.matches.filter(m => m.matched).length)} از ${toPersianDigits(b.rows.length)} ردیف به محصولات سایت متصل شد.`);
+      } catch (e) { b.rows = []; app.toast('خطا: ' + e.message); }
+      b.matching = false;
+      this.render();
+    },
+
+    bulkVisibleIndexes: function () {
+      const b = this.state.bulk;
+      return b.rows.map((r, i) => i).filter(i => b.filter === 'all' || (b.filter === 'approved' ? b.rows[i].approved : !b.rows[i].approved));
+    },
+
+    bulkLog: function (type, text) {
+      const b = this.state.bulk;
+      b.log.push({ type, text, time: new Date().toLocaleTimeString('fa-IR') });
+      if (b.log.length > 300) b.log.shift();
+    },
+
+    bulkStatusHtml: function (row) {
+      if (row.run === 'running') return '⏳ در حال تولید...';
+      if (row.run === 'done') return `✅ انجام شد${row.editUrl ? ` — <a href="${escapeHtml(row.editUrl)}" target="_blank" rel="noopener">ویرایش</a>` : ''}`;
+      if (row.run === 'error') return `❌ ${escapeHtml(row.error || 'خطا')}`;
+      return '—';
+    },
+
+    bulkProgressHtml: function () {
+      const b = this.state.bulk;
+      const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
+      return b.total ? `<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:6px"><span>${b.running ? (b.paused ? 'متوقف موقت' : 'در حال پردازش...') : 'پایان / توقف'}</span><span>${toPersianDigits(b.done)} از ${toPersianDigits(b.total)} (${toPersianDigits(pct)}٪)</span></div><div class="wila-progress-bar-bg"><div class="wila-progress-bar-fill" style="width:${pct}%"></div></div>` : '';
+    },
+
+    bulkLogHtml: function () {
+      const colors = { ok: '#047857', err: '#b91c1c', info: '#475569' };
+      return this.state.bulk.log.map(l => `<div style="color:${colors[l.type] || colors.info}">[${escapeHtml(l.time)}] ${escapeHtml(l.text)}</div>`).join('');
+    },
+
+    bulkRefreshUi: function () {
+      const b = this.state.bulk;
+      const progress = this.root.querySelector('#wila-bulk-progress'); if (progress) progress.innerHTML = this.bulkProgressHtml();
+      const log = this.root.querySelector('#wila-bulk-log'); if (log) { log.innerHTML = this.bulkLogHtml(); log.scrollTop = log.scrollHeight; }
+      this.root.querySelectorAll('[data-bulk-status]').forEach(cell => { cell.innerHTML = this.bulkStatusHtml(b.rows[cell.getAttribute('data-bulk-status')]); });
+    },
+
+    startBulk: async function () {
+      const b = this.state.bulk;
+      if (b.running) return;
+      const queue = b.rows.map((r, i) => i).filter(i => b.selected[i] && b.rows[i].match && b.rows[i].match.matched && b.rows[i].run !== 'done');
+      if (!queue.length) return app.toast('هیچ ردیف متصل‌شده‌ای برای پردازش انتخاب نشده است.', 'error');
+      if (b.mode === 'replace' && !confirm(`توضیحات فعلی ${toPersianDigits(queue.length)} محصول جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
+      Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0 });
+      this.bulkLog('info', `شروع پردازش ${toPersianDigits(queue.length)} محصول.`);
+      this.render();
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      for (const i of queue) {
+        while (b.paused && !b.stopRequested) await sleep(300);
+        if (b.stopRequested) break;
+        const row = b.rows[i];
+        row.run = 'running'; this.bulkLog('info', `در حال تولید: ${row.match.title}`); this.bulkRefreshUi();
+        try {
+          const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match.product_id, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks } }) });
+          if (!r.success) throw new Error(r.message || 'تولید انجام نشد.');
+          row.run = 'done'; row.editUrl = r.edit_url;
+          this.bulkLog('ok', `انجام شد: ${row.match.title} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
+        } catch (e) {
+          row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
+          this.bulkLog('err', `خطا در ${row.match.title}: ${row.error}`);
+        }
+        b.done++; this.bulkRefreshUi();
+      }
+      this.bulkLog('info', b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش صف به پایان رسید.');
+      b.running = false; b.paused = false;
+      this.render();
+      app.toast(b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش انبوه به پایان رسید.');
+    },
+
     runLinkPlanner: async function () {
       const pf = this.state.plannerForm;
 
@@ -605,6 +742,51 @@
           ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p>${isArticle ? `<p>نامک: ${esc(this.state.contentOutline.slug)}</p>` : ''}<p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
           ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
           <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
+        </div>`;
+      } else if (activeTab === 'bulk') {
+        const b = this.state.bulk;
+        const visible = this.bulkVisibleIndexes();
+        const matchedCount = b.rows.filter(r => r.match && r.match.matched).length;
+        const selectedCount = Object.keys(b.selected).filter(i => b.selected[i]).length;
+        const allVisibleSelected = visible.length && visible.every(i => b.selected[i]);
+        const locked = b.running ? 'disabled' : '';
+        contentHtml = `<div class="wila-card">
+          <h3 style="margin-top:0">تولید محتوای انبوه از شیت (CSV Bulk Generator)</h3>
+          <p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه/آستر/کفی و ویژگی‌های کلی. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>
+          <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="wila-input" style="width:100%" ${locked}>
+          ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
+          ${b.rows.length && !b.matching ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">
+              <div><label style="display:block;margin-bottom:4px;font-weight:600">حالت درج محتوا</label>
+                <select id="wila-bulk-mode" class="wila-select" style="width:100%" ${locked}>
+                  <option value="replace" ${b.mode === 'replace' ? 'selected' : ''}>جایگزینی کامل توضیحات محصول</option>
+                  <option value="append" ${b.mode === 'append' ? 'selected' : ''}>افزودن به انتهای توضیحات فعلی</option>
+                  <option value="draft" ${b.mode === 'draft' ? 'selected' : ''}>ذخیره به‌عنوان پیش‌نویس بازبینی (بدون تغییر صفحه زنده)</option>
+                </select></div>
+              <div><label style="display:block;margin-bottom:4px;font-weight:600">فیلتر ستون «تایید سئو»</label>
+                <select id="wila-bulk-filter" class="wila-select" style="width:100%">
+                  <option value="all" ${b.filter === 'all' ? 'selected' : ''}>همه ردیف‌ها</option>
+                  <option value="approved" ${b.filter === 'approved' ? 'selected' : ''}>فقط تاییدشده ✅</option>
+                  <option value="unapproved" ${b.filter === 'unapproved' ? 'selected' : ''}>فقط تاییدنشده</option>
+                </select></div>
+            </div>
+            <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}> ذخیره خودکار عنوان سئو، توضیحات متا و کلیدواژه در متافیلدهای Yoast و Rank Math</label>
+            <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}> لینک‌سازی داخلی خودکار (دسته‌بندی محصول + ۲ محصول هم‌دسته)</label>
+            <p style="margin:12px 0 6px;font-size:.85rem">${toPersianDigits(matchedCount)} از ${toPersianDigits(b.rows.length)} ردیف متصل شد؛ ${toPersianDigits(selectedCount)} ردیف انتخاب شده است.</p>
+            <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
+              <th><input type="checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${locked}></th><th>#</th><th>نام محصول (شیت)</th><th>تایید سئو</th><th>تطبیق</th><th>محصول سایت</th><th>وضعیت پردازش</th>
+            </tr></thead><tbody>${visible.map(i => {
+              const r = b.rows[i], m = r.match;
+              const matchHtml = !m ? '—' : m.matched ? `✅ متصل شد <span class="wila-badge wila-badge-neutral">${m.via === 'slug' ? 'با نامک' : m.via === 'name_ambiguous' ? 'با نام (چند مورد مشابه)' : 'با نام'}</span>` : '❌ پیدا نشد';
+              return `<tr><td><input type="checkbox" class="wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${m && m.matched && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${r.approved ? '✅' : '—'}</td><td>${matchHtml}</td><td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td><td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td></tr>`;
+            }).join('')}</tbody></table></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+              <button id="wila-bulk-start" class="wila-btn wila-btn-primary" ${b.running ? 'disabled' : ''}>${b.running ? 'در حال پردازش...' : 'شروع تولید انبوه'}</button>
+              ${b.running ? `<button id="wila-bulk-pause" class="wila-btn wila-btn-outline">${b.paused ? 'ادامه' : 'مکث'}</button><button id="wila-bulk-stop" class="wila-btn wila-btn-outline" style="color:#dc2626">توقف</button>` : ''}
+            </div>
+            <div id="wila-bulk-progress" style="margin-top:14px">${this.bulkProgressHtml()}</div>
+            <div id="wila-bulk-log" style="margin-top:10px;max-height:220px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.8rem;line-height:1.9">${this.bulkLogHtml()}</div>
+          ` : ''}
         </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
@@ -839,6 +1021,7 @@
           <button class="wila-tab-btn ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview">پیشخوان آماری</button>
           <button class="wila-tab-btn ${activeTab === 'planner' ? 'active' : ''}" data-tab="planner">🎯 برنامه‌‌ریز لینک</button>
           <button class="wila-tab-btn ${activeTab === 'generator' ? 'active' : ''}" data-tab="generator">تولیدکننده محتوا</button>
+          <button class="wila-tab-btn ${activeTab === 'bulk' ? 'active' : ''}" data-tab="bulk">تولید انبوه (CSV)</button>
           <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر پیوندها</button>
           <button class="wila-tab-btn ${activeTab === 'orphans' ? 'active' : ''}" data-tab="orphans">صفحات یتیم</button>
           <button class="wila-tab-btn ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">تنظیمات</button>
@@ -896,6 +1079,19 @@
         const len = [...seoTitleInput.value].length, badge = this.root.querySelector('#wila-seo-title-len');
         if (badge) { badge.textContent = `${toPersianDigits(len)} کاراکتر (ایده‌آل ۵۰ تا ۶۰)`; badge.style.color = len >= 50 && len <= 60 ? '#16a34a' : '#d97706'; }
       });
+      const bulkFile = this.root.querySelector('#wila-bulk-file');
+      if (bulkFile) bulkFile.addEventListener('change', e => this.loadBulkFile(e.target.files[0]));
+      const bulk = this.state.bulk;
+      const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
+      const bulkFilter = this.root.querySelector('#wila-bulk-filter'); if (bulkFilter) bulkFilter.addEventListener('change', e => { bulk.filter = e.target.value; this.render(); });
+      const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
+      const bulkLinks = this.root.querySelector('#wila-bulk-links'); if (bulkLinks) bulkLinks.addEventListener('change', e => { bulk.autoLinks = e.target.checked; });
+      this.root.querySelectorAll('.wila-bulk-row').forEach(box => box.addEventListener('change', e => { bulk.selected[e.target.dataset.index] = e.target.checked; this.render(); }));
+      const bulkAll = this.root.querySelector('#wila-bulk-select-all');
+      if (bulkAll) bulkAll.addEventListener('change', e => { this.bulkVisibleIndexes().forEach(i => { if (bulk.rows[i].match && bulk.rows[i].match.matched) bulk.selected[i] = e.target.checked; }); this.render(); });
+      const bulkStart = this.root.querySelector('#wila-bulk-start'); if (bulkStart) bulkStart.addEventListener('click', () => this.startBulk());
+      const bulkPause = this.root.querySelector('#wila-bulk-pause'); if (bulkPause) bulkPause.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); });
+      const bulkStop = this.root.querySelector('#wila-bulk-stop'); if (bulkStop) bulkStop.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.bulkRefreshUi(); });
       const outlineBtn = this.root.querySelector('#wila-generate-outline');
       if (outlineBtn) outlineBtn.addEventListener('click', () => this.generateOutline());
       const fullBtn = this.root.querySelector('#wila-generate-full');
