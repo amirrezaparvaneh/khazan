@@ -463,6 +463,13 @@ class WILA_AvalAI_Client {
             $slug = sanitize_title(remove_accents($params['focus_keyword']));
         }
 
+        if ($this->params_kind($params) !== WILA_Content_Targets::KIND_ARTICLE) {
+            // Product and category pages carry no image prompts and never link to the homepage.
+            $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
+            $featured_prompt = '';
+            $content = $this->strip_homepage_links($content);
+        }
+
         $external_links = $this->extract_external_links($content);
         return array(
             'content' => $content,
@@ -475,6 +482,16 @@ class WILA_AvalAI_Client {
             'external_link_count' => count($external_links),
             'external_links' => $external_links,
         );
+    }
+
+    private function strip_homepage_links($content) {
+        $home = untrailingslashit(home_url('/'));
+        return preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use ($home) {
+            $url = untrailingslashit(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
+            $path = (string) wp_parse_url($url, PHP_URL_PATH);
+            $is_home = $url === $home || trim($m[2]) === '/' || ($path === '' && strtolower((string) wp_parse_url($url, PHP_URL_HOST)) === strtolower((string) wp_parse_url($home, PHP_URL_HOST)));
+            return $is_home ? $m[3] : $m[0];
+        }, $content);
     }
 
     private function parse_content_anchors($content) {
@@ -540,11 +557,12 @@ class WILA_AvalAI_Client {
             "فقط از داده‌های کلید target و توضیحات کاربر استفاده کن. مشخصات فنی، قیمت، گارانتی، تخفیف، موجودی، جنس، ابعاد، آمار، نظر مشتری یا ادعای رتبه را هرگز نساز؛ اگر اطلاعاتی نیست درباره‌اش ننویس و آن را در evidence_needed بیاور. محتوای قبلی (current_content) فقط برای حفظ اطلاعات درست است و باید بازنویسی و بهبود شود، نه کپی.\n" .
             "نیت جستجو تجاری/تراکنشی است: مفید، شفاف و کاربرمحور بنویس، نه مقاله آموزشی. عبارت کانونی را طبیعی در ۱۰۰ واژه نخست، عنوان سئو، متا و چند زیرعنوان بیاور و از keyword stuffing پرهیز کن. جمله‌ها کوتاه و معلوم، پاراگراف‌ها کوتاه و هیچ بخشی بیش از ۳۰۰ واژه بدون H2/H3 نباشد. H1 نساز و H3 بدون H2 نساز.\n";
         if ($is_product) {
-            $prompt .= "ساختار پیشنهادی محصول: مقدمه با پاسخ مستقیم و کاربرد اصلی، ویژگی‌ها و مزایا (فقط تاییدشده)، مناسب چه کسانی/چه موقعیتی است، نکات استفاده و نگهداری در صورت وجود داده، و در پایان چند پرسش متداول (FAQ) واقعی. اگر دسته‌بندی‌های محصول در target آمده، در جمله‌ای طبیعی به دسته مرتبط لینک بده.\n";
+            $prompt .= "ساختار پیشنهادی محصول: مقدمه با پاسخ مستقیم و کاربرد اصلی، ویژگی‌ها و مزایا (فقط تاییدشده)، مناسب چه کسانی/چه موقعیتی است، نکات استفاده و نگهداری در صورت وجود داده، و در پایان چند پرسش متداول (FAQ) واقعی.\n" .
+                "لینک اجباری: حتماً دست‌کم یک بار به دسته‌بندی والد این محصول (target.parent_categories) با HTML <a href=\"URL\">نام دسته یا عبارت طبیعی خرید همان دسته</a> در جمله‌ای طبیعی لینک بده. در صورت ارتباط طبیعی، حداکثر ۲ تا ۳ لینک به محصولات مرتبط (target.related_products) با انکر نام همان محصول بده؛ مجبور به استفاده از همه آن‌ها نیستی.\n";
         } else {
-            $prompt .= "ساختار پیشنهادی دسته‌بندی: مقدمه‌ای که دسته و محصولات آن را معرفی می‌کند، راهنمای انتخاب (معیارهای واقعی)، معرفی زیردسته‌ها (subcategories) با لینک در صورت وجود URL، انواع محصولات، و پرسش‌های متداول. نام محصولات نمونه (sample_products) را فقط برای مثال بیاور و ادعا درباره‌شان نساز. محتوا باید برای نمایش بالا یا پایین لیست محصولات مناسب و غیرتکراری باشد.\n";
+            $prompt .= "ساختار پیشنهادی دسته‌بندی: مقدمه‌ای که دسته و محصولات آن را معرفی می‌کند، راهنمای انتخاب (معیارهای واقعی)، معرفی زیردسته‌ها (target.subcategories) با لینک به URL هرکدام و در صورت وجود، یک لینک طبیعی به دسته والد (target.parent_category)، انواع محصولات، و پرسش‌های متداول. نام محصولات نمونه (sample_products) را فقط برای مثال بیاور و ادعا درباره‌شان نساز. محتوا باید برای نمایش بالا یا پایین لیست محصولات مناسب و غیرتکراری باشد.\n";
         }
-        $prompt .= "نقشه لینک داخلی داده‌شده (internal_links) را فقط با HTML <a href=\"URL\">انکرتکست</a> و در جمله طبیعی وارد کن؛ انکر باید توصیف‌کننده مقصد باشد، لینک به خود صفحه مقصد (target.url) ممنوع است و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ واژه مجاز است. اگر use_orphan_links فعال است، فقط نامزدهای واقعاً مرتبط را به‌ترتیب اولویت به‌کار ببر.";
+        $prompt .= "نقشه لینک داخلی داده‌شده (internal_links) را فقط با HTML <a href=\"URL\">انکرتکست</a> و در جمله طبیعی وارد کن؛ انکر باید توصیف‌کننده مقصد باشد، لینک به صفحه اول سایت و به خود صفحه مقصد (target.url) ممنوع است و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ واژه مجاز است. اگر use_orphan_links فعال است، فقط نامزدهای واقعاً مرتبط را به‌ترتیب اولویت به‌کار ببر.";
         return $prompt;
     }
 

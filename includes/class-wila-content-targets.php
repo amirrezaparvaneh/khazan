@@ -113,7 +113,8 @@ class WILA_Content_Targets {
             'url'               => get_permalink($id),
             'short_description' => self::plain($post->post_excerpt, 80),
             'current_content'   => self::plain($post->post_content, 120),
-            'categories'        => wp_list_pluck((array) get_the_terms($id, 'product_cat'), 'name'),
+            'parent_categories' => self::product_parent_categories($id),
+            'related_products'  => self::related_products($id),
         );
         if (function_exists('wc_get_product')) {
             $product = wc_get_product($id);
@@ -133,13 +134,39 @@ class WILA_Content_Targets {
         return $context;
     }
 
+    /**
+     * دسته‌بندی‌های والد محصول؛ فقط عمیق‌ترین دسته‌ها (آن‌هایی که والد دسته دیگری از همین محصول نیستند)
+     */
+    private static function product_parent_categories($id) {
+        $terms = get_the_terms($id, 'product_cat');
+        if (!is_array($terms)) return array();
+        $parent_ids = array_map('intval', wp_list_pluck($terms, 'parent'));
+        $categories = array();
+        foreach ($terms as $term) {
+            if (in_array((int) $term->term_id, $parent_ids, true) && count($terms) > 1) continue;
+            $link = get_term_link($term);
+            if (!is_wp_error($link)) $categories[] = array('name' => $term->name, 'url' => $link);
+        }
+        return array_slice($categories, 0, 3);
+    }
+
+    private static function related_products($id) {
+        if (!function_exists('wc_get_related_products')) return array();
+        $related = array();
+        foreach (wc_get_related_products($id, 5) as $related_id) {
+            if (get_post_status($related_id) !== 'publish') continue;
+            $related[] = array('title' => get_the_title($related_id), 'url' => get_permalink($related_id));
+        }
+        return $related;
+    }
+
     private static function category_context($id) {
         $term = get_term($id, 'product_cat');
         if (!$term || is_wp_error($term)) {
             return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
         $link = get_term_link($term);
-        $children = get_terms(array('taxonomy' => 'product_cat', 'parent' => $id, 'hide_empty' => false, 'number' => 20, 'fields' => 'names'));
+        $children = get_terms(array('taxonomy' => 'product_cat', 'parent' => $id, 'hide_empty' => false, 'number' => 20));
         $products = get_posts(array(
             'post_type'      => 'product',
             'post_status'    => 'publish',
@@ -155,11 +182,15 @@ class WILA_Content_Targets {
             'current_content' => self::plain($term->description, 120),
             'product_count'   => (int) $term->count,
             'sample_products' => array_map('get_the_title', $products),
-            'subcategories'   => is_wp_error($children) ? array() : array_values($children),
+            'subcategories'   => is_wp_error($children) ? array() : array_values(array_filter(array_map(function ($child) {
+                $child_link = get_term_link($child);
+                return is_wp_error($child_link) ? null : array('name' => $child->name, 'url' => $child_link);
+            }, $children))),
         );
         if ($term->parent) {
             $parent = get_term($term->parent, 'product_cat');
-            if ($parent && !is_wp_error($parent)) $context['parent_category'] = $parent->name;
+            $parent_link = $parent && !is_wp_error($parent) ? get_term_link($parent) : null;
+            if ($parent_link && !is_wp_error($parent_link)) $context['parent_category'] = array('name' => $parent->name, 'url' => $parent_link);
         }
         return $context;
     }

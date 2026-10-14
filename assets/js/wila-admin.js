@@ -10,6 +10,16 @@
     return n.toString().replace(/\d/g, (x) => farsiDigits[x]);
   }
 
+  // تاریخ شمسی با ارقام فارسی؛ مقدار ورودی زمان محلی سایت (Y-m-d H:i:s) است و بدون تبدیل منطقه زمانی نمایش داده می‌شود.
+  function formatJalali(value) {
+    const m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (!m) return toPersianDigits(value || '');
+    try {
+      return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
+        .format(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+    } catch (e) { return toPersianDigits(value); }
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -60,8 +70,20 @@
       generatedExternalLinkCount: 0,
       generatedExternalLinks: [],
       contentHistory: [],
+      historyLoading: true,
       isGeneratingContent: false,
       modal: { isOpen: false, title: '', contentHtml: '' },
+    },
+
+    toast: function (message, type) {
+      let box = document.getElementById('wila-toast-root');
+      if (!box) { box = document.createElement('div'); box.id = 'wila-toast-root'; document.body.appendChild(box); }
+      const kind = type || (/^خطا|ناموفق|نشد|نامعتبر/.test(message) ? 'error' : 'success');
+      const el = document.createElement('div');
+      el.className = `wila-toast wila-toast-${kind}`;
+      el.textContent = message;
+      box.appendChild(el);
+      setTimeout(() => { el.classList.add('wila-toast-hide'); setTimeout(() => el.remove(), 300); }, 3500);
     },
 
     init: function () {
@@ -110,8 +132,15 @@
       try {
         const response = await this.apiFetch('/content/history');
         this.state.contentHistory = response.items || [];
-        this.render();
       } catch (e) {}
+      this.state.historyLoading = false;
+      this.render();
+    },
+
+    copyField: function (id, label, value, opts) {
+      const o = opts || {};
+      if (value === null || value === undefined || String(value).trim() === '') return '';
+      return `<div style="margin:0 0 14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px"><label style="font-weight:600">${label}</label><button type="button" class="wila-btn wila-btn-outline wila-btn-sm wila-copy-btn" data-copy="${id}">کپی</button></div>${o.rows ? `<textarea id="${id}" class="wila-input" rows="${o.rows}" readonly style="width:100%;${o.ltr ? 'direction:ltr;text-align:left' : 'direction:rtl'}">${escapeHtml(value)}</textarea>` : `<input id="${id}" class="wila-input" readonly style="width:100%;${o.ltr ? 'direction:ltr;text-align:left' : ''}" value="${escapeHtml(value)}">`}</div>`;
     },
 
     showContentHistoryItem: async function (id) {
@@ -119,13 +148,45 @@
         const response = await this.apiFetch(`/content/history/${id}`);
         if (!response.success || !response.item) throw new Error(response.message || 'محتوا یافت نشد.');
         const item = response.item;
+        let links = [];
+        try { links = JSON.parse(item.external_links || '[]') || []; } catch (e) {}
+        const summary = [`عنوان: ${item.title}`, `نوع: ${this.kindLabel(item.content_kind)}`, `کلیدواژه کانونی: ${item.focus_keyword}`, item.slug ? `نامک: ${item.slug}` : '', `عنوان سئو: ${item.seo_title}`, `توضیحات متا: ${item.meta_description}`, `مترادف‌ها: ${item.keyword_synonyms}`].filter(Boolean).join('\n');
         this.state.modal = {
           isOpen: true,
           title: escapeHtml(item.title),
-          contentHtml: `<p><strong>کلیدواژه کانونی:</strong> ${escapeHtml(item.focus_keyword)}</p>${item.slug ? `<p><strong>اسلاگ:</strong> <code dir="ltr">${escapeHtml(item.slug)}</code></p>` : ''}<p><strong>تاریخ تولید:</strong> ${escapeHtml(item.created_at)}</p><label style="display:block;margin:14px 0 6px;font-weight:600">محتوا</label><textarea id="wila-history-content" class="wila-input" rows="16" style="width:100%;direction:rtl">${escapeHtml(item.content)}</textarea>${item.featured_image_prompt ? `<label style="display:block;margin:14px 0 6px;font-weight:600">پرامپت تصویر شاخص</label><textarea class="wila-input" rows="4" style="width:100%;direction:ltr;text-align:left">${escapeHtml(item.featured_image_prompt)}</textarea>` : ''}<div style="margin-top:12px"><button id="wila-copy-history-content" class="wila-btn wila-btn-primary">کپی محتوا</button></div>`
+          contentHtml: `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span><span class="wila-badge wila-badge-neutral">${formatJalali(item.created_at)}</span><span class="wila-badge wila-badge-success">لینک داخلی: ${toPersianDigits(item.internal_link_count)}</span><span class="wila-badge wila-badge-neutral">لینک خارجی: ${toPersianDigits(item.external_link_count)}</span></div>`
+            + this.copyField('wila-h-summary', 'خلاصه اطلاعات (برای کپی یکجا)', summary, { rows: 6 })
+            + this.copyField('wila-h-keyword', 'کلیدواژه کانونی', item.focus_keyword)
+            + this.copyField('wila-h-slug', 'نامک (اسلاگ)', item.slug, { ltr: true })
+            + this.copyField('wila-h-seo-title', 'عنوان سئو', item.seo_title)
+            + this.copyField('wila-h-meta', 'توضیحات متا', item.meta_description, { rows: 3 })
+            + this.copyField('wila-h-synonyms', 'مترادف‌ها و عبارات کلیدی', item.keyword_synonyms)
+            + (links.length ? this.copyField('wila-h-links', 'لینک‌های خارجی', links.map(l => `${l.anchor || ''} ${l.url}`.trim()).join('\n'), { rows: Math.min(6, links.length + 1), ltr: true }) : '')
+            + this.copyField('wila-h-content', 'محتوای HTML', item.content, { rows: 16 })
+            + this.copyField('wila-h-image', 'پرامپت تصویر شاخص', item.featured_image_prompt, { rows: 4, ltr: true })
         };
         this.render();
-      } catch (e) { alert('خطا: ' + e.message); }
+      } catch (e) { app.toast('خطا: ' + e.message); }
+    },
+
+    copyText: async function (text) {
+      try { await navigator.clipboard.writeText(text); app.toast('کپی شد.'); }
+      catch (e) {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); app.toast('کپی شد.'); } catch (err) { app.toast('کپی ناموفق بود.'); }
+        ta.remove();
+      }
+    },
+
+    deleteHistoryItem: async function (id) {
+      if (!confirm('این محتوا برای همیشه از آرشیو حذف شود؟ (صفحه منتشرشده تغییری نمی‌کند)')) return;
+      try {
+        const r = await this.apiFetch(`/content/history/${id}`, { method: 'DELETE' });
+        if (!r.success) throw new Error(r.message || 'حذف انجام نشد.');
+        this.state.contentHistory = this.state.contentHistory.filter(item => String(item.id) !== String(id));
+        this.render();
+        app.toast('از آرشیو حذف شد.');
+      } catch (e) { app.toast('خطا: ' + e.message); }
     },
 
     startBatchScan: async function () {
@@ -152,9 +213,9 @@
 
         this.state.isScanning = false;
         await this.fetchSummary();
-        alert('اسکن سایت کامل شد!');
+        app.toast('اسکن سایت کامل شد!');
       } catch (err) {
-        alert('خطا در فرآیند اسکن: ' + err.message);
+        app.toast('خطا در فرآیند اسکن: ' + err.message);
         this.state.isScanning = false;
         this.render();
       }
@@ -232,17 +293,17 @@
 
     generateOutline: async function () {
       const p = this.getGeneratorPayload();
-      if (p.content_kind !== 'article' && !p.target_id) return alert(`ابتدا ${this.kindLabel(p.content_kind)} مورد نظر را از فهرست انتخاب کنید.`);
-      if (!p.h1_title.trim() || !p.focus_keyword.trim()) return alert('عنوان و کلیدواژه کانونی الزامی هستند.');
+      if (p.content_kind !== 'article' && !p.target_id) return app.toast(`ابتدا ${this.kindLabel(p.content_kind)} مورد نظر را از فهرست انتخاب کنید.`);
+      if (!p.h1_title.trim() || !p.focus_keyword.trim()) return app.toast('عنوان و کلیدواژه کانونی الزامی هستند.');
       this.state.isGeneratingContent = true; this.resetGenerated(); this.render();
       try { const r = await this.apiFetch('/content/outline', { method: 'POST', body: JSON.stringify(p) }); if (!r.success) throw new Error(r.message || 'طرح تولید نشد.'); this.state.contentOutline = r.outline; this.state.generatedSlug = r.outline.slug || ''; this.state.generatedSeoTitle = r.outline.seo_title || ''; this.state.generatedMetaDescription = r.outline.meta_description || ''; this.state.generatedKeywordSynonyms = r.outline.keyword_synonyms || ''; }
-      catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
+      catch (e) { app.toast('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
     generateFullContent: async function () {
       this.state.isGeneratingContent = true; this.render();
       try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; this.state.featuredImagePrompt = r.featured_image_prompt || ''; this.state.generatedSlug = r.slug || ''; this.state.generatedSeoTitle = r.seo_title || ''; this.state.generatedMetaDescription = r.meta_description || ''; this.state.generatedKeywordSynonyms = r.keyword_synonyms || ''; this.state.generatedInternalLinkCount = Number(r.internal_link_count || 0); this.state.generatedExternalLinkCount = Number(r.external_link_count || 0); this.state.generatedExternalLinks = Array.isArray(r.external_links) ? r.external_links : []; }
-      catch (e) { alert('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
+      catch (e) { app.toast('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
     contentQualityReport: function (html, keyword) {
@@ -275,10 +336,10 @@
     copyGeneratedContent: async function () {
       const contentField = this.root.querySelector('#wila-generated-content');
       const content = contentField ? contentField.value : this.state.generatedContent;
-      try { await navigator.clipboard.writeText(content); alert('تمام محتوای HTML کپی شد.'); }
+      try { await navigator.clipboard.writeText(content); app.toast('تمام محتوای HTML کپی شد.'); }
       catch (e) {
-        if (contentField) { contentField.select(); document.execCommand('copy'); alert('تمام محتوای HTML کپی شد.'); }
-        else alert('کپی محتوا ناموفق بود.');
+        if (contentField) { contentField.select(); document.execCommand('copy'); app.toast('تمام محتوای HTML کپی شد.'); }
+        else app.toast('کپی محتوا ناموفق بود.');
       }
     },
 
@@ -286,7 +347,7 @@
       const contentField = this.root.querySelector('#wila-generated-content');
       const content = contentField ? contentField.value : this.state.generatedContent;
       try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content, slug: (this.root.querySelector('#wila-generated-slug') || {}).value || this.state.generatedSlug, focus_keyword: this.state.generatorForm.focusKeyword, keyword_synonyms: (this.root.querySelector('#wila-keyword-synonyms') || {}).value || this.state.generatedKeywordSynonyms, seo_title: (this.root.querySelector('#wila-seo-title') || {}).value || this.state.generatedSeoTitle, meta_description: (this.root.querySelector('#wila-meta-description') || {}).value || this.state.generatedMetaDescription }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
-      catch (e) { alert('خطا: ' + e.message); }
+      catch (e) { app.toast('خطا: ' + e.message); }
     },
 
     applyToTarget: async function () {
@@ -304,14 +365,14 @@
         }) });
         if (!r.success) throw new Error(r.message || 'انتشار انجام نشد.');
         window.location.assign(r.edit_url);
-      } catch (e) { alert('خطا: ' + e.message); this.state.isApplying = false; this.render(); }
+      } catch (e) { app.toast('خطا: ' + e.message); this.state.isApplying = false; this.render(); }
     },
 
     runLinkPlanner: async function () {
       const pf = this.state.plannerForm;
 
       if (!pf.h1Title.trim() || !pf.focusKeyword.trim()) {
-        alert('لطفاً عنوان مقاله و کلیدواژه کانونی را وارد کنید.');
+        app.toast('لطفاً عنوان مقاله و کلیدواژه کانونی را وارد کنید.');
         return;
       }
 
@@ -336,7 +397,7 @@
 
         this.state.plannerResult = res.blueprint;
       } catch (err) {
-        alert('خطا: ' + err.message);
+        app.toast('خطا: ' + err.message);
       } finally {
         this.state.isPlanning = false;
         this.render();
@@ -383,7 +444,7 @@
       if (this.suggestionsPending) return;
       const s = this.state.aiSettings;
       if (!s.hasAvalAIKey) {
-        alert('لطفاً ابتدا کلید API را در بخش تنظیمات وارد کنید.');
+        app.toast('لطفاً ابتدا کلید API را در بخش تنظیمات وارد کنید.');
         return;
       }
 
@@ -432,7 +493,7 @@
       const resultBox = document.getElementById('wila-test-result');
       const testBtn = document.getElementById('wila-test-api-btn');
       if (!avalaiKey && !this.state.aiSettings.hasAvalAIKey) {
-        alert('لطفاً کلید API سرویس AvalAI را وارد کنید.');
+        app.toast('لطفاً کلید API سرویس AvalAI را وارد کنید.');
         return;
       }
       if (testBtn) { testBtn.disabled = true; testBtn.innerText = 'در حال بررسی...'; }
@@ -461,10 +522,10 @@
             homepage_keywords: homepageKeywords
           })
         });
-        alert('تنظیمات با موفقیت ذخیره شد.');
+        app.toast('تنظیمات با موفقیت ذخیره شد.');
         await this.fetchSettings();
       } catch (e) {
-        alert('خطا در ذخیره تنظیمات.');
+        app.toast('خطا در ذخیره تنظیمات.');
       }
     },
 
@@ -488,6 +549,7 @@
           });
         }
 
+        if (!summary) cardsHtml = '<div class="wila-card"><div class="wila-skeleton" style="height:14px;width:50%"></div><div class="wila-skeleton" style="height:30px;width:35%;margin-top:14px"></div></div>'.repeat(3);
         contentHtml = `
           <div class="wila-progress-wrapper">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -524,7 +586,7 @@
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
           ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p>${isArticle ? `<p>نامک: ${esc(this.state.contentOutline.slug)}</p>` : ''}<p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
           ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
-          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر، همراه تاریخ تولید، در این بخش نگهداری می‌شود.</p><table class="wila-table"><thead><tr><th>عنوان</th><th>کلیدواژه</th><th>نوع</th><th>اسلاگ</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td>${esc(item.focus_keyword)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td><code dir="ltr">${esc(item.slug || '')}</code></td><td>${esc(item.created_at)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button></td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div>
+          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
         </div>`;
       } else if (activeTab === 'planner') {
         const pf = plannerForm;
@@ -819,13 +881,11 @@
       const draftBtn = this.root.querySelector('#wila-create-draft');
       if (draftBtn) draftBtn.addEventListener('click', () => this.createDraft());
       this.root.querySelectorAll('.wila-history-view').forEach(btn => btn.addEventListener('click', e => this.showContentHistoryItem(e.currentTarget.getAttribute('data-id'))));
-      const copyHistoryBtn = this.root.querySelector('#wila-copy-history-content');
-      if (copyHistoryBtn) copyHistoryBtn.addEventListener('click', async () => {
-        const field = this.root.querySelector('#wila-history-content');
-        if (!field) return;
-        try { await navigator.clipboard.writeText(field.value); alert('محتوا کپی شد.'); }
-        catch (e) { field.select(); document.execCommand('copy'); alert('محتوا کپی شد.'); }
-      });
+      this.root.querySelectorAll('.wila-history-delete').forEach(btn => btn.addEventListener('click', e => this.deleteHistoryItem(e.currentTarget.getAttribute('data-id'))));
+      this.root.querySelectorAll('.wila-copy-btn').forEach(btn => btn.addEventListener('click', e => {
+        const field = this.root.querySelector('#' + e.currentTarget.getAttribute('data-copy'));
+        if (field) this.copyText(field.value);
+      }));
 
       // اتصال رویدادها برای حفظ دائمی مقادیر فرم برنامه‌ریز در state
       const planTitle = document.getElementById('wila-plan-title');

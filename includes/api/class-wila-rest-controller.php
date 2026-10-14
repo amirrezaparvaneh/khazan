@@ -34,7 +34,10 @@ class WILA_REST_Controller {
         register_rest_route($this->namespace, '/content/targets', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_targets'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/apply', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'apply_content_to_target'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history'), 'permission_callback' => array($this, 'check_permission')));
-        register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history_item'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array(
+            array('methods' => WP_REST_Server::READABLE, 'callback' => array($this, 'get_content_history_item'), 'permission_callback' => array($this, 'check_permission')),
+            array('methods' => WP_REST_Server::DELETABLE, 'callback' => array($this, 'delete_content_history_item'), 'permission_callback' => array($this, 'check_permission')),
+        ));
         register_rest_route($this->namespace, '/test-connection', array('methods' => WP_REST_Server::CREATABLE, 'callback' => array($this, 'test_avalai_connection'), 'permission_callback' => array($this, 'check_permission')));
 
     }
@@ -296,10 +299,14 @@ class WILA_REST_Controller {
             'description' => isset($params['description']) ? sanitize_textarea_field($params['description']) : '',
             'internal_links' => $internal_links,
             'use_orphan_links' => $use_orphan_links,
-            'homepage_keywords' => get_option('wila_homepage_keywords', ''),
-            'homepage_url' => home_url('/'),
         );
-        if ($target) $result['target'] = $target;
+        // The homepage link is a blog-article feature only.
+        if ($target) {
+            $result['target'] = $target;
+        } else {
+            $result['homepage_keywords'] = get_option('wila_homepage_keywords', '');
+            $result['homepage_url'] = home_url('/');
+        }
         return $result;
     }
 
@@ -358,7 +365,7 @@ class WILA_REST_Controller {
     public function get_content_history() {
         global $wpdb;
         $table = WILA_DB::get_content_history_table_name();
-        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, content_kind, target_id, internal_link_count, external_link_count, seo_title, meta_description, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
+        $items = $wpdb->get_results("SELECT id, title, focus_keyword, slug, content_kind, target_id, internal_link_count, external_link_count, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} ORDER BY created_at DESC, id DESC LIMIT 100", ARRAY_A);
         return rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
@@ -368,6 +375,13 @@ class WILA_REST_Controller {
         $item = $wpdb->get_row($wpdb->prepare("SELECT id, title, focus_keyword, slug, content_kind, target_id, content, featured_image_prompt, internal_link_count, external_link_count, external_links, seo_title, meta_description, keyword_synonyms, created_at FROM {$table} WHERE id = %d", absint($request['id'])), ARRAY_A);
         if (!$item) return new WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
         return rest_ensure_response(array('success' => true, 'item' => $item));
+    }
+
+    public function delete_content_history_item($request) {
+        global $wpdb;
+        $deleted = $wpdb->delete(WILA_DB::get_content_history_table_name(), array('id' => absint($request['id'])), array('%d'));
+        if (!$deleted) return new WP_Error('content_not_found', 'محتوای درخواستی یافت نشد.', array('status' => 404));
+        return rest_ensure_response(array('success' => true));
     }
 
     public function create_content_draft($request) {
