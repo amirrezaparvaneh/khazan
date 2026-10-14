@@ -9,6 +9,7 @@
 namespace Khazan\Http\Requests;
 
 use Khazan\Services\Links\OrphanFinder;
+use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -30,7 +31,7 @@ final class ContentGenerationRequest {
      * @return array|\WP_Error Normalized parameters for the AI services.
      */
     public function validated() {
-        $kind   = \WILA_Content_Targets::normalize_kind($this->value('content_kind', ''));
+        $kind   = Settings::normalize_kind($this->value('content_kind', ''));
         $target = $this->resolve_target($kind);
         if (is_wp_error($target)) return $target;
 
@@ -59,8 +60,8 @@ final class ContentGenerationRequest {
      * @return array|null|\WP_Error
      */
     private function resolve_target($kind) {
-        if (!\WILA_Content_Targets::is_target_kind($kind)) return null;
-        return \WILA_Content_Targets::get_context($kind, $this->value('target_id', 0));
+        if (!Settings::is_target_kind($kind)) return null;
+        return (new \Khazan\Repository\ContentTargetRepository())->get_context($kind, $this->value('target_id', 0));
     }
 
     private function internal_links() {
@@ -83,7 +84,7 @@ final class ContentGenerationRequest {
             if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $kind) continue;
             if (!empty($orphan['url']) && !empty($orphan['title'])) {
                 // محصول با کلیدواژه کانونی: انکر قفل‌شده؛ بدون آن، نام کامل محصول بدون دستکاری
-                $focus_anchor = $orphan['type'] === \WILA_Content_Targets::product_post_type() ? \WILA_Content_Targets::product_link_anchor($orphan['id']) : '';
+                $focus_anchor = $orphan['type'] === Settings::product_post_type() ? (new \Khazan\Repository\ContentTargetRepository())->product_link_anchor($orphan['id']) : '';
                 $anchor = $focus_anchor !== '' ? $focus_anchor : $orphan['title'];
                 $links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $focus_anchor !== '');
             }
@@ -105,7 +106,7 @@ final class ContentGenerationRequest {
             'focus_keyword'    => $this->text('focus_keyword'),
             'long_tail'        => $this->text('long_tail'),
             'word_count'       => isset($this->input['word_count']) ? max(300, min(10000, absint($this->input['word_count']))) : 1200,
-            'content_type'     => \WILA_Content_Targets::kind_label($kind),
+            'content_type'     => Settings::kind_label($kind),
             'funnel_stage'     => $this->text('funnel_stage'),
             'description'      => isset($this->input['description']) ? sanitize_textarea_field($this->input['description']) : '',
             'internal_links'   => $links,
@@ -115,7 +116,7 @@ final class ContentGenerationRequest {
         if ($target) {
             $result['target'] = $target;
         } else {
-            $result['homepage_keywords'] = get_option('wila_homepage_keywords', '');
+            $result['homepage_keywords'] = get_option(Settings::OPT_HOMEPAGE_KEYWORDS, '');
             $result['homepage_url']      = home_url('/');
         }
         return $result;

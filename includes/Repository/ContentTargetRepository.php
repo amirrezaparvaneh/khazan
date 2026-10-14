@@ -9,6 +9,7 @@
 namespace Khazan\Repository;
 
 use Khazan\Services\Seo\SeoMetaService;
+use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -27,14 +28,14 @@ final class ContentTargetRepository {
      * فهرست محصولات یا دسته‌بندی‌ها برای انتخاب در رابط کاربری
      */
     public function list_targets($kind, $search = '') {
-        if (!\WILA_Content_Targets::is_target_kind($kind) || !\WILA_Content_Targets::kind_available($kind)) {
+        if (!Settings::is_target_kind($kind) || !Settings::kind_available($kind)) {
             return new \WP_Error('target_kind_unavailable', 'ووکامرس یا نوع محتوای درخواستی در این سایت فعال نیست.', array('status' => 400));
         }
 
         $items = array();
-        if ($kind === \WILA_Content_Targets::KIND_PRODUCT) {
+        if ($kind === Settings::KIND_PRODUCT) {
             $args = array(
-                'post_type'      => \WILA_Content_Targets::product_post_type(),
+                'post_type'      => Settings::product_post_type(),
                 'post_status'    => array('publish', 'draft', 'pending', 'private'),
                 'posts_per_page' => 300,
                 'orderby'        => 'title',
@@ -48,7 +49,7 @@ final class ContentTargetRepository {
             return $items;
         }
 
-        $terms = get_terms(array('taxonomy' => \WILA_Content_Targets::category_taxonomy(), 'hide_empty' => false, 'number' => 300, 'search' => $search, 'orderby' => 'name'));
+        $terms = get_terms(array('taxonomy' => Settings::category_taxonomy(), 'hide_empty' => false, 'number' => 300, 'search' => $search, 'orderby' => 'name'));
         if (is_wp_error($terms)) return $terms;
         foreach ($terms as $term) {
             $link = get_term_link($term);
@@ -75,10 +76,10 @@ final class ContentTargetRepository {
      */
     public function get_context($kind, $id) {
         $id = absint($id);
-        if (!$id || !\WILA_Content_Targets::is_target_kind($kind) || !\WILA_Content_Targets::kind_available($kind)) {
+        if (!$id || !Settings::is_target_kind($kind) || !Settings::kind_available($kind)) {
             return new \WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
         }
-        return $kind === \WILA_Content_Targets::KIND_PRODUCT ? $this->product_context($id) : $this->category_context($id);
+        return $kind === Settings::KIND_PRODUCT ? $this->product_context($id) : $this->category_context($id);
     }
 
     private function plain($html, $words) {
@@ -87,11 +88,11 @@ final class ContentTargetRepository {
 
     private function product_context($id) {
         $post = get_post($id);
-        if (!$post || $post->post_type !== \WILA_Content_Targets::product_post_type()) {
+        if (!$post || $post->post_type !== Settings::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         $context = array(
-            'kind'              => \WILA_Content_Targets::KIND_PRODUCT,
+            'kind'              => Settings::KIND_PRODUCT,
             'id'                => $id,
             'title'             => get_the_title($id),
             'url'               => get_permalink($id),
@@ -122,7 +123,7 @@ final class ContentTargetRepository {
      * دسته‌بندی‌های والد محصول؛ فقط عمیق‌ترین دسته‌ها (آن‌هایی که والد دسته دیگری از همین محصول نیستند)
      */
     private function product_parent_categories($id) {
-        $terms = get_the_terms($id, \WILA_Content_Targets::category_taxonomy());
+        $terms = get_the_terms($id, Settings::category_taxonomy());
         if (!is_array($terms)) return array();
         $parent_ids = array_map('intval', wp_list_pluck($terms, 'parent'));
         $categories = array();
@@ -139,16 +140,16 @@ final class ContentTargetRepository {
         if (function_exists('wc_get_related_products')) {
             $ids = wc_get_related_products($id, $limit * 3);
         } else {
-            $term_ids = wp_get_post_terms($id, \WILA_Content_Targets::category_taxonomy(), array('fields' => 'ids'));
+            $term_ids = wp_get_post_terms($id, Settings::category_taxonomy(), array('fields' => 'ids'));
             if (!is_wp_error($term_ids) && $term_ids) {
                 $ids = get_posts(array(
-                    'post_type'      => \WILA_Content_Targets::product_post_type(),
+                    'post_type'      => Settings::product_post_type(),
                     'post_status'    => 'publish',
                     'posts_per_page' => $limit * 3,
                     'post__not_in'   => array($id),
                     'fields'         => 'ids',
                     'no_found_rows'  => true,
-                    'tax_query'      => array(array('taxonomy' => \WILA_Content_Targets::category_taxonomy(), 'field' => 'term_id', 'terms' => $term_ids)),
+                    'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => $term_ids)),
                 ));
             }
         }
@@ -156,7 +157,7 @@ final class ContentTargetRepository {
         foreach ($ids as $related_id) {
             if (get_post_status($related_id) !== 'publish') continue;
             // انکرتکست لینک محصول فقط کلیدواژه کانونی مقصد است؛ محصول بدون کلیدواژه کنار گذاشته می‌شود.
-            $anchor = \WILA_Content_Targets::product_link_anchor($related_id);
+            $anchor = $this->product_link_anchor($related_id);
             if ($anchor === '') continue;
             $related[] = array(
                 'title'  => get_the_title($related_id),
@@ -169,21 +170,21 @@ final class ContentTargetRepository {
     }
 
     private function category_context($id) {
-        $term = get_term($id, \WILA_Content_Targets::category_taxonomy());
+        $term = get_term($id, Settings::category_taxonomy());
         if (!$term || is_wp_error($term)) {
             return new \WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
         $link = get_term_link($term);
-        $children = get_terms(array('taxonomy' => \WILA_Content_Targets::category_taxonomy(), 'parent' => $id, 'hide_empty' => false, 'number' => 20));
+        $children = get_terms(array('taxonomy' => Settings::category_taxonomy(), 'parent' => $id, 'hide_empty' => false, 'number' => 20));
         $products = get_posts(array(
-            'post_type'      => \WILA_Content_Targets::product_post_type(),
+            'post_type'      => Settings::product_post_type(),
             'post_status'    => 'publish',
             'posts_per_page' => 12,
             'fields'         => 'ids',
-            'tax_query'      => array(array('taxonomy' => \WILA_Content_Targets::category_taxonomy(), 'field' => 'term_id', 'terms' => $id)),
+            'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => $id)),
         ));
         $context = array(
-            'kind'            => \WILA_Content_Targets::KIND_CATEGORY,
+            'kind'            => Settings::KIND_CATEGORY,
             'id'              => $id,
             'title'           => $term->name,
             'url'             => is_wp_error($link) ? '' : $link,
@@ -196,7 +197,7 @@ final class ContentTargetRepository {
             }, $children))),
         );
         if ($term->parent) {
-            $parent = get_term($term->parent, \WILA_Content_Targets::category_taxonomy());
+            $parent = get_term($term->parent, Settings::category_taxonomy());
             $parent_link = $parent && !is_wp_error($parent) ? get_term_link($parent) : null;
             if ($parent_link && !is_wp_error($parent_link)) $context['parent_category'] = array('name' => $parent->name, 'url' => $parent_link);
         }
@@ -208,15 +209,15 @@ final class ContentTargetRepository {
      */
     public function current_content($kind, $id) {
         $id = absint($id);
-        if (!$id || !\WILA_Content_Targets::is_target_kind($kind) || !\WILA_Content_Targets::kind_available($kind)) {
+        if (!$id || !Settings::is_target_kind($kind) || !Settings::kind_available($kind)) {
             return new \WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
         }
-        return $kind === \WILA_Content_Targets::KIND_PRODUCT ? $this->current_product($id) : $this->current_category($id);
+        return $kind === Settings::KIND_PRODUCT ? $this->current_product($id) : $this->current_category($id);
     }
 
     private function current_product($id) {
         $post = get_post($id);
-        if (!$post || $post->post_type !== \WILA_Content_Targets::product_post_type()) {
+        if (!$post || $post->post_type !== Settings::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         $seo = $this->seo->read_post_seo($id);
@@ -229,7 +230,7 @@ final class ContentTargetRepository {
     }
 
     private function current_category($id) {
-        $term = get_term($id, \WILA_Content_Targets::category_taxonomy());
+        $term = get_term($id, Settings::category_taxonomy());
         if (!$term || is_wp_error($term)) {
             return new \WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
@@ -238,7 +239,7 @@ final class ContentTargetRepository {
             'title'   => $term->name,
             'url'     => is_wp_error($link) ? '' : $link,
             'content' => $term->description,
-            'seo'     => $this->seo->read_term_seo(\WILA_Content_Targets::category_taxonomy(), $id),
+            'seo'     => $this->seo->read_term_seo(Settings::category_taxonomy(), $id),
         );
     }
 
@@ -248,7 +249,7 @@ final class ContentTargetRepository {
     public function apply($kind, $id, $data) {
         $id = absint($id);
         $content = isset($data['content']) ? \Khazan\Services\Content\ContentGuard::wrap(wp_kses_post($data['content'])) : '';
-        if (!$id || !\WILA_Content_Targets::is_target_kind($kind) || !\WILA_Content_Targets::kind_available($kind) || trim($content) === '') {
+        if (!$id || !Settings::is_target_kind($kind) || !Settings::kind_available($kind) || trim($content) === '') {
             return new \WP_Error('missing_apply_content', 'مقصد و محتوای انتشار الزامی هستند.', array('status' => 400));
         }
 
@@ -260,7 +261,7 @@ final class ContentTargetRepository {
         );
 
         $mode = isset($data['mode']) ? sanitize_key($data['mode']) : 'replace';
-        if ($kind === \WILA_Content_Targets::KIND_PRODUCT) return $this->apply_to_product($id, $content, $seo, $mode);
+        if ($kind === Settings::KIND_PRODUCT) return $this->apply_to_product($id, $content, $seo, $mode);
         return $this->apply_to_category($id, $content, $seo);
     }
 
@@ -276,7 +277,7 @@ final class ContentTargetRepository {
      */
     public function create_review_draft($id, $content, $seo) {
         $post = get_post($id);
-        if (!$post || $post->post_type !== \WILA_Content_Targets::product_post_type()) {
+        if (!$post || $post->post_type !== Settings::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         $type = get_post_type_object($post->post_type);
@@ -285,21 +286,21 @@ final class ContentTargetRepository {
         }
         $draft_id = wp_insert_post(array('post_type' => $post->post_type, 'post_status' => 'draft', 'post_title' => '[بازبینی] ' . $post->post_title, 'post_content' => $content), true);
         if (is_wp_error($draft_id)) return $draft_id;
-        update_post_meta($draft_id, '_wila_source_product', $id);
+        update_post_meta($draft_id, Settings::META_SOURCE_PRODUCT, $id);
         $this->write_post_seo($draft_id, $seo);
         return array('target_id' => $draft_id, 'edit_url' => get_edit_post_link($draft_id, 'raw'), 'view_url' => '');
     }
 
     private function apply_to_product($id, $content, $seo, $mode = 'replace') {
         $post = get_post($id);
-        if (!$post || $post->post_type !== \WILA_Content_Targets::product_post_type()) {
+        if (!$post || $post->post_type !== Settings::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         if (!current_user_can('edit_post', $id)) {
             return new \WP_Error('cannot_edit_target', 'اجازه ویرایش این محصول را ندارید.', array('status' => 403));
         }
         if ($mode === 'draft') return $this->create_review_draft($id, $content, $seo);
-        update_post_meta($id, '_wila_previous_content', $post->post_content);
+        update_post_meta($id, Settings::META_PREVIOUS_CONTENT, $post->post_content);
         $new_content = $mode === 'append'
             ? \Khazan\Services\Content\ContentGuard::wrap(\Khazan\Services\Content\ContentGuard::unwrap($post->post_content) . "\n\n" . \Khazan\Services\Content\ContentGuard::unwrap($content))
             : $content;
@@ -311,20 +312,20 @@ final class ContentTargetRepository {
     }
 
     private function apply_to_category($id, $content, $seo) {
-        $term = get_term($id, \WILA_Content_Targets::category_taxonomy());
+        $term = get_term($id, Settings::category_taxonomy());
         if (!$term || is_wp_error($term)) {
             return new \WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
         if (!current_user_can('edit_term', $id)) {
             return new \WP_Error('cannot_edit_target', 'اجازه ویرایش این دسته‌بندی را ندارید.', array('status' => 403));
         }
-        update_term_meta($id, '_wila_previous_description', $term->description);
-        $result = wp_update_term($id, \WILA_Content_Targets::category_taxonomy(), array('description' => $content));
+        update_term_meta($id, Settings::META_PREVIOUS_DESCRIPTION, $term->description);
+        $result = wp_update_term($id, Settings::category_taxonomy(), array('description' => $content));
         if (is_wp_error($result)) return $result;
 
-        $this->seo->write_term_seo(\WILA_Content_Targets::category_taxonomy(), $id, $seo);
+        $this->seo->write_term_seo(Settings::category_taxonomy(), $id, $seo);
         $link = get_term_link($term);
-        return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, \WILA_Content_Targets::category_taxonomy(), \WILA_Content_Targets::product_post_type()), 'view_url' => is_wp_error($link) ? '' : $link);
+        return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, Settings::category_taxonomy(), Settings::product_post_type()), 'view_url' => is_wp_error($link) ? '' : $link);
     }
 
     public function find_product_id_by_title($name) {
@@ -332,7 +333,7 @@ final class ContentTargetRepository {
         if ($name === '') return 0;
         return (int) $wpdb->get_var($wpdb->prepare(
             "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_title = %s AND post_status IN ('draft', 'pending', 'private', 'publish') ORDER BY ID DESC LIMIT 1",
-            \WILA_Content_Targets::product_post_type(),
+            Settings::product_post_type(),
             $name
         ));
     }
@@ -342,11 +343,11 @@ final class ContentTargetRepository {
      */
     public function create_draft_product($row) {
         if ($row['name'] === '') return new \WP_Error('missing_product_name', 'برای ساخت محصول جدید، نام محصول در ردیف الزامی است.', array('status' => 400));
-        $type = get_post_type_object(\WILA_Content_Targets::product_post_type());
+        $type = get_post_type_object(Settings::product_post_type());
         if (!$type || !current_user_can($type->cap->create_posts)) return new \WP_Error('cannot_create_product', 'اجازه ساخت محصول جدید را ندارید.', array('status' => 403));
 
         $post_id = wp_insert_post(array(
-            'post_type'   => \WILA_Content_Targets::product_post_type(),
+            'post_type'   => Settings::product_post_type(),
             'post_status' => 'draft',
             'post_title'  => $row['name'],
             'post_name'   => $row['slug'] !== '' ? sanitize_title(\Khazan\Services\Csv\TextNormalizer::normalize_slug($row['slug'])) : '',
@@ -355,12 +356,48 @@ final class ContentTargetRepository {
     }
 
     /**
+     * انکرتکست لینک به یک محصول: دقیقاً کلیدواژه کانونی مقصد، بدون کوتاه‌سازی یا تغییر.
+     * ترتیب منبع: RankMath، Yoast، سپس ستون کلیدواژه کانونی شیت CSV که هنگام آپلود ثبت شده است.
+     * اگر هیچ‌کدام نبود رشته خالی برمی‌گردد و لینک قفل‌شده ساخته نمی‌شود.
+     */
+    public function product_link_anchor($id) {
+        $rank = SeoMetaService::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
+        if ($rank) return $rank[0];
+        foreach (array('_yoast_wpseo_focuskw', \Khazan\Core\Settings::META_CSV_FOCUS) as $meta_key) {
+            $value = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, $meta_key, true)));
+            if ($value !== '') return $value;
+        }
+        return '';
+    }
+
+    /**
+     * کلیدواژه کانونی ستون شیت را روی محصول ثبت می‌کند تا محصولات دیگر پیش از تولید محتوای آن هم بتوانند با انکر درست به آن لینک دهند
+     */
+    public function remember_csv_focus($id, $focus) {
+        $focus = trim(preg_replace('/\s+/u', ' ', sanitize_text_field((string) $focus)));
+        if (!$id || $focus === '' || get_post_type($id) !== \Khazan\Core\Settings::product_post_type()) return;
+        update_post_meta($id, \Khazan\Core\Settings::META_CSV_FOCUS, $focus);
+    }
+
+    /**
+     * شناسه محصولِ یک لینک داخلی؛ برای اصلاح انکرتکست پس از تولید محتوا
+     */
+    public function product_id_from_url($url) {
+        $url = html_entity_decode((string) $url, ENT_QUOTES, 'UTF-8');
+        $site_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+        if ($host !== '' && $host !== $site_host) return 0;
+        $id = url_to_postid($url);
+        return $id && get_post_type($id) === \Khazan\Core\Settings::product_post_type() ? (int) $id : 0;
+    }
+
+    /**
      * Creates a blog draft (title, content, English slug) and writes its SEO meta.
      *
      * @return int|\WP_Error Post ID on success.
      */
     public function create_blog_draft($title, $content, $slug, array $seo) {
-        $blog_post_type = apply_filters('wila_blog_post_type', 'blog');
+        $blog_post_type = apply_filters(Settings::FILTER_BLOG_POST_TYPE, 'blog');
         if (!post_type_exists($blog_post_type)) {
             return new \WP_Error('blog_post_type_not_found', 'نوع محتوای «وبلاگ» یافت نشد. با فیلتر wila_blog_post_type نام post type وبلاگ را تنظیم کنید.', array('status' => 400));
         }

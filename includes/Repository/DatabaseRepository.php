@@ -7,6 +7,8 @@
 
 namespace Khazan\Repository;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -14,10 +16,10 @@ if (!defined('ABSPATH')) {
 final class DatabaseRepository {
 
     /** Single schema-version option. */
-    const VERSION_OPTION = 'wila_db_version';
+    const VERSION_OPTION = Settings::OPT_DB_VERSION;
 
     /** Previous option that tracked the installed schema version (migrated, then removed). */
-    const LEGACY_VERSION_OPTION = 'wila_db_installed_version';
+    const LEGACY_VERSION_OPTION = Settings::OPT_DB_INSTALLED_VERSION_LEGACY;
 
     /** @var \wpdb */
     private $wpdb;
@@ -29,15 +31,15 @@ final class DatabaseRepository {
     // ---- table names ----
 
     public function links_table() {
-        return $this->wpdb->prefix . 'wila_internal_links';
+        return $this->wpdb->prefix . Settings::TABLE_LINKS;
     }
 
     public function bulk_items_table() {
-        return $this->wpdb->prefix . 'wila_bulk_items';
+        return $this->wpdb->prefix . Settings::TABLE_BULK_ITEMS;
     }
 
     public function content_history_table() {
-        return $this->wpdb->prefix . 'wila_content_history';
+        return $this->wpdb->prefix . Settings::TABLE_CONTENT_HISTORY;
     }
 
     // ---- schema & versioning ----

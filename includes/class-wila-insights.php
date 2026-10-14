@@ -2,6 +2,12 @@
 /**
  * قابلیت آزمایشی مصورسازی ساختار لینک‌ها و Quick Winهای Search Console.
  *
+ * وضعیت: «پارک‌شده» (inactive). این کلاس در Plugin::$legacy_files بارگذاری نمی‌شود، مسیرهای
+ * /insights/* ثبت نمی‌شوند و assets/js/wila-insights.js هیچ صفحه‌ای را نمی‌سازد
+ * (المان #wila-insights-root وجود ندارد). وابستگی‌هایش (WILA_Scanner، WILA_DB) همچنان
+ * از طریق لایه‌های ارجاع‌دهنده معتبرند. برای فعال‌سازی باید یک صفحه/تب مجزا، ثبت مسیرها
+ * در Khazan\Http و وارد کردن Access Token در رابط کاربری اضافه شود (docs/ARCHITECTURE.md).
+ *
  * @package WP_Internal_Link_Analyzer
  */
 

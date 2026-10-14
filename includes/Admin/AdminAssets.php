@@ -31,9 +31,18 @@ final class AdminAssets {
 
         wp_enqueue_style('wila-admin-style', $this->url('assets/css/wila-admin.css'), array(), WILA_VERSION);
 
-        wp_enqueue_script('khazan-leaves', $this->url('assets/js/khazan-leaves.js'), array(), $this->version('assets/js/khazan-leaves.js'), true);
-        wp_enqueue_script('khazan-csv', $this->url('assets/js/khazan-csv.js'), array(), $this->version('assets/js/khazan-csv.js'), true);
-        wp_enqueue_script('wila-admin-script', $this->url('assets/js/wila-admin.js'), array('khazan-leaves', 'khazan-csv'), $this->version('assets/js/wila-admin.js'), true);
+        // ترتیب بارگذاری: ابزارها -> CSV -> صف و تب‌ها -> هسته (wila-admin.js)
+        $scripts = array(
+            'khazan-leaves' => array('assets/js/khazan-leaves.js', array()),
+            'khazan-utils'  => array('assets/js/khazan-utils.js', array()),
+            'khazan-csv'    => array('assets/js/khazan-csv.js', array()),
+            'khazan-queue'  => array('assets/js/khazan-queue.js', array('khazan-utils', 'khazan-csv')),
+            'khazan-tabs'   => array('assets/js/khazan-tabs.js', array('khazan-utils')),
+            'wila-admin-script' => array('assets/js/wila-admin.js', array('khazan-leaves', 'khazan-utils', 'khazan-csv', 'khazan-queue', 'khazan-tabs')),
+        );
+        foreach ($scripts as $handle => $script) {
+            wp_enqueue_script($handle, $this->url($script[0]), $script[1], $this->version($script[0]), true);
+        }
 
         wp_localize_script('wila-admin-script', 'wilaData', array(
             'restUrl'      => esc_url_raw(rest_url()),

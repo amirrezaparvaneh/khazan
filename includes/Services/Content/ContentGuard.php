@@ -7,6 +7,8 @@
 
 namespace Khazan\Services\Content;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -54,7 +56,7 @@ final class ContentGuard {
      * اصطلاحات تخصصی که اگر در متن باشند انکرتکست طبیعی‌تری برای لینک مرجع‌اند؛ با فیلتر wila_anchor_terms قابل تغییر است
      */
     private static function specialist_terms() {
-        $terms = apply_filters('wila_anchor_terms', array(
+        $terms = apply_filters(Settings::FILTER_ANCHOR_TERMS, array(
             'استانداردهای جهانی ارگونومی', 'ارگونومی پا', 'ارگونومی', 'چرم طبیعی', 'چرم گاوی', 'چرم مصنوعی',
             'زیره پلی‌یورتان', 'زیره لاستیکی', 'زیره EVA', 'پلی‌یورتان', 'آناتومی پا', 'قوس کف پا', 'کفی طبی',
             'جذب ضربه', 'میکروفایبر', 'استاندارد ایزو', 'استاندارد',
@@ -111,7 +113,7 @@ final class ContentGuard {
      * الگوها با فیلتر wila_reference_url_templates قابل تغییرند؛ هر الگو باید %s برای عبارت جستجو داشته باشد.
      */
     public static function pick_reference_url($term) {
-        $templates = apply_filters('wila_reference_url_templates', array(
+        $templates = apply_filters(Settings::FILTER_REFERENCE_URL_TEMPLATES, array(
             'https://fa.wikipedia.org/wiki/Special:Search?search=%s',
             'https://en.wikipedia.org/w/index.php?search=%s',
             'https://scholar.google.com/scholar?q=%s',
@@ -323,8 +325,8 @@ final class ContentGuard {
             $url = untrailingslashit(html_entity_decode($m[3], ENT_QUOTES, 'UTF-8'));
             $anchor = isset($normalized[$url]) ? $normalized[$url] : '';
             if ($anchor === '') {
-                $product_id = \WILA_Content_Targets::product_id_from_url($url);
-                if ($product_id) $anchor = \WILA_Content_Targets::product_link_anchor($product_id);
+                $product_id = (new \Khazan\Repository\ContentTargetRepository())->product_id_from_url($url);
+                if ($product_id) $anchor = (new \Khazan\Repository\ContentTargetRepository())->product_link_anchor($product_id);
             }
             if ($anchor === '' || trim(wp_strip_all_tags($m[4])) === $anchor) return $m[0];
             return $m[1] . esc_html($anchor) . $m[5];

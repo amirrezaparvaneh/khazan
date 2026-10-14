@@ -10,6 +10,7 @@ namespace Khazan\Services\Csv;
 
 use Khazan\Repository\ContentTargetRepository;
 use Khazan\Repository\DatabaseRepository;
+use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -48,8 +49,8 @@ final class BulkRowProcessor {
         if (is_wp_error($resolved)) return $resolved;
         list($product_id, $created, $mode) = $resolved;
 
-        \WILA_Content_Targets::remember_csv_focus($product_id, $row['focus_keyword']);
-        $context = $this->targets->get_context(\WILA_Content_Targets::KIND_PRODUCT, $product_id);
+        (new \Khazan\Repository\ContentTargetRepository())->remember_csv_focus($product_id, $row['focus_keyword']);
+        $context = $this->targets->get_context(Settings::KIND_PRODUCT, $product_id);
         if (is_wp_error($context)) return $context;
         if (function_exists('set_time_limit')) @set_time_limit(240);
 
@@ -123,14 +124,14 @@ final class BulkRowProcessor {
     private function build_params($product_id, array $row, array $context, array $internal_links) {
         $focus = $row['focus_keyword'] !== '' ? $row['focus_keyword'] : $context['title'];
         return array(
-            'content_kind'      => \WILA_Content_Targets::KIND_PRODUCT,
+            'content_kind'      => Settings::KIND_PRODUCT,
             'target_id'         => $product_id,
             'h1_title'          => $context['title'],
             'focus_keyword'     => $focus,
             'long_tail'         => $row['related_keywords'],
             'seo_synonyms'      => $row['related_keywords'],
             'word_count'        => 1000,
-            'content_type'      => \WILA_Content_Targets::kind_label(\WILA_Content_Targets::KIND_PRODUCT),
+            'content_type'      => Settings::kind_label(Settings::KIND_PRODUCT),
             'funnel_stage'      => 'BOFU',
             'description'       => '',
             'internal_links'    => $internal_links,
@@ -163,7 +164,7 @@ final class BulkRowProcessor {
     private function save(array $params, array $result, $product_id, $mode, $inject_seo) {
         $this->database->insert_content_history($params, $result);
 
-        return $this->targets->apply(\WILA_Content_Targets::KIND_PRODUCT, $product_id, array(
+        return $this->targets->apply(Settings::KIND_PRODUCT, $product_id, array(
             'content'          => $result['content'],
             'mode'             => $mode,
             'seo_title'        => $inject_seo ? $result['seo_title'] : '',

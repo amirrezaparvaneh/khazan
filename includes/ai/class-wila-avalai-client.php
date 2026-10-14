@@ -6,6 +6,7 @@
  * @package WP_Internal_Link_Analyzer
  */
 
+use Khazan\Core\Settings;
 use Khazan\Services\Ai\AiResponseDecoder;
 use Khazan\Services\Ai\AvalaiHttpClient;
 use Khazan\Services\Ai\ContentParser;
@@ -18,7 +19,7 @@ if (!defined('ABSPATH')) {
 
 class WILA_AvalAI_Client {
 
-    const MODEL = 'gpt-5.4-mini';
+    const MODEL = Settings::AI_MODEL;
 
     private $provider;
     private $api_key;
@@ -28,12 +29,12 @@ class WILA_AvalAI_Client {
     private $entities;
 
     public function __construct() {
-        $this->provider = 'avalai';
-        $this->api_key  = trim(get_option('wila_avalai_api_key', ''));
+        $this->provider = Settings::AI_PROVIDER;
+        $this->api_key  = Settings::avalai_api_key();
         $this->model    = self::MODEL;
         $this->http     = new AvalaiHttpClient($this->api_key, $this->model);
         $this->entities = new SiteEntityRepository();
-        $this->prompts  = new PromptBuilder(trim(get_option('wila_homepage_keywords', '')));
+        $this->prompts  = new PromptBuilder(trim(Settings::homepage_keywords()));
     }
 
     public function is_configured() {
@@ -84,7 +85,7 @@ class WILA_AvalAI_Client {
             if (empty($candidates)) return new WP_Error('no_candidates', 'هیچ محتوایی برای پیشنهاد پیدا نشد.');
 
             $prompt = $this->prompts->link_analysis($target_info, $candidates);
-            $cache_key = 'wila_suggest_v2_' . md5($this->provider . $this->model . $prompt);
+            $cache_key = Settings::TRANSIENT_SUGGEST_PREFIX . md5($this->provider . $this->model . $prompt);
             $cached = get_transient($cache_key);
             if (false !== $cached) return $cached;
 

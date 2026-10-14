@@ -7,6 +7,8 @@
 
 namespace Khazan\Services\Ai;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -28,7 +30,7 @@ final class PromptBuilder {
     }
 
     public function kind($params) {
-        return \WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        return Settings::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
     }
 
     public function seo_repairs($segments, $instructions) {
@@ -40,7 +42,7 @@ final class PromptBuilder {
     public function outline($params) {
         $kind = $this->kind($params);
         $prompt = $this->content_system($params) . "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
-        if ($kind === \WILA_Content_Targets::KIND_ARTICLE) {
+        if ($kind === Settings::KIND_ARTICLE) {
             $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
             $prompt .= '\nدر همین JSON فیلدهای seo_title، meta_description، keyword_synonyms (رشته با ویرگول)، slug (انگلیسی)، entities (آرایه موجودیت‌ها) و evidence_needed (آرایه شواهد لازم برای بازبینی انسانی) را هم اضافه کن. برای هر هدینگ word_budget حداکثر ۲۲۰ تعیین کن.';
         } else {
@@ -52,7 +54,7 @@ final class PromptBuilder {
 
     public function full_content($params, $outline) {
         $kind = $this->kind($params);
-        $is_article = $kind === \WILA_Content_Targets::KIND_ARTICLE;
+        $is_article = $kind === Settings::KIND_ARTICLE;
 
         $prompt = $this->content_system($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
@@ -96,7 +98,7 @@ final class PromptBuilder {
     }
 
     public function bulk_product($params, $row) {
-        $kind = \WILA_Content_Targets::KIND_PRODUCT;
+        $kind = Settings::KIND_PRODUCT;
         $labels = array(
             'name' => 'نام محصول', 'focus_keyword' => 'کلیدواژه کانونی', 'related_keywords' => 'کلیدواژه‌های فرعی',
             'description' => 'توضیحات', 'notes' => 'یادداشت', 'sole' => 'زیره', 'upper' => 'رویه', 'lining' => 'آستر و کفی', 'general' => 'ویژگی‌های کلی',
@@ -195,7 +197,7 @@ final class PromptBuilder {
 
     public function content_system($params) {
         $kind = $this->kind($params);
-        if ($kind !== \WILA_Content_Targets::KIND_ARTICLE) return $this->commerce_system($params, $kind) . "\n" . \Khazan\Services\Content\ContentRules::writing_rules($kind);
+        if ($kind !== Settings::KIND_ARTICLE) return $this->commerce_system($params, $kind) . "\n" . \Khazan\Services\Content\ContentRules::writing_rules($kind);
         $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
         $prompt = "شما نویسنده ارشد محتوای فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا: " . $data . "\n" .
             "الزامات سئو برای طرح و مقاله: محتوای اصیل، مفید و کاربرمحور مطابق نیت جستجو بنویس؛ رتبه گوگل یا امتیاز Yoast را تضمین نکن. موجودیت‌های اصلی، ویژگی‌ها، روابط و پرسش‌های مرتبط را بدون حاشیه‌روی پوشش بده. E-E-A-T: تجربه دست‌اول، آزمایش، آمار، نقل‌قول، مدرک و هویت متخصص را هرگز نساز؛ فقط از شواهد داده‌شده استفاده کن و نبود شواهد را روشن بگو. ادعاهای حساس پزشکی/مالی/حقوقی نیازمند منبع معتبر و بازبینی متخصص‌اند. پاسخ مستقیم را در مقدمه بده.\n" .
@@ -212,7 +214,7 @@ final class PromptBuilder {
 
     private function commerce_system($params, $kind) {
         $data = wp_json_encode($params, JSON_UNESCAPED_UNICODE);
-        $is_product = $kind === \WILA_Content_Targets::KIND_PRODUCT;
+        $is_product = $kind === Settings::KIND_PRODUCT;
         $prompt = "شما نویسنده ارشد محتوای فروشگاهی فارسی و متخصص سئو در سال ۲۰۲۶ هستید. مشخصات محتوا و داده‌های واقعی صفحه مقصد (کلید target): " . $data . "\n" .
             "فقط از داده‌های کلید target و توضیحات کاربر استفاده کن. مشخصات فنی، قیمت، گارانتی، تخفیف، موجودی، جنس، ابعاد، آمار، نظر مشتری یا ادعای رتبه را هرگز نساز؛ اگر اطلاعاتی نیست درباره‌اش ننویس و آن را در evidence_needed بیاور. محتوای قبلی (current_content) فقط برای حفظ اطلاعات درست است و باید بازنویسی و بهبود شود، نه کپی.\n" .
             "نیت جستجو تجاری/تراکنشی است: مفید، شفاف و کاربرمحور بنویس، نه مقاله آموزشی. عبارت کانونی را طبیعی در ۱۰۰ واژه نخست، عنوان سئو و متا و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها بیاور و از keyword stuffing پرهیز کن. جمله‌ها کوتاه و معلوم، پاراگراف‌ها کوتاه و هیچ بخشی بیش از ۲۲۰ واژه بدون H2/H3 نباشد. H1 نساز و H3 بدون H2 نساز.\n";

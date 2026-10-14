@@ -8,13 +8,15 @@
 
 namespace Khazan\Services\Csv;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
 final class ProductMatcher {
 
-    const GENERATED_META = '_wila_csv_generated_at';
+    const GENERATED_META = Settings::META_CSV_GENERATED;
 
     /**
      * تطبیق دومرحله‌ای: ۱) نام محصول ۲) نامک
@@ -22,7 +24,7 @@ final class ProductMatcher {
      * @return array|\WP_Error
      */
     public static function match_rows($rows, $file_name = '') {
-        if (!post_type_exists(\WILA_Content_Targets::product_post_type())) {
+        if (!post_type_exists(Settings::product_post_type())) {
             return new \WP_Error('product_type_unavailable', 'نوع محتوای محصول در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
         }
         list($by_title, $by_slug) = self::build_index();
@@ -43,7 +45,7 @@ final class ProductMatcher {
             }
             // پیش‌ثبت کلیدواژه کانونی شیت تا لینک‌های محصولات دیگر به این محصول از ابتدا انکر درست داشته باشند.
             if ($found && !empty($row['focus_keyword'])) {
-                \WILA_Content_Targets::remember_csv_focus($found['id'], $row['focus_keyword']);
+                (new \Khazan\Repository\ContentTargetRepository())->remember_csv_focus($found['id'], $row['focus_keyword']);
             }
             $matches[] = $found
                 ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status'], 'generated' => self::generated_info($found['id']))
@@ -72,7 +74,7 @@ final class ProductMatcher {
         $by_title = array();
         $by_slug  = array();
         $posts = get_posts(array(
-            'post_type'      => \WILA_Content_Targets::product_post_type(),
+            'post_type'      => Settings::product_post_type(),
             'post_status'    => array('publish', 'draft', 'pending', 'private'),
             'posts_per_page' => -1,
             'no_found_rows'  => true,

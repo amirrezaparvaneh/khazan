@@ -8,6 +8,8 @@
 
 namespace Khazan\Services\Ai;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -80,14 +82,14 @@ final class ContentParser {
         }
 
         $slug = sanitize_title($slug);
-        if ($slug === '' && self::kind($params) === \WILA_Content_Targets::KIND_ARTICLE) {
+        if ($slug === '' && self::kind($params) === Settings::KIND_ARTICLE) {
             $slug = sanitize_title(remove_accents($params['h1_title']));
         }
-        if ($slug === '' && self::kind($params) === \WILA_Content_Targets::KIND_ARTICLE) {
+        if ($slug === '' && self::kind($params) === Settings::KIND_ARTICLE) {
             $slug = sanitize_title(remove_accents($params['focus_keyword']));
         }
 
-        if (self::kind($params) !== \WILA_Content_Targets::KIND_ARTICLE) {
+        if (self::kind($params) !== Settings::KIND_ARTICLE) {
             // Product and category pages carry no image boxes or featured image prompt and never link to the homepage.
             $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
             $featured_prompt = '';
@@ -183,7 +185,7 @@ final class ContentParser {
             }, $title);
             $title = trim(preg_replace('/\s{2,}/u', ' ', $title));
         } elseif (empty($found[0])) {
-            $defaults = array(\WILA_Content_Targets::KIND_ARTICLE => '📘', \WILA_Content_Targets::KIND_PRODUCT => '🛒', \WILA_Content_Targets::KIND_CATEGORY => '🛍️');
+            $defaults = array(Settings::KIND_ARTICLE => '📘', Settings::KIND_PRODUCT => '🛒', Settings::KIND_CATEGORY => '🛍️');
             $title .= ' ' . $defaults[$kind];
         }
         return $title;
@@ -262,7 +264,7 @@ final class ContentParser {
 
     public static function normalize_outline($outline, $kind) {
         if (is_array($outline) && !is_wp_error($outline)) {
-            if ($kind !== \WILA_Content_Targets::KIND_ARTICLE) unset($outline['slug'], $outline['image_positions']);
+            if ($kind !== Settings::KIND_ARTICLE) unset($outline['slug'], $outline['image_positions']);
             if (isset($outline['seo_title'])) $outline['seo_title'] = self::normalize_seo_title($outline['seo_title'], $kind);
         }
         return $outline;
@@ -273,7 +275,7 @@ final class ContentParser {
      */
     public static function full_content($raw, $params) {
         $kind       = self::kind($params);
-        $is_article = $kind === \WILA_Content_Targets::KIND_ARTICLE;
+        $is_article = $kind === Settings::KIND_ARTICLE;
 
         $result = self::parse_full_content_payload($raw, $params);
         if (is_wp_error($result)) return $result;
@@ -289,7 +291,7 @@ final class ContentParser {
      * @return array|\WP_Error
      */
     public static function bulk_product_result($raw, $params, $need_title) {
-        $kind   = \WILA_Content_Targets::KIND_PRODUCT;
+        $kind   = Settings::KIND_PRODUCT;
         $result = self::parse_full_content_payload($raw, $params);
         if (is_wp_error($result)) return $result;
         $result['seo_title'] = $need_title ? self::normalize_seo_title($result['seo_title'], $kind) : '';
@@ -325,6 +327,6 @@ final class ContentParser {
     }
 
     private static function kind($params) {
-        return \WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        return Settings::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
     }
 }

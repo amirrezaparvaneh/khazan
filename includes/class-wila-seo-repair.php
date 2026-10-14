@@ -64,7 +64,7 @@ class WILA_SEO_Repair {
             if (!is_string($segment) || $segment !== wp_strip_all_tags($segment)) return new WP_Error('invalid_segment', 'فقط قطعه متن ساده مجاز است.', array('status' => 400));
         }
         // Bound concurrent requests and API spend per editor.
-        $lock = 'wila_repair_' . get_current_user_id();
+        $lock = \Khazan\Core\Settings::TRANSIENT_REPAIR_LOCK_PREFIX . get_current_user_id();
         if (get_transient($lock)) return new WP_Error('repair_busy', 'بررسی در جریان است؛ کمی بعد تلاش کنید.', array('status' => 429));
         set_transient($lock, 1, 190);
         try {

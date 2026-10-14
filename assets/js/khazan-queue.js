@@ -1,0 +1,242 @@
+/**
+ * Khazan - bulk CSV queue: state, row selection, start/pause/stop, progress and log.
+ * Mixed into the dashboard app by wila-admin.js (methods run with `this` === app).
+ * Author: امیــــــــررضا پـروانه
+ */
+(function () {
+  'use strict';
+
+  const { toPersianDigits, formatJalali, shortJalali, escapeHtml } = window.KhazanUtils;
+
+  const methods = {
+    // ---------- تولید انبوه از شیت (CSV) ----------
+    // پارس و تشخیص ستون‌های CSV در assets/js/khazan-csv.js قرار دارد
+    parseCsv: function (text) { return window.KhazanCsv.parse(text); },
+    mapCsvHeader: function (header) { return window.KhazanCsv.mapHeader(header); },
+    findCsvHeaderRow: function (table) { return window.KhazanCsv.findHeaderRow(table); },
+    isApprovedValue: function (value) { return window.KhazanCsv.isApproved(value); },
+
+    // دکمه سه‌بعدی؛ متن همیشه داخل لایه .btn-top قرار می‌گیرد
+    btn3d: function (id, variant, text, attrs) {
+      return `<button type="button" id="${id}" class="khazan-3d-btn ${variant}" ${attrs || ''}><span class="btn-top">${text}</span><span class="btn-bottom"></span><span class="btn-base"></span></button>`;
+    },
+
+    formatFileSize: function (bytes) {
+      if (!bytes) return '';
+      return bytes < 1024 * 1024 ? toPersianDigits((bytes / 1024).toFixed(1)) + ' کیلوبایت' : toPersianDigits((bytes / 1024 / 1024).toFixed(2)) + ' مگابایت';
+    },
+
+    loadBulkFile: async function (file) {
+      const app = this;
+      if (!file) return;
+      const b = this.state.bulk;
+      try {
+        const table = this.parseCsv(await file.text());
+        if (table.length < 2) throw new Error('فایل خالی است یا ردیف داده ندارد.');
+        const found = this.findCsvHeaderRow(table);
+        if (!found) {
+          const seen = table.slice(0, 5).map(r => r.map(c => String(c).trim()).filter(Boolean).join(' | ')).filter(Boolean);
+          console.log('WILA CSV headers (first rows):', seen);
+          throw new Error('ستون «نام محصول» یا «نامک» در فایل پیدا نشد. هدرهای خوانده‌شده: ' + (seen[0] || '—'));
+        }
+        const map = found.map;
+        console.log('WILA CSV header row:', found.index + 1, table[found.index], map);
+        b.rows = table.slice(found.index + 1).map(cells => {
+          const row = { approved: false, run: '', match: null };
+          map.forEach((key, idx) => { if (key) row[key] = (cells[idx] || '').trim(); });
+          row.approved = this.isApprovedValue(row.approved);
+          return row;
+        }).filter(r => r.name || r.slug || r.product_url);
+        b.fileName = file.name; b.fileSize = file.size; b.selected = {}; b.log = []; b.filter = 'all'; b.view = 'found'; b.matching = true;
+        this.render();
+        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ file_name: b.fileName, rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || r.product_url || '', focus_keyword: r.focus_keyword || '' })) }) });
+        if (!res.success) throw new Error(res.message || 'تطبیق انجام نشد.');
+        const hasApproval = map.includes('approved');
+        res.matches.forEach((m, i) => {
+          b.rows[i].match = m;
+          // ردیف‌های تولیدشده یا آپلودشده قبلی به‌طور پیش‌فرض انتخاب نمی‌شوند
+          if (m.matched && !m.generated && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
+        });
+        const already = res.matches.filter(m => m.matched && m.generated).length;
+        const uploaded = res.matches.filter(m => m.history).length;
+        const fresh = res.matches.filter(m => !m.history && !m.generated).length;
+        app.toast(`${toPersianDigits(res.matches.filter(m => m.matched).length)} از ${toPersianDigits(b.rows.length)} ردیف به محصولات سایت متصل شد. ${toPersianDigits(fresh)} ردیف جدید و ${toPersianDigits(uploaded)} ردیف قبلاً آپلود شده است.${already ? ` ${toPersianDigits(already)} مورد قبلاً تولید شده و انتخاب نشد.` : ''}`);
+      } catch (e) { b.rows = []; app.toast('خطا: ' + e.message); }
+      b.matching = false;
+      this.render();
+    },
+
+    bulkVisibleIndexes: function () {
+      const b = this.state.bulk;
+      return b.rows.map((r, i) => i).filter(i => {
+        const m = b.rows[i].match;
+        // فیلتر وضعیت فقط روی «محتوا تولید شده» است؛ ردیف‌های صرفاً آپلودشده در انتظار تولید محسوب می‌شوند
+        const generated = !!(m && m.generated);
+        if (b.status === 'pending' && generated) return false;
+        if (b.status === 'generated' && !generated) return false;
+        const matched = !!(m && m.matched);
+        return b.view === 'missing' ? !matched : matched;
+      });
+    },
+
+    // ردیف‌های مجاز برای «انتخاب همه»: متصل‌شده و بدون سابقه تولید (موارد قبلاً تولیدشده فقط دستی انتخاب می‌شوند)
+    bulkSelectableIndexes: function () {
+      const b = this.state.bulk;
+      // در فیلتر «قبلاً تولیدشده‌ها» همه ردیف‌های قابل‌مشاهده برای تولید مجدد قابل انتخابند
+      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && (b.status === 'generated' || !(b.rows[i].match && b.rows[i].match.generated)));
+    },
+
+    // ردیف متصل‌شده، یا ردیف یافت‌نشده وقتی «ایجاد خودکار محصول پیش‌نویس» روشن است
+    bulkIsTargetable: function (i) {
+      const b = this.state.bulk, row = b.rows[i];
+      if (row.match && row.match.matched) return true;
+      return b.createMissing && String(row.name || '').trim() !== '';
+    },
+
+    bulkRowTitle: function (row) {
+      return row.match && row.match.title ? row.match.title : (row.name || row.slug || '');
+    },
+
+    bulkLog: function (type, text) {
+      const b = this.state.bulk;
+      b.log.push({ type, text, time: new Date().toLocaleTimeString('fa-IR') });
+      if (b.log.length > 300) b.log.shift();
+    },
+
+    bulkStatusHtml: function (row) {
+      if (row.run === 'running') return '⏳ در حال تولید...';
+      if (row.run === 'done') return `✅ انجام شد${row.editUrl ? ` — <a href="${escapeHtml(row.editUrl)}" target="_blank" rel="noopener">ویرایش</a>` : ''}`;
+      if (row.run === 'error') return `❌ ${escapeHtml(row.error || 'خطا')}`;
+      return '—';
+    },
+
+    bulkProgressHtml: function () {
+      const b = this.state.bulk;
+      const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
+      return b.total ? `<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:6px"><span>${b.running ? (b.paused ? 'متوقف موقت' : 'در حال پردازش...') : 'پایان / توقف'}</span><span>${toPersianDigits(b.done)} از ${toPersianDigits(b.total)} (${toPersianDigits(pct)}٪)</span></div><div class="wila-progress-bar-bg"><div class="wila-progress-bar-fill" style="width:${pct}%"></div></div>` : '';
+    },
+
+    bulkLogHtml: function () {
+      const colors = { ok: '#047857', err: '#b91c1c', info: '#475569' };
+      return this.state.bulk.log.map(l => `<div style="color:${colors[l.type] || colors.info}">[${escapeHtml(l.time)}] ${escapeHtml(l.text)}</div>`).join('');
+    },
+
+    bulkRefreshUi: function () {
+      const b = this.state.bulk;
+      const progress = this.root.querySelector('#wila-bulk-progress'); if (progress) progress.innerHTML = this.bulkProgressHtml();
+      const log = this.root.querySelector('#wila-bulk-log'); if (log) { log.innerHTML = this.bulkLogHtml(); log.scrollTop = log.scrollHeight; }
+      this.root.querySelectorAll('[data-bulk-status]').forEach(cell => { cell.innerHTML = this.bulkStatusHtml(b.rows[cell.getAttribute('data-bulk-status')]); });
+    },
+
+    // single: فقط یک ردیف (دکمه «تولید این ردیف»)؛ ردیف‌های قبلاً تولیدشده هم دوباره تولید می‌شوند
+    startBulk: async function (single) {
+      const app = this;
+      const b = this.state.bulk;
+      if (b.running) return;
+      const isSingle = Number.isInteger(single);
+      const queue = isSingle
+        ? (this.bulkIsTargetable(single) ? [single] : [])
+        : b.rows.map((r, i) => i).filter(i => b.selected[i] && this.bulkIsTargetable(i) && b.rows[i].run !== 'done');
+      if (!queue.length) return app.toast('هیچ ردیف متصل‌شده‌ای برای پردازش انتخاب نشده است.', 'error');
+      queue.forEach(i => { b.rows[i].run = ''; b.rows[i].error = ''; });
+      if (!isSingle && b.mode === 'replace' && !confirm(`توضیحات فعلی ${toPersianDigits(queue.length)} محصول جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
+      Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0 });
+      this.bulkLog('info', `شروع پردازش ${toPersianDigits(queue.length)} محصول.`);
+      this.render();
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      // انتظار قابل‌قطع با دکمه توقف
+      const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
+      const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
+      for (let n = 0; n < queue.length; n++) {
+        const i = queue[n];
+        while (b.paused && !b.stopRequested) await sleep(300);
+        if (b.stopRequested) break;
+        const row = b.rows[i];
+        row.run = 'running'; this.bulkLog('info', `در حال تولید: ${this.bulkRowTitle(row)}`); this.bulkRefreshUi();
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          try {
+            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match && row.match.matched ? row.match.product_id : 0, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks, create_missing: b.createMissing } }) });
+            if (!r.success) {
+              const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err;
+            }
+            if (r.created) row.match = { matched: true, via: 'created', product_id: r.product_id, title: r.title, url: r.url };
+            row.run = 'done'; row.editUrl = r.edit_url; row.match.generated = r.generated;
+            this.bulkLog('ok', `انجام شد: ${this.bulkRowTitle(row)} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
+            break;
+          } catch (e) {
+            const temporary = e.temporary || e instanceof TypeError; // TypeError: خطای شبکه در fetch
+            if (temporary && attempt < 2 && !b.stopRequested) {
+              const delay = 10000 * Math.pow(2, attempt);
+              this.bulkLog('info', `خطای موقت (${e.message}) در ${this.bulkRowTitle(row)}؛ تلاش مجدد ${toPersianDigits(attempt + 1)} از ۲ پس از ${toPersianDigits(delay / 1000)} ثانیه.`);
+              this.bulkRefreshUi();
+              await wait(delay);
+              continue;
+            }
+            row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
+            this.bulkLog('err', `خطا در ${this.bulkRowTitle(row)}: ${row.error}`);
+            break;
+          }
+        }
+        b.done++; this.bulkRefreshUi();
+        // فاصله ۳ ثانیه‌ای بین محصولات برای جلوگیری از Rate Limit
+        if (n < queue.length - 1 && !b.stopRequested) await wait(3000);
+      }
+      this.bulkLog('info', b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش صف به پایان رسید.');
+      b.running = false; b.paused = false;
+      this.render();
+      app.toast(b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش انبوه به پایان رسید.');
+    },
+    bindQueueEvents: function () {
+      const bulk = this.state.bulk;
+      const bulkFile = this.root.querySelector('#wila-bulk-file');
+      if (bulkFile) bulkFile.addEventListener('change', e => this.loadBulkFile(e.target.files[0]));
+      const dropzone = this.root.querySelector('#wila-bulk-dropzone');
+      if (dropzone && !this.state.bulk.running) {
+        ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('is-drag'); }));
+        ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('is-drag'); }));
+        dropzone.addEventListener('drop', e => {
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (!f) return;
+          if (!/\.csv$/i.test(f.name) && f.type !== 'text/csv') { this.toast('خطا: فقط فایل CSV قابل قبوله.'); return; }
+          this.loadBulkFile(f);
+        });
+      }
+      const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
+      this.root.querySelectorAll('.wila-bulk-view').forEach(btn => btn.addEventListener('click', e => { bulk.view = e.currentTarget.getAttribute('data-view'); this.render(); }));
+      const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
+      const bulkLinks = this.root.querySelector('#wila-bulk-links'); if (bulkLinks) bulkLinks.addEventListener('change', e => { bulk.autoLinks = e.target.checked; });
+      const bulkStatus = this.root.querySelector('#wila-bulk-status');
+      if (bulkStatus) bulkStatus.addEventListener('change', e => { bulk.status = e.target.value; this.render(); });
+      const bulkCreate = this.root.querySelector('#wila-bulk-create');
+      if (bulkCreate) bulkCreate.addEventListener('change', e => {
+        bulk.createMissing = e.target.checked;
+        // با خاموش‌شدن گزینه، انتخاب ردیف‌های یافت‌نشده هم برداشته می‌شود
+        if (!bulk.createMissing) Object.keys(bulk.selected).forEach(i => { if (!(bulk.rows[i].match && bulk.rows[i].match.matched)) delete bulk.selected[i]; });
+        this.render();
+      });
+      this.root.querySelectorAll('.wila-bulk-row').forEach(box => box.addEventListener('change', e => { bulk.selected[e.target.dataset.index] = e.target.checked; this.render(); }));
+      this.root.querySelectorAll('.wila-bulk-single').forEach(btn => btn.addEventListener('click', () => this.startBulk(Number(btn.dataset.index))));
+      const bulkAll = this.root.querySelector('#wila-bulk-select-all');
+      if (bulkAll) {
+        const visibleSelected = this.bulkVisibleIndexes().filter(i => bulk.selected[i]).length;
+        bulkAll.indeterminate = !bulkAll.checked && visibleSelected > 0;
+        bulkAll.addEventListener('change', e => {
+          // تیک‌خوردن: انتخاب ردیف‌های مجاز؛ برداشتن تیک: برداشتن تیک همه ردیف‌های قابل‌مشاهده
+          if (e.target.checked) this.bulkSelectableIndexes().forEach(i => { bulk.selected[i] = true; });
+          else this.bulkVisibleIndexes().forEach(i => { delete bulk.selected[i]; });
+          this.render();
+        });
+      }
+      const bulkStart = this.root.querySelector('#wila-bulk-start'); if (bulkStart) bulkStart.addEventListener('click', () => this.startBulk());
+      const bulkPause = this.root.querySelector('#wila-bulk-pause'); if (bulkPause) bulkPause.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); });
+      const bulkStop = this.root.querySelector('#wila-bulk-stop'); if (bulkStop) bulkStop.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.bulkRefreshUi(); });
+    },
+  };
+
+  window.KhazanQueue = {
+    initialState: function () {
+      return { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
+    },
+    methods: methods
+  };
+})();

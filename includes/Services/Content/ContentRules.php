@@ -7,6 +7,8 @@
 
 namespace Khazan\Services\Content;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -17,7 +19,7 @@ final class ContentRules {
      * قوانین قالب HTML، توزیع کلیدواژه و نگارش فعال؛ برای محصول، دسته‌بندی و مقاله یکسان است
      */
     public static function writing_rules($kind) {
-        $tags = $kind === \WILA_Content_Targets::KIND_PRODUCT
+        $tags = $kind === Settings::KIND_PRODUCT
             ? 'فقط از <h2>، <h3>، <p>، <ul>، <li>، <strong> و <a> استفاده کن. تگ <table> و هر تگ جدولی ممنوع است؛ مشخصات فنی را به‌صورت <ul><li><strong>ویژگی:</strong> مقدار</li></ul> بنویس.'
             : 'از <h2>، <h3>، <p>، <ul>، <li>، <strong> و <a> استفاده کن.';
         return "[قوانین قالب و نگارش]\n" .
@@ -35,9 +37,9 @@ final class ContentRules {
      */
     public static function seo_title_rules($kind) {
         $modifiers = array(
-            \WILA_Content_Targets::KIND_ARTICLE  => 'یک مزیت یا نوع محتوا مانند «راهنمای کامل»، «آموزش گام‌به‌گام» یا «روش‌ها»',
-            \WILA_Content_Targets::KIND_PRODUCT  => 'یک کلمه تجاری مانند «خرید» همراه یک ویژگی یا مزیت که در مشخصات محصول تایید شده است',
-            \WILA_Content_Targets::KIND_CATEGORY => 'یک کلمه تجاری مانند «خرید»، «قیمت» یا «انواع» همراه گستره محصولات همان دسته',
+            Settings::KIND_ARTICLE  => 'یک مزیت یا نوع محتوا مانند «راهنمای کامل»، «آموزش گام‌به‌گام» یا «روش‌ها»',
+            Settings::KIND_PRODUCT  => 'یک کلمه تجاری مانند «خرید» همراه یک ویژگی یا مزیت که در مشخصات محصول تایید شده است',
+            Settings::KIND_CATEGORY => 'یک کلمه تجاری مانند «خرید»، «قیمت» یا «انواع» همراه گستره محصولات همان دسته',
         );
         return "[قواعد عنوان سئو]\n" .
             "۱. طول عنوان (با احتساب ایموجی و فاصله‌ها) ۵۰ تا ۶۰ کاراکتر باشد و از ۶۰ بیشتر نشود تا در نتایج گوگل بریده نشود.\n" .

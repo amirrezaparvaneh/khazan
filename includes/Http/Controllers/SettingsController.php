@@ -5,6 +5,8 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -16,9 +18,9 @@ final class SettingsController extends BaseController {
 
     public function get_settings() {
         $provider = 'avalai';
-        $avalai_key = trim(get_option('wila_avalai_api_key', ''));
+        $avalai_key = trim(get_option(Settings::OPT_AVALAI_API_KEY, ''));
         $avalai_client = new \WILA_AvalAI_Client();
-        $homepage_keywords = get_option('wila_homepage_keywords', '');
+        $homepage_keywords = get_option(Settings::OPT_HOMEPAGE_KEYWORDS, '');
 
         return rest_ensure_response(array(
             'provider' => $provider,
@@ -26,8 +28,8 @@ final class SettingsController extends BaseController {
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
             'homepage_keywords' => $homepage_keywords,
-            'product_post_type' => \WILA_Content_Targets::product_post_type(),
-            'product_category_taxonomy' => \WILA_Content_Targets::category_taxonomy(),
+            'product_post_type' => Settings::product_post_type(),
+            'product_category_taxonomy' => Settings::category_taxonomy(),
         ));
     }
 
@@ -57,24 +59,24 @@ final class SettingsController extends BaseController {
 
     public function save_settings($request) {
         $params   = $request->get_json_params();
-        update_option('wila_ai_provider', 'avalai');
+        update_option(Settings::OPT_AI_PROVIDER, 'avalai');
 
         if (isset($params['homepage_keywords'])) {
-            update_option('wila_homepage_keywords', sanitize_textarea_field($params['homepage_keywords']));
+            update_option(Settings::OPT_HOMEPAGE_KEYWORDS, sanitize_textarea_field($params['homepage_keywords']));
         }
         if (isset($params['avalai_api_key'])) {
             $key = trim(sanitize_text_field($params['avalai_api_key']));
             if (!empty($key) && strpos($key, '...') === false) {
-                update_option('wila_avalai_api_key', $key);
+                update_option(Settings::OPT_AVALAI_API_KEY, $key);
             }
         }
         if (isset($params['product_post_type'])) {
             $pt = sanitize_key($params['product_post_type']);
-            if (post_type_exists($pt)) update_option('wila_product_post_type', $pt);
+            if (post_type_exists($pt)) update_option(Settings::OPT_PRODUCT_POST_TYPE, $pt);
         }
         if (isset($params['product_category_taxonomy'])) {
             $tax = sanitize_key($params['product_category_taxonomy']);
-            if (taxonomy_exists($tax)) update_option('wila_product_category_taxonomy', $tax);
+            if (taxonomy_exists($tax)) update_option(Settings::OPT_PRODUCT_CATEGORY_TAXONOMY, $tax);
         }
 
         return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات با موفقیت ذخیره شد.'));

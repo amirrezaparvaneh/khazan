@@ -8,19 +8,15 @@
 
 namespace Khazan\Services\Ai;
 
+
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
 final class AvalaiHttpClient {
 
-    const ENDPOINT = 'https://api.avalai.ir/v1/chat/completions';
-
-    const PING_TIMEOUT        = 20;
-    const SUGGESTION_TIMEOUT  = 35;
-    const GENERATION_TIMEOUT  = 180;
-    const SUGGESTION_TOKENS   = 2048;
-    const GENERATION_TOKENS   = 12000;
 
     /** @var string */
     private $api_key;
@@ -41,7 +37,7 @@ final class AvalaiHttpClient {
      * Uses the override key unless it is empty or a masked value ("abc...xyz").
      */
     public static function resolve_key($override_key = null) {
-        $saved_key = trim(get_option('wila_avalai_api_key', ''));
+        $saved_key = trim(get_option(Settings::OPT_AVALAI_API_KEY, ''));
 
         $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $saved_key;
         if (strpos($key, '...') !== false || empty($key)) {
@@ -78,13 +74,13 @@ final class AvalaiHttpClient {
             return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
         }
 
-        $tokens = $max_tokens ? $max_tokens : ($suggestions_request ? self::SUGGESTION_TOKENS : self::GENERATION_TOKENS);
+        $tokens = $max_tokens ? $max_tokens : ($suggestions_request ? Settings::TOKENS_SUGGESTION : Settings::TOKENS_GENERATION);
         $body   = $this->build_request_body($prompt, $tokens);
         if ($json_response) {
             $body['response_format'] = array('type' => 'json_object');
         }
 
-        $response = $this->post($this->api_key, $body, $suggestions_request ? self::SUGGESTION_TIMEOUT : self::GENERATION_TIMEOUT);
+        $response = $this->post($this->api_key, $body, $suggestions_request ? Settings::TIMEOUT_LONG : Settings::TIMEOUT_BULK);
         if (is_wp_error($response)) {
             return $response;
         }
@@ -114,7 +110,7 @@ final class AvalaiHttpClient {
         }
 
         $start    = microtime(true);
-        $response = $this->post($key, $this->build_request_body('Ping', 16), self::PING_TIMEOUT);
+        $response = $this->post($key, $this->build_request_body('Ping', 16), Settings::TIMEOUT_DEFAULT);
         $latency  = round((microtime(true) - $start) * 1000);
 
         if (is_wp_error($response)) {
@@ -138,7 +134,7 @@ final class AvalaiHttpClient {
     }
 
     private function post($key, array $body, $timeout) {
-        return wp_remote_post(self::ENDPOINT, array(
+        return wp_remote_post(Settings::AI_ENDPOINT, array(
             'headers' => array(
                 'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $key,

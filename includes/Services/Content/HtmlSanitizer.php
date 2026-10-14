@@ -7,6 +7,8 @@
 
 namespace Khazan\Services\Content;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -20,7 +22,7 @@ final class HtmlSanitizer {
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
-        if ($kind === \WILA_Content_Targets::KIND_PRODUCT) $html = self::tables_to_lists($html);
+        if ($kind === Settings::KIND_PRODUCT) $html = self::tables_to_lists($html);
         return self::tidy_whitespace($html);
     }
 

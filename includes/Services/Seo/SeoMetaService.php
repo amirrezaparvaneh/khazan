@@ -8,6 +8,8 @@
 
 namespace Khazan\Services\Seo;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -136,7 +138,7 @@ final class SeoMetaService {
      * @return array{title:string,desc:string,focuskw:string,synonyms:string}
      */
     public function read_term_seo($taxonomy, $id) {
-        $option = get_option('wpseo_taxonomy_meta', array());
+        $option = get_option(Settings::OPT_YOAST_TAXONOMY_META, array());
         $meta = is_array($option) && isset($option[$taxonomy][$id]) ? (array) $option[$taxonomy][$id] : array();
         $synonyms = self::parse_yoast_synonyms($meta['wpseo_keywordsynonyms'] ?? '');
         return array(
@@ -152,11 +154,11 @@ final class SeoMetaService {
      */
     public function write_term_seo($taxonomy, $id, $seo) {
         if (!defined('WPSEO_VERSION')) return;
-        $option = get_option('wpseo_taxonomy_meta', array());
+        $option = get_option(Settings::OPT_YOAST_TAXONOMY_META, array());
         if (!is_array($option)) $option = array();
         foreach (self::term_meta_map($seo) as $meta_key => $value) {
             $option[$taxonomy][$id][$meta_key] = $value;
         }
-        update_option('wpseo_taxonomy_meta', $option);
+        update_option(Settings::OPT_YOAST_TAXONOMY_META, $option);
     }
 }

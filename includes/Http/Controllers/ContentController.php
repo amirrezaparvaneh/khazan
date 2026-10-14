@@ -5,6 +5,8 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Core\Settings;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -65,23 +67,23 @@ final class ContentController extends BaseController {
     }
 
     public function get_content_targets($request) {
-        $kind = \WILA_Content_Targets::normalize_kind($request->get_param('kind'));
-        $items = \WILA_Content_Targets::list_targets($kind, sanitize_text_field((string) $request->get_param('search')));
+        $kind = Settings::normalize_kind($request->get_param('kind'));
+        $items = (new \Khazan\Repository\ContentTargetRepository())->list_targets($kind, sanitize_text_field((string) $request->get_param('search')));
         return is_wp_error($items) ? $items : rest_ensure_response(array('success' => true, 'items' => $items));
     }
 
     public function get_current_content($request) {
-        $kind = \WILA_Content_Targets::normalize_kind($request->get_param('content_kind'));
-        $result = \WILA_Content_Targets::current_content($kind, $request->get_param('target_id'));
+        $kind = Settings::normalize_kind($request->get_param('content_kind'));
+        $result = (new \Khazan\Repository\ContentTargetRepository())->current_content($kind, $request->get_param('target_id'));
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 
     public function fix_seo_errors($request) {
         $params = $request->get_json_params();
-        $kind = \WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        $kind = Settings::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
         $errors = isset($params['errors']) ? sanitize_textarea_field(mb_substr((string) $params['errors'], 0, 3000)) : '';
         if (trim($errors) === '') return new \WP_Error('missing_seo_errors', 'متن خطاهای سئو را وارد کنید.', array('status' => 400));
-        $current = \WILA_Content_Targets::current_content($kind, isset($params['target_id']) ? $params['target_id'] : 0);
+        $current = (new \Khazan\Repository\ContentTargetRepository())->current_content($kind, isset($params['target_id']) ? $params['target_id'] : 0);
         if (is_wp_error($current)) return $current;
         if (trim(wp_strip_all_tags($current['content'])) === '') return new \WP_Error('empty_content', 'این صفحه محتوایی ندارد؛ ابتدا محتوا تولید کنید.', array('status' => 400));
         $result = (new \WILA_AvalAI_Client())->generate_seo_fix($kind, $current, $errors);
@@ -90,8 +92,8 @@ final class ContentController extends BaseController {
 
     public function apply_content_to_target($request) {
         $params = $request->get_json_params();
-        $kind = \WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
-        $result = \WILA_Content_Targets::apply($kind, isset($params['target_id']) ? $params['target_id'] : 0, is_array($params) ? $params : array());
+        $kind = Settings::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
+        $result = (new \Khazan\Repository\ContentTargetRepository())->apply($kind, isset($params['target_id']) ? $params['target_id'] : 0, is_array($params) ? $params : array());
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 
