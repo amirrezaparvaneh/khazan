@@ -736,12 +736,6 @@
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .khazan-toggle:has(input:checked) { border-color: #ea580c; background: #fff7ed; }
-.khazan-toggle input { position: absolute; opacity: 0; pointer-events: none; }
-.khazan-switch { flex: none; position: relative; width: 38px; height: 22px; border-radius: 9999px; background: #d6d3d1; transition: background 0.2s ease; }
-.khazan-switch::after { content: ''; position: absolute; top: 3px; right: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform 0.2s ease; }
-.khazan-toggle input:checked + .khazan-switch { background: linear-gradient(135deg, #991b1b, #ea580c); }
-.khazan-toggle input:checked + .khazan-switch::after { transform: translateX(-16px); }
-.khazan-toggle input:focus-visible + .khazan-switch { box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.2); }
 .khazan-toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .khazan-toggle-text strong { font-size: 0.85rem; color: #3b1f1a; }
 .khazan-toggle-text small { font-size: 0.74rem; line-height: 1.6; color: #78716c; font-weight: 400; }
@@ -856,3 +850,55 @@ img.khazan-watermark {
   transition: filter 0.15s ease;
 }
 .khazan-dropzone:hover .khazan-dz-cta { filter: brightness(1.08); }
+
+/* Toggle switch (RTL: knob rests on the right, slides left when checked) */
+.khazan-switch {
+  flex: none;
+  font-size: 15px;
+  position: relative;
+  display: inline-block;
+  width: 3.5em;
+  height: 2em;
+  vertical-align: middle;
+}
+.khazan-switch input {
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+.khazan-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgb(182, 182, 182);
+  transition: .4s;
+  border-radius: 10px;
+}
+.khazan-slider:before {
+  position: absolute;
+  content: "";
+  height: 1.4em;
+  width: 1.4em;
+  border-radius: 8px;
+  right: 0.3em;
+  bottom: 0.3em;
+  transform: rotate(270deg);
+  background-color: rgb(255, 255, 255);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: .4s;
+}
+.khazan-switch input:checked + .khazan-slider {
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+}
+.khazan-switch input:focus + .khazan-slider {
+  box-shadow: 0 0 2px #c2410c;
+}
+.khazan-switch input:checked + .khazan-slider:before {
+  transform: translateX(-1.5em) rotate(270deg);
+}
+.khazan-switch input:disabled + .khazan-slider { opacity: 0.55; cursor: not-allowed; }
