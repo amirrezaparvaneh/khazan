@@ -36,7 +36,6 @@
   }
 
 
-  const KHAZAN_LEAF_PATH = 'M50 4l9 20 14-6-4 22 22-6-11 18 14 8-25 8 4 14-21-6v20h-8V78l-21 6 4-14-25-8 14-8-11-18 22 6-4-22 14 6z';
   const KHAZAN_ICONS = {
     home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
     edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
@@ -47,31 +46,12 @@
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
     chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
-    link: '<path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>',
-    leaf: '<path d="' + KHAZAN_LEAF_PATH + '"/>'
+    link: '<path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>'
   };
 
   function icon(name, size) {
     const sz = size || 20;
-    return `<svg class="khazan-icon" width="${sz}" height="${sz}" viewBox="0 0 ${name === 'leaf' ? 100 : 24} ${name === 'leaf' ? 100 : 24}" fill="none" stroke="currentColor" stroke-width="${name === 'leaf' ? 4 : 1.7}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${KHAZAN_ICONS[name] || ''}</svg>`;
-  }
-
-  function khazanLogo(size, uid) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" class="khazan-logo-svg">
-      <defs>
-        <linearGradient id="kz-g-${uid}" x1="15%" y1="0%" x2="85%" y2="100%"><stop offset="0%" stop-color="#b91c1c"/><stop offset="55%" stop-color="#ea580c"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
-        <linearGradient id="kz-h-${uid}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#fff" stop-opacity=".38"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient>
-        <filter id="kz-s-${uid}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#7f1d1d" flood-opacity=".35"/></filter>
-      </defs>
-      <g filter="url(#kz-s-${uid})">
-        <path d="${KHAZAN_LEAF_PATH}" fill="url(#kz-g-${uid})"/>
-        <path d="M50 4l9 20 14-6-4 22 22-6-11 18 14 8-25 8 4 14-21-6v20h-8V4z" fill="#7f1d1d" opacity=".16" transform="translate(100 0) scale(-1 1)"/>
-        <path d="M50 4l-9 20-14-6 4 22-22-6 11 18-14 8 25 8-4 14 21-6V4z" fill="url(#kz-h-${uid})"/>
-      </g>
-      <g stroke="#fde68a" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".9">
-        <path d="M50 94V20M50 70L26 62M50 70l24-8M50 52L22 40M50 52l28-12M50 34l-9-8M50 34l9-8"/>
-      </g>
-    </svg>`;
+    return `<svg class="khazan-icon" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${KHAZAN_ICONS[name] || ''}</svg>`;
   }
 
   const KHAZAN_NAV = [
@@ -1349,11 +1329,9 @@
       this.root.innerHTML = `
         <aside class="khazan-sidebar">
           <div class="khazan-brand">
-            <div class="khazan-brand-logo">${khazanLogo(58, 'brand')}</div>
-            <div class="khazan-brand-text">
-              <h1>خـزان</h1>
-              <span class="khazan-version">نسخه : ${toPersianDigits(wilaData.version || '')}</span>
-            </div>
+            <img class="khazan-brand-logo" src="${escapeHtml(wilaData.logoUrl || '')}" alt="خـزان">
+            <h1 class="khazan-sr-only">خـزان</h1>
+            <span class="khazan-version">نسخه : ${toPersianDigits(wilaData.version || '')}</span>
           </div>
           <p class="khazan-tagline">دستیار هوشمند تولید محتوا و مهندسی سئو</p>
           <nav class="khazan-nav">
@@ -1361,10 +1339,7 @@
             <div class="khazan-nav-label">تحلیل لینک</div>
             ${KHAZAN_NAV_EXTRA.map(navBtn).join('')}
           </nav>
-          <div class="khazan-watermark" aria-hidden="true">
-            ${khazanLogo(150, 'wm')}
-            <div class="khazan-wm-word">Khazan</div>
-          </div>
+          <img class="khazan-watermark" src="${escapeHtml(wilaData.watermarkUrl || '')}" alt="" aria-hidden="true">
           <div class="khazan-signature">طراحی و توسعه: امیــــــــررضا پـروانه</div>
         </aside>
         <main class="khazan-main">

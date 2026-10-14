@@ -499,16 +499,6 @@
 
 .khazan-brand { display: flex; align-items: center; gap: 12px; }
 .khazan-brand-logo { flex: none; line-height: 0; }
-.khazan-brand-text h1 {
-  margin: 0;
-  font-size: 1.7rem;
-  font-weight: 800;
-  line-height: 1.2;
-  background: linear-gradient(135deg, #991b1b, #ea580c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 .khazan-version { display: block; margin-top: 2px; font-size: 0.72rem; color: var(--wila-text-muted); }
 .khazan-tagline {
   margin: 12px 4px 16px;
@@ -546,25 +536,6 @@
 }
 .khazan-nav-item.active .khazan-icon { color: #fff; }
 
-.khazan-watermark {
-  margin-top: auto;
-  padding-top: 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  opacity: 0.12;
-  pointer-events: none;
-  user-select: none;
-}
-.khazan-wm-word {
-  margin-top: 6px;
-  font-family: Georgia, 'Times New Roman', serif !important;
-  font-size: 2rem;
-  letter-spacing: 0.14em;
-  font-weight: 700;
-  color: #991b1b;
-  direction: ltr;
-}
 .khazan-signature {
   position: relative;
   margin-top: 10px;
@@ -667,7 +638,7 @@
   .khazan-sidebar { flex: none; width: 100%; }
   .khazan-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 6px; }
   #wila-app-root .wila-tab-btn.khazan-nav-item { width: auto; flex: 0 0 auto; white-space: nowrap; }
-  .khazan-nav-label, .khazan-watermark { display: none; }
+  .khazan-nav-label { display: none; }
 }
 @media (max-width: 782px) {
   .khazan-home-grid { grid-template-columns: 1fr; }
@@ -826,3 +797,32 @@
 .khazan-dropzone.has-file .khazan-dz-text { text-align: right; }
 .khazan-dz-text strong { font-size: 0.9rem; color: #3b1f1a; overflow-wrap: anywhere; }
 .khazan-dz-text small { font-size: 0.75rem; color: #78716c; font-weight: 400; }
+
+/* Khazan v3 - image logo and watermark */
+.khazan-sidebar { padding-bottom: 175px; }
+.khazan-brand { flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.khazan-brand-logo { display: block; width: 100%; max-width: 230px; height: auto; max-height: 96px; object-fit: contain; }
+.khazan-version { text-align: center; }
+.khazan-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+img.khazan-watermark {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 250px;
+  height: auto;
+  max-height: 140px;
+  object-fit: contain;
+  margin: 0;
+  padding: 0;
+  opacity: 0.14;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.khazan-signature { position: absolute; left: 0; right: 0; bottom: 20px; margin: 0; z-index: 1; font-weight: 600; }
+@media (max-width: 960px) {
+  .khazan-sidebar { padding-bottom: 14px; }
+  img.khazan-watermark, .khazan-signature { display: none; }
+}

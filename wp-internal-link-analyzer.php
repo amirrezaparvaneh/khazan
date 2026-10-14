@@ -148,6 +148,8 @@ final class WP_Internal_Link_Analyzer {
             'restUrl' => esc_url_raw(rest_url()),
             'nonce'   => wp_create_nonce('wp_rest'),
             'version' => WILA_VERSION,
+            'logoUrl' => esc_url_raw(plugins_url('assets/images/logo-header.webp', __FILE__)),
+            'watermarkUrl' => esc_url_raw(plugins_url('assets/images/watermark-sidebar.webp', __FILE__)),
         ));
     }
 
