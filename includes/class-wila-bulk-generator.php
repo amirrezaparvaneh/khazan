@@ -27,7 +27,7 @@ class WILA_Bulk_Generator {
         return mb_strtolower(trim($text));
     }
 
-    private static function normalize_slug($slug) {
+    public static function normalize_slug($slug) {
         $slug = trim((string) $slug);
         if ($slug === '') return '';
         if (preg_match('~^https?://~i', $slug)) {
@@ -62,15 +62,17 @@ class WILA_Bulk_Generator {
     /**
      * تطبیق دومرحله‌ای: ۱) نام محصول ۲) نامک
      */
-    public static function match_rows($rows) {
+    public static function match_rows($rows, $file_name = '') {
         if (!post_type_exists(WILA_Content_Targets::product_post_type())) {
             return new WP_Error('product_type_unavailable', 'نوع محتوای محصول در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
         }
         list($by_title, $by_slug) = self::build_index();
         $matches = array();
+        $history_keys = array();
         foreach ($rows as $row) {
             $name = self::normalize(isset($row['name']) ? $row['name'] : '');
             $slug = self::normalize_slug(isset($row['slug']) ? $row['slug'] : '');
+            $history_keys[] = array('name_key' => $name, 'slug_key' => $slug);
             $found = null;
             $via = '';
             if ($name !== '' && isset($by_title[$name])) {
@@ -82,6 +84,11 @@ class WILA_Bulk_Generator {
                 $via = 'slug';
             }
             $matches[] = $found ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status'], 'generated' => self::get_generated_info($found['id'])) : array('matched' => false);
+        }
+        // سابقه آپلود قبلی برای هر ردیف؛ ردیف‌های تازه همین حالا ثبت می‌شوند
+        $history = WILA_Bulk_History::sync($history_keys, $file_name);
+        foreach ($matches as $i => $match) {
+            $matches[$i]['history'] = isset($history[$i]) ? $history[$i] : null;
         }
         return $matches;
     }

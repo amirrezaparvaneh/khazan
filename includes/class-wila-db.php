@@ -16,6 +16,11 @@ class WILA_DB {
         return $wpdb->prefix . 'wila_internal_links';
     }
 
+    public static function get_bulk_items_table_name() {
+        global $wpdb;
+        return $wpdb->prefix . 'wila_bulk_items';
+    }
+
     public static function get_content_history_table_name() {
         global $wpdb;
         return $wpdb->prefix . 'wila_content_history';
@@ -50,6 +55,20 @@ class WILA_DB {
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+
+        // سابقه آپلود CSV: نام و نامک ردیف‌ها برای تشخیص ردیف‌های تکراری در آپلودهای بعدی
+        $bulk_table = self::get_bulk_items_table_name();
+        $bulk_sql = "CREATE TABLE {$bulk_table} (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            name_key VARCHAR(191) NOT NULL DEFAULT '',
+            slug_key VARCHAR(191) NOT NULL DEFAULT '',
+            file_name VARCHAR(255) NOT NULL DEFAULT '',
+            first_seen DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            KEY name_key_idx (name_key),
+            KEY slug_key_idx (slug_key)
+        ) $charset_collate;";
+        dbDelta($bulk_sql);
 
         $history_table = self::get_content_history_table_name();
         $history_sql = "CREATE TABLE {$history_table} (

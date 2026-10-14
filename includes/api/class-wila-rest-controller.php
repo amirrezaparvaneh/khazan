@@ -360,7 +360,8 @@ class WILA_REST_Controller {
     public function bulk_match_products($request) {
         $params = $request->get_json_params();
         $rows = isset($params['rows']) && is_array($params['rows']) ? array_slice($params['rows'], 0, 1000) : array();
-        $result = WILA_Bulk_Generator::match_rows($rows);
+        $file_name = isset($params['file_name']) ? sanitize_text_field($params['file_name']) : '';
+        $result = WILA_Bulk_Generator::match_rows($rows, $file_name);
         return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'matches' => $result));
     }
 
