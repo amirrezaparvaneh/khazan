@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 class WILA_Content_Guard {
 
     const WRAPPER_CLASS = 'aka-desc-wrapper';
-    const MAX_KEYWORD_OCCURRENCES = 7;
+    const MAX_KEYWORD_OCCURRENCES = 5;
 
     /**
      * پوشش کل محتوا با کلاس اختصاصی سایت؛ اجرای دوباره روی محتوای پوشش‌داده‌شده تاثیری ندارد
@@ -58,6 +58,35 @@ class WILA_Content_Guard {
             'جذب ضربه', 'میکروفایبر', 'استاندارد ایزو', 'استاندارد',
         ));
         return array_values(array_filter((array) $terms, 'is_string'));
+    }
+
+    /**
+     * لینک‌های داخلی اجباری (دسته‌بندی و محصولات هم‌دسته) که مدل جا انداخته در یک پاراگراف پایانی اضافه می‌شوند
+     */
+    public static function ensure_internal_links($html, $links) {
+        $present = array();
+        if (preg_match_all('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1~is', $html, $found)) {
+            foreach ($found[2] as $href) $present[untrailingslashit(html_entity_decode($href, ENT_QUOTES, 'UTF-8'))] = true;
+        }
+        $category = null;
+        $products = array();
+        foreach ((array) $links as $link) {
+            if (empty($link['required']) || empty($link['url']) || empty($link['anchor'])) continue;
+            if (isset($present[untrailingslashit($link['url'])])) continue;
+            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html($link['anchor']) . '</a>';
+            if (isset($link['type']) && $link['type'] === 'category') {
+                if ($category === null) $category = $anchor;
+            } else {
+                $products[] = $anchor;
+            }
+        }
+        if ($category === null && !$products) return $html;
+
+        $parts = array();
+        if ($category !== null) $parts[] = 'از دسته‌بندی ' . $category;
+        if ($products) $parts[] = ($category !== null ? 'یا ' : 'از ') . 'محصولات مشابه مانند ' . implode(' و ', $products);
+        $sentence = 'همچنین می‌توانید ' . implode(' ', $parts) . ' دیدن کنید.';
+        return rtrim($html) . '<p>' . $sentence . '</p>';
     }
 
     private static function has_external_link($html) {

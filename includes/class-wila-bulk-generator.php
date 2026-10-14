@@ -144,11 +144,11 @@ class WILA_Bulk_Generator {
         $internal_links = array();
         if ($auto_links) {
             foreach (array_slice($context['parent_categories'], 0, 1) as $category) {
-                $internal_links[] = array('anchor' => $category['name'], 'url' => $category['url']);
+                $internal_links[] = array('anchor' => $category['name'], 'url' => $category['url'], 'required' => true, 'type' => 'category');
             }
             $context['related_products'] = WILA_Content_Targets::related_products($product_id, 2);
             foreach ($context['related_products'] as $related) {
-                $internal_links[] = array('anchor' => $related['anchor'], 'url' => $related['url'], 'locked' => true);
+                $internal_links[] = array('anchor' => $related['anchor'], 'url' => $related['url'], 'locked' => true, 'required' => true, 'type' => 'product');
             }
         } else {
             $context['parent_categories'] = array();
