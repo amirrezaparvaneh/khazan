@@ -61,65 +61,7 @@ final class ContentController extends BaseController {
     }
 
     private function content_generator_params($request) {
-        $params = $request->get_json_params();
-        $content_kind = \WILA_Content_Targets::normalize_kind(isset($params['content_kind']) ? $params['content_kind'] : '');
-        $target = null;
-        if (\WILA_Content_Targets::is_target_kind($content_kind)) {
-            $target = \WILA_Content_Targets::get_context($content_kind, isset($params['target_id']) ? $params['target_id'] : 0);
-            if (is_wp_error($target)) return $target;
-        }
-        $internal_links = isset($params['internal_links']) && is_array($params['internal_links']) ? array_map(function ($link) {
-            return array('anchor' => isset($link['anchor']) ? sanitize_text_field($link['anchor']) : '', 'url' => isset($link['url']) ? esc_url_raw($link['url']) : '');
-        }, $params['internal_links']) : array();
-        $use_orphan_links = !empty($params['use_orphan_links']);
-
-        if ($use_orphan_links && empty($internal_links)) {
-            $scanner = new \WILA_Scanner();
-            $orphans = \Khazan\Services\Links\OrphanFinder::calculate($scanner->get_all_scannable_items());
-            $priorities = array('product_cat' => 1, 'product' => 2, 'post' => 3, 'page' => 4);
-            usort($orphans['list'], function ($a, $b) use ($priorities) {
-                $a_priority = isset($priorities[$a['type']]) ? $priorities[$a['type']] : 3;
-                $b_priority = isset($priorities[$b['type']]) ? $priorities[$b['type']] : 3;
-                return $a_priority === $b_priority ? strcasecmp($a['title'], $b['title']) : $a_priority - $b_priority;
-            });
-            foreach ($orphans['list'] as $orphan) {
-                if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $content_kind) continue;
-                if (!empty($orphan['url']) && !empty($orphan['title'])) {
-                    // محصول با کلیدواژه کانونی: انکر قفل‌شده؛ بدون آن، نام کامل محصول بدون دستکاری
-                    $focus_anchor = $orphan['type'] === \WILA_Content_Targets::product_post_type() ? \WILA_Content_Targets::product_link_anchor($orphan['id']) : '';
-                    $anchor = $focus_anchor !== '' ? $focus_anchor : $orphan['title'];
-                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $focus_anchor !== '');
-                }
-            }
-        }
-
-        if ($target) {
-            $internal_links = array_values(array_filter($internal_links, function ($link) use ($target) {
-                return untrailingslashit($link['url']) !== untrailingslashit($target['url']);
-            }));
-        }
-
-        $result = array(
-            'content_kind' => $content_kind,
-            'target_id' => $target ? $target['id'] : 0,
-            'h1_title' => $target ? $target['title'] : (isset($params['h1_title']) ? sanitize_text_field($params['h1_title']) : ''),
-            'focus_keyword' => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
-            'long_tail' => isset($params['long_tail']) ? sanitize_text_field($params['long_tail']) : '',
-            'word_count' => isset($params['word_count']) ? max(300, min(10000, absint($params['word_count']))) : 1200,
-            'content_type' => \WILA_Content_Targets::kind_label($content_kind),
-            'funnel_stage' => isset($params['funnel_stage']) ? sanitize_text_field($params['funnel_stage']) : '',
-            'description' => isset($params['description']) ? sanitize_textarea_field($params['description']) : '',
-            'internal_links' => $internal_links,
-            'use_orphan_links' => $use_orphan_links,
-        );
-        // The homepage link is a blog-article feature only.
-        if ($target) {
-            $result['target'] = $target;
-        } else {
-            $result['homepage_keywords'] = get_option('wila_homepage_keywords', '');
-            $result['homepage_url'] = home_url('/');
-        }
-        return $result;
+        return (new \Khazan\Http\Requests\ContentGenerationRequest($request->get_json_params()))->validated();
     }
 
     public function get_content_targets($request) {
@@ -206,26 +148,15 @@ final class ContentController extends BaseController {
             return new \WP_Error('invalid_english_slug', 'نامک انگلیسی مرتبط را با حروف لاتین و خط تیره وارد کنید.', array('status' => 400));
         }
         if (empty($title) || empty($content)) return new \WP_Error('missing_draft_content', 'عنوان و محتوای پیش‌نویس الزامی هستند.', array('status' => 400));
-        $blog_post_type = apply_filters('wila_blog_post_type', 'blog');
-        if (!post_type_exists($blog_post_type)) {
-            return new \WP_Error('blog_post_type_not_found', 'نوع محتوای «وبلاگ» یافت نشد. با فیلتر wila_blog_post_type نام post type وبلاگ را تنظیم کنید.', array('status' => 400));
-        }
-        if (!current_user_can(get_post_type_object($blog_post_type)->cap->create_posts)) {
-            return new \WP_Error('cannot_create_blog_draft', 'اجازه ایجاد پیش‌نویس در بخش وبلاگ را ندارید.', array('status' => 403));
-        }
-        $post_id = wp_insert_post(array('post_title' => $title, 'post_content' => $content, 'post_status' => 'draft', 'post_type' => $blog_post_type, 'post_name' => $slug), true);
-        if (is_wp_error($post_id)) return $post_id;
 
-        $focus_keyword = isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '';
-        $synonyms = isset($params['keyword_synonyms']) ? sanitize_text_field($params['keyword_synonyms']) : '';
-        $seo_title = isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title;
-        $meta_description = isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '';
-        \WILA_Content_Targets::write_post_seo($post_id, array(
-            'title'    => $seo_title,
-            'desc'     => $meta_description,
-            'focuskw'  => $focus_keyword,
-            'synonyms' => $synonyms,
-        ));
+        $seo = array(
+            'title'    => isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title,
+            'desc'     => isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '',
+            'focuskw'  => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
+            'synonyms' => isset($params['keyword_synonyms']) ? sanitize_text_field($params['keyword_synonyms']) : '',
+        );
+        $post_id = (new \Khazan\Repository\ContentTargetRepository())->create_blog_draft($title, $content, $slug, $seo);
+        if (is_wp_error($post_id)) return $post_id;
 
         return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'slug' => get_post_field('post_name', $post_id), 'edit_url' => get_edit_post_link($post_id, 'raw')));
     }

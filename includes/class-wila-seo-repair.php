@@ -2,6 +2,8 @@
 /** Selective, editor-only SEO repairs. */
 if (!defined('ABSPATH')) exit;
 
+use Khazan\Core\View;
+
 class WILA_SEO_Repair {
     public function __construct() {
         add_action('add_meta_boxes', array($this, 'meta_boxes'));
@@ -19,17 +21,11 @@ class WILA_SEO_Repair {
     }
 
     public function term_panel() {
-        echo '<tr class="form-field"><th>بررسی و اصلاح سئو</th><td>';
-        $this->panel();
-        echo '</td></tr>';
+        View::render('admin/seo-repair-term-row');
     }
 
     public function panel() {
-        echo '<div id="wila-repair-panel"><p>بررسی مستقل بر پایه توصیه‌های خوانایی Yoast؛ نه خواندن مستقیم خطاهای آن. فقط متن اصلاح می‌شود، نه لینک، تصویر، نامک یا متادیتا.</p>';
-        echo '<p>با شروع بررسی، متن فعلی برای پردازش به AvalAI ارسال می‌شود. پیشنهادها را بازبینی و تیک بزنید؛ ذخیره نهایی با به‌روزرسانی وردپرس است.</p>';
-        echo '<label>موارد موردنظر برای اصلاح (اختیاری)<textarea id="wila-repair-instructions" rows="3" style="width:100%" maxlength="2000" placeholder="مثلاً فقط جمله‌های بلند مقدمه کوتاه شوند."></textarea></label>';
-        echo '<p><button type="button" class="button" id="wila-repair-analyze">شروع بررسی و پیشنهاد اصلاح</button> <button type="button" class="button button-primary" id="wila-repair-apply" disabled>اعمال موارد تیک‌خورده</button> <button type="button" class="button" id="wila-repair-undo" disabled>بازگردانی</button></p>';
-        echo '<p id="wila-repair-status" role="status" aria-live="polite"></p><div id="wila-repair-results"></div></div>';
+        View::render('admin/seo-repair-panel');
     }
 
     public function assets() {
