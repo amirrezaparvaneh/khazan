@@ -18,7 +18,7 @@ class WILA_Seo_Meta {
         $exclude_key = mb_strtolower(trim((string) $exclude));
         $seen = array();
         $list = array();
-        foreach (preg_split('/[,،]/u', (string) $raw) as $item) {
+        foreach (preg_split('/[,،;؛\r\n]+/u', (string) $raw) as $item) {
             $item = trim(preg_replace('/\s+/u', ' ', $item));
             $key = mb_strtolower($item);
             if ($item === '' || $key === $exclude_key || isset($seen[$key])) continue;

@@ -37,13 +37,27 @@ class WILA_Content_Guard {
         $keyword = trim((string) $keyword);
         if ($keyword === '') return $html;
 
-        $candidates = array_unique(array($keyword, self::first_word($keyword)));
+        // انکرتکست ترجیحاً یک اصطلاح تخصصی موجود در متن است، نه عبارت عمومی یا نام محصول.
+        $candidates = array_merge(self::specialist_terms(), array($keyword, self::first_word($keyword)));
+        $candidates = array_unique($candidates);
         foreach ($candidates as $term) {
             if ($term === '' || mb_strlen($term) < 2) continue;
             $linked = self::link_first_text_occurrence($html, $term);
             if ($linked !== null) return $linked;
         }
         return $html;
+    }
+
+    /**
+     * اصطلاحات تخصصی که اگر در متن باشند انکرتکست طبیعی‌تری برای لینک مرجع‌اند؛ با فیلتر wila_anchor_terms قابل تغییر است
+     */
+    private static function specialist_terms() {
+        $terms = apply_filters('wila_anchor_terms', array(
+            'استانداردهای جهانی ارگونومی', 'ارگونومی پا', 'ارگونومی', 'چرم طبیعی', 'چرم گاوی', 'چرم مصنوعی',
+            'زیره پلی‌یورتان', 'زیره لاستیکی', 'زیره EVA', 'پلی‌یورتان', 'آناتومی پا', 'قوس کف پا', 'کفی طبی',
+            'جذب ضربه', 'میکروفایبر', 'استاندارد ایزو', 'استاندارد',
+        ));
+        return array_values(array_filter((array) $terms, 'is_string'));
     }
 
     private static function has_external_link($html) {
@@ -138,6 +152,27 @@ class WILA_Content_Guard {
             $tokens[$i] = $out;
         }
         return implode('', $tokens);
+    }
+
+    /**
+     * اگر بیش از نسبت مجاز هدینگ‌های H2/H3 کلیدواژه کانونی داشتند، کلیدواژه در هدینگ‌های بعدی با مترادف جایگزین می‌شود
+     */
+    public static function limit_heading_keyword($html, $keyword, $synonyms, $ratio = 0.4) {
+        $keyword = trim((string) $keyword);
+        $alternatives = WILA_Seo_Meta::split_keywords($synonyms, $keyword);
+        if ($keyword === '' || !$alternatives) return $html;
+        if (!preg_match_all('~<h[23]\b[^>]*>.*?</h[23]>~isu', $html, $found)) return $html;
+
+        $total = count($found[0]);
+        $allowed = max(1, (int) floor($total * $ratio));
+        $with_keyword = 0;
+        $alt_index = 0;
+        return preg_replace_callback('~<h[23]\b[^>]*>.*?</h[23]>~isu', function ($m) use ($keyword, $alternatives, $allowed, &$with_keyword, &$alt_index) {
+            if (mb_strpos($m[0], $keyword) === false) return $m[0];
+            $with_keyword++;
+            if ($with_keyword <= $allowed) return $m[0];
+            return str_replace($keyword, $alternatives[$alt_index++ % count($alternatives)], $m[0]);
+        }, $html);
     }
 
     private static function count_anchor_occurrences($tokens, $keyword) {
