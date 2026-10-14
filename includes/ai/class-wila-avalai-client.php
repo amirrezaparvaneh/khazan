@@ -1,6 +1,6 @@
 <?php
 /**
- * کلاینت AvalAI با مدل ثابت DeepSeek Chat و قابلیت تزریق کلمات کلیدی صفحه اصلی
+ * کلاینت AvalAI با مدل ثابت GPT-5.4 Mini و قابلیت تزریق کلمات کلیدی صفحه اصلی
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -10,6 +10,8 @@ if (!defined('ABSPATH')) {
 }
 
 class WILA_AvalAI_Client {
+
+    const MODEL = 'gpt-5.4-mini';
 
     private $provider;
     private $api_key;
@@ -21,7 +23,7 @@ class WILA_AvalAI_Client {
         $this->homepage_keywords = trim(get_option('wila_homepage_keywords', ''));
         
         $this->api_key = trim(get_option('wila_avalai_api_key', ''));
-        $this->model   = 'deepseek-chat';
+        $this->model   = self::MODEL;
     }
 
     public function is_configured() {
@@ -52,11 +54,7 @@ class WILA_AvalAI_Client {
             $start_time = microtime(true);
 
             $url = 'https://api.avalai.ir/v1/chat/completions';
-            $body = array(
-                'model' => 'deepseek-chat',
-                'messages' => array(array('role' => 'user', 'content' => 'Ping')),
-                'max_tokens' => 5,
-            );
+            $body = $this->build_request_body('Ping', 16);
             $response = wp_remote_post($url, array(
                 'headers' => array(
                     'Content-Type' => 'application/json',
@@ -96,16 +94,28 @@ class WILA_AvalAI_Client {
         }
     }
 
+    /**
+     * بدنه درخواست چت؛ مدل‌های GPT-5 پارامتر max_completion_tokens می‌خواهند و دمای سفارشی را نمی‌پذیرند
+     */
+    private function build_request_body($prompt, $max_tokens) {
+        $body = array(
+            'model' => $this->model,
+            'messages' => array(array('role' => 'user', 'content' => $prompt)),
+        );
+        if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
+            $body['max_completion_tokens'] = $max_tokens;
+        } else {
+            $body['temperature'] = 0.2;
+            $body['max_tokens'] = $max_tokens;
+        }
+        return $body;
+    }
+
     private function send_ai_request($prompt, $suggestions_request = false, $json_response = true) {
         if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
 
         $url = 'https://api.avalai.ir/v1/chat/completions';
-        $body = array(
-            'model' => $this->model,
-            'messages' => array(array('role' => 'user', 'content' => $prompt)),
-            'temperature' => 0.2,
-            'max_tokens' => $suggestions_request ? 2048 : 12000,
-        );
+        $body = $this->build_request_body($prompt, $suggestions_request ? 2048 : 12000);
         if ($json_response) {
             $body['response_format'] = array('type' => 'json_object');
         }

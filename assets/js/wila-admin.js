@@ -43,7 +43,7 @@
         provider: 'avalai',
         hasAvalAIKey: false,
         avalAIMaskedKey: '',
-        avalAIModel: 'deepseek-chat',
+        avalAIModel: 'gpt-5.4-mini',
         homepageKeywords: ''
       },
       plannerForm: {
@@ -116,7 +116,7 @@
           provider: 'avalai',
           hasAvalAIKey: data.has_avalai_key,
           avalAIMaskedKey: data.avalai_masked_key || '',
-          avalAIModel: data.avalai_model || 'deepseek-chat',
+          avalAIModel: data.avalai_model || 'gpt-5.4-mini',
           homepageKeywords: data.homepage_keywords || '',
           productPostType: data.product_post_type || 'product',
           productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
@@ -1003,7 +1003,7 @@
               <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات AvalAI</h4>
               <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید API سرویس AvalAI: ${s.hasAvalAIKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
               <input type="text" id="wila-avalai-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasAvalAIKey ? s.avalAIMaskedKey : ''}" placeholder="کلید API AvalAI" />
-              <p style="font-size:0.75rem; color:#64748b; margin-bottom:0;">مدل ثابت: <code>deepseek-chat</code></p>
+              <p style="font-size:0.75rem; color:#64748b; margin-bottom:0;">مدل ثابت: <code>gpt-5.4-mini</code></p>
             </div>
 
 

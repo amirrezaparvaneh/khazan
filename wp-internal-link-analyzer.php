@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
- * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با AvalAI و مدل DeepSeek Chat
+ * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با AvalAI و مدل GPT-5.4 Mini
  * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
