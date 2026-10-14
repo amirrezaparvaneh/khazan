@@ -317,7 +317,7 @@ class WILA_REST_Controller {
                 if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $content_kind) continue;
                 if (!empty($orphan['url']) && !empty($orphan['title'])) {
                     $anchor = $orphan['type'] === WILA_Content_Targets::product_post_type() ? WILA_Content_Targets::product_link_anchor($orphan['id']) : $orphan['title'];
-                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true);
+                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $orphan['type'] === WILA_Content_Targets::product_post_type());
                 }
             }
         }

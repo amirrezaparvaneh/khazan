@@ -157,7 +157,7 @@ class WILA_Content_Guard {
     /**
      * اگر بیش از نسبت مجاز هدینگ‌های H2/H3 کلیدواژه کانونی داشتند، کلیدواژه در هدینگ‌های بعدی با مترادف جایگزین می‌شود
      */
-    public static function limit_heading_keyword($html, $keyword, $synonyms, $ratio = 0.4) {
+    public static function limit_heading_keyword($html, $keyword, $synonyms, $ratio = 0.5) {
         $keyword = trim((string) $keyword);
         $alternatives = WILA_Seo_Meta::split_keywords($synonyms, $keyword);
         if ($keyword === '' || !$alternatives) return $html;
@@ -201,5 +201,19 @@ class WILA_Content_Guard {
             if ($anchor_depth === 0) $count += substr_count($token, $keyword);
         }
         return $count;
+    }
+
+    /**
+     * انکرتکست لینک‌های داخلی قفل‌شده را به عبارت اجباری برمی‌گرداند. $map: آدرس => انکرتکست اجباری
+     */
+    public static function enforce_link_anchors($html, $map) {
+        if (!$map) return $html;
+        return preg_replace_callback('~(<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\2[^>]*>)(.*?)(</a>)~is', function ($m) use ($map) {
+            $url = untrailingslashit(html_entity_decode($m[3], ENT_QUOTES, 'UTF-8'));
+            foreach ($map as $target => $anchor) {
+                if (untrailingslashit($target) === $url && $anchor !== '') return $m[1] . esc_html($anchor) . $m[5];
+            }
+            return $m[0];
+        }, $html);
     }
 }

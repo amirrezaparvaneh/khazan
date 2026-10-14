@@ -215,7 +215,8 @@ class WILA_Content_Targets {
             $value = trim((string) get_post_meta($id, $meta_key, true));
             if ($value === '') continue;
             // RankMath ذخیره می‌کند «کلیدواژه اصلی، مترادف‌ها»؛ فقط کلیدواژه اصلی لازم است.
-            $focus = trim(explode(',', $value)[0]);
+            $list = WILA_Seo_Meta::split_keywords($value);
+            $focus = $list ? $list[0] : '';
             break;
         }
         return $focus !== '' ? $focus : WILA_Content_Rules::short_keyword(get_the_title($id));
