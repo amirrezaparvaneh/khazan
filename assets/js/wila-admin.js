@@ -57,7 +57,7 @@
       plannerResult: null,
       isPlanning: false,
       generatorForm: { contentKind: 'article', targetId: 0, h1Title: '', focusKeyword: '', longTail: '', wordCount: 1200, funnelStage: 'تشخیص خودکار', internalLinks: '', description: '', useOrphanLinks: true },
-      bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'draft', injectSeo: true, autoLinks: true, matching: false, running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
+      bulk: { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'draft', injectSeo: true, autoLinks: true, createMissing: false, matching: false, running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] },
       targets: [],
       targetsLoading: false,
       targetsError: '',
@@ -490,7 +490,18 @@
     // ردیف‌های مجاز برای «انتخاب همه»: متصل‌شده و بدون سابقه تولید (موارد قبلاً تولیدشده فقط دستی انتخاب می‌شوند)
     bulkSelectableIndexes: function () {
       const b = this.state.bulk;
-      return this.bulkVisibleIndexes().filter(i => b.rows[i].match && b.rows[i].match.matched && !b.rows[i].match.generated);
+      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && !(b.rows[i].match && b.rows[i].match.generated));
+    },
+
+    // ردیف متصل‌شده، یا ردیف یافت‌نشده وقتی «ایجاد خودکار محصول پیش‌نویس» روشن است
+    bulkIsTargetable: function (i) {
+      const b = this.state.bulk, row = b.rows[i];
+      if (row.match && row.match.matched) return true;
+      return b.createMissing && String(row.name || '').trim() !== '';
+    },
+
+    bulkRowTitle: function (row) {
+      return row.match && row.match.title ? row.match.title : (row.name || row.slug || '');
     },
 
     bulkLog: function (type, text) {
@@ -527,7 +538,7 @@
     startBulk: async function () {
       const b = this.state.bulk;
       if (b.running) return;
-      const queue = b.rows.map((r, i) => i).filter(i => b.selected[i] && b.rows[i].match && b.rows[i].match.matched && b.rows[i].run !== 'done');
+      const queue = b.rows.map((r, i) => i).filter(i => b.selected[i] && this.bulkIsTargetable(i) && b.rows[i].run !== 'done');
       if (!queue.length) return app.toast('هیچ ردیف متصل‌شده‌ای برای پردازش انتخاب نشده است.', 'error');
       if (b.mode === 'replace' && !confirm(`توضیحات فعلی ${toPersianDigits(queue.length)} محصول جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
       Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0 });
@@ -542,27 +553,28 @@
         while (b.paused && !b.stopRequested) await sleep(300);
         if (b.stopRequested) break;
         const row = b.rows[i];
-        row.run = 'running'; this.bulkLog('info', `در حال تولید: ${row.match.title}`); this.bulkRefreshUi();
+        row.run = 'running'; this.bulkLog('info', `در حال تولید: ${this.bulkRowTitle(row)}`); this.bulkRefreshUi();
         for (let attempt = 0; attempt <= 2; attempt++) {
           try {
-            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match.product_id, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks } }) });
+            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match && row.match.matched ? row.match.product_id : 0, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks, create_missing: b.createMissing } }) });
             if (!r.success) {
               const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err;
             }
+            if (r.created) row.match = { matched: true, via: 'created', product_id: r.product_id, title: r.title, url: r.url };
             row.run = 'done'; row.editUrl = r.edit_url; row.match.generated = r.generated;
-            this.bulkLog('ok', `انجام شد: ${row.match.title} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
+            this.bulkLog('ok', `انجام شد: ${this.bulkRowTitle(row)} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
             break;
           } catch (e) {
             const temporary = e.temporary || e instanceof TypeError; // TypeError: خطای شبکه در fetch
             if (temporary && attempt < 2 && !b.stopRequested) {
               const delay = 10000 * Math.pow(2, attempt);
-              this.bulkLog('info', `خطای موقت (${e.message}) در ${row.match.title}؛ تلاش مجدد ${toPersianDigits(attempt + 1)} از ۲ پس از ${toPersianDigits(delay / 1000)} ثانیه.`);
+              this.bulkLog('info', `خطای موقت (${e.message}) در ${this.bulkRowTitle(row)}؛ تلاش مجدد ${toPersianDigits(attempt + 1)} از ۲ پس از ${toPersianDigits(delay / 1000)} ثانیه.`);
               this.bulkRefreshUi();
               await wait(delay);
               continue;
             }
             row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
-            this.bulkLog('err', `خطا در ${row.match.title}: ${row.error}`);
+            this.bulkLog('err', `خطا در ${this.bulkRowTitle(row)}: ${row.error}`);
             break;
           }
         }
@@ -834,14 +846,15 @@
             </div>
             <label style="display:flex;gap:8px;align-items:center;margin-top:10px;cursor:pointer"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}> ذخیره خودکار عنوان سئو، توضیحات متا و کلیدواژه در متافیلدهای Yoast و Rank Math</label>
             <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}> لینک‌سازی داخلی خودکار (دسته‌بندی محصول + ۲ محصول هم‌دسته)</label>
+            <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}> ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</label>
             <p style="margin:12px 0 6px;font-size:.85rem">${toPersianDigits(matchedCount)} از ${toPersianDigits(b.rows.length)} ردیف متصل شد؛ ${toPersianDigits(selectedCount)} ردیف انتخاب شده است.</p>
             <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
               <th><input type="checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>تایید سئو</th><th>تطبیق</th><th>محصول سایت</th><th>وضعیت پردازش</th>
             </tr></thead><tbody>${visible.map(i => {
               const r = b.rows[i], m = r.match;
-              const matchHtml = !m ? '—' : m.matched ? `✅ متصل شد <span class="wila-badge wila-badge-neutral">${m.via === 'slug' ? 'با نامک' : m.via === 'name_ambiguous' ? 'با نام (چند مورد مشابه)' : 'با نام'}</span>` : '❌ پیدا نشد';
+              const matchHtml = !m ? '—' : m.matched ? `✅ متصل شد <span class="wila-badge wila-badge-neutral">${m.via === 'created' ? 'ساخته شد' : m.via === 'slug' ? 'با نامک' : m.via === 'name_ambiguous' ? 'با نام (چند مورد مشابه)' : 'با نام'}</span>` : (b.createMissing ? '➕ ایجاد محصول جدید (پیش‌نویس)' : '❌ پیدا نشد');
               const genHtml = m && m.generated ? `<div style="margin-top:4px;font-size:.75rem;color:#047857">🟢 قبلاً تولید شده (در تاریخ ${formatJalali(m.generated.at)})</div>` : '';
-              return `<tr><td><input type="checkbox" class="wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${m && m.matched && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${r.approved ? '✅' : '—'}</td><td>${matchHtml}${genHtml}</td><td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td><td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td></tr>`;
+              return `<tr><td><input type="checkbox" class="wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${r.approved ? '✅' : '—'}</td><td>${matchHtml}${genHtml}</td><td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td><td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td></tr>`;
             }).join('')}</tbody></table></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
               <button id="wila-bulk-start" class="wila-btn wila-btn-primary" ${b.running ? 'disabled' : ''}>${b.running ? 'در حال پردازش...' : 'شروع تولید انبوه'}</button>
@@ -1149,6 +1162,13 @@
       const bulkFilter = this.root.querySelector('#wila-bulk-filter'); if (bulkFilter) bulkFilter.addEventListener('change', e => { bulk.filter = e.target.value; this.render(); });
       const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
       const bulkLinks = this.root.querySelector('#wila-bulk-links'); if (bulkLinks) bulkLinks.addEventListener('change', e => { bulk.autoLinks = e.target.checked; });
+      const bulkCreate = this.root.querySelector('#wila-bulk-create');
+      if (bulkCreate) bulkCreate.addEventListener('change', e => {
+        bulk.createMissing = e.target.checked;
+        // با خاموش‌شدن گزینه، انتخاب ردیف‌های یافت‌نشده هم برداشته می‌شود
+        if (!bulk.createMissing) Object.keys(bulk.selected).forEach(i => { if (!(bulk.rows[i].match && bulk.rows[i].match.matched)) delete bulk.selected[i]; });
+        this.render();
+      });
       this.root.querySelectorAll('.wila-bulk-row').forEach(box => box.addEventListener('change', e => { bulk.selected[e.target.dataset.index] = e.target.checked; this.render(); }));
       const bulkAll = this.root.querySelector('#wila-bulk-select-all');
       if (bulkAll) {

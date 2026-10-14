@@ -110,12 +110,24 @@ class WILA_Bulk_Generator {
      */
     public static function process($product_id, $raw_row, $options) {
         $product_id = absint($product_id);
+        $row = self::clean_row($raw_row);
+        $mode = isset($options['mode']) && in_array($options['mode'], array('replace', 'append', 'draft'), true) ? $options['mode'] : 'draft';
+
+        // ردیف یافت‌نشده: ابتدا محصول پیش‌نویس ساخته می‌شود و محتوا مستقیم روی همان نوشته می‌نشیند.
+        $created = false;
+        if (!$product_id) {
+            if (empty($options['create_missing'])) return new WP_Error('missing_product', 'محصول مقصد مشخص نشده است.', array('status' => 400));
+            // اگر تلاش قبلی بعد از ساخت پیش‌نویس شکست خورده باشد، همان نوشته دوباره استفاده می‌شود.
+            $product_id = self::find_product_id_by_title($row['name']) ?: self::create_draft_product($row);
+            if (is_wp_error($product_id)) return $product_id;
+            $created = true;
+            $mode = 'replace';
+        }
+
         $context = WILA_Content_Targets::get_context(WILA_Content_Targets::KIND_PRODUCT, $product_id);
         if (is_wp_error($context)) return $context;
         if (function_exists('set_time_limit')) @set_time_limit(240);
 
-        $row = self::clean_row($raw_row);
-        $mode = isset($options['mode']) && in_array($options['mode'], array('replace', 'append', 'draft'), true) ? $options['mode'] : 'draft';
         $inject_seo = !empty($options['inject_seo']);
         $auto_links = !empty($options['auto_links']);
 
@@ -177,10 +189,40 @@ class WILA_Bulk_Generator {
         return array(
             'product_id'          => $product_id,
             'mode'                => $mode,
+            'created'             => $created,
+            'title'               => $context['title'],
+            'url'                 => $context['url'],
             'edit_url'            => $applied['edit_url'],
             'internal_link_count' => $result['internal_link_count'],
             'seo_title'           => $seo_title,
             'generated'           => $generated,
         );
+    }
+
+    private static function find_product_id_by_title($name) {
+        global $wpdb;
+        if ($name === '') return 0;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_title = %s AND post_status IN ('draft', 'pending', 'private', 'publish') ORDER BY ID DESC LIMIT 1",
+            WILA_Content_Targets::product_post_type(),
+            $name
+        ));
+    }
+
+    /**
+     * ساخت محصول پیش‌نویس از ردیف شیت (نام و نامک)؛ وردپرس اگر نامک تکراری باشد پسوند عددی می‌دهد
+     */
+    private static function create_draft_product($row) {
+        if ($row['name'] === '') return new WP_Error('missing_product_name', 'برای ساخت محصول جدید، نام محصول در ردیف الزامی است.', array('status' => 400));
+        $type = get_post_type_object(WILA_Content_Targets::product_post_type());
+        if (!$type || !current_user_can($type->cap->create_posts)) return new WP_Error('cannot_create_product', 'اجازه ساخت محصول جدید را ندارید.', array('status' => 403));
+
+        $post_id = wp_insert_post(array(
+            'post_type'   => WILA_Content_Targets::product_post_type(),
+            'post_status' => 'draft',
+            'post_title'  => $row['name'],
+            'post_name'   => $row['slug'] !== '' ? sanitize_title(self::normalize_slug($row['slug'])) : '',
+        ), true);
+        return $post_id;
     }
 }

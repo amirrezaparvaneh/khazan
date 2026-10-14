@@ -261,7 +261,7 @@ class WILA_Content_Targets {
      */
     public static function apply($kind, $id, $data) {
         $id = absint($id);
-        $content = isset($data['content']) ? wp_kses_post($data['content']) : '';
+        $content = isset($data['content']) ? WILA_Content_Guard::wrap(wp_kses_post($data['content'])) : '';
         if (!$id || !self::is_target_kind($kind) || !self::kind_available($kind) || trim($content) === '') {
             return new WP_Error('missing_apply_content', 'مقصد و محتوای انتشار الزامی هستند.', array('status' => 400));
         }
@@ -326,7 +326,9 @@ class WILA_Content_Targets {
         }
         if ($mode === 'draft') return self::create_review_draft($id, $content, $seo);
         update_post_meta($id, '_wila_previous_content', $post->post_content);
-        $new_content = $mode === 'append' ? $post->post_content . "\n\n" . $content : $content;
+        $new_content = $mode === 'append'
+            ? WILA_Content_Guard::wrap(WILA_Content_Guard::unwrap($post->post_content) . "\n\n" . WILA_Content_Guard::unwrap($content))
+            : $content;
         $result = wp_update_post(array('ID' => $id, 'post_content' => $new_content), true);
         if (is_wp_error($result)) return $result;
 
