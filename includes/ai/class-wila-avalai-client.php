@@ -111,11 +111,11 @@ class WILA_AvalAI_Client {
         return $body;
     }
 
-    private function send_ai_request($prompt, $suggestions_request = false, $json_response = true) {
+    private function send_ai_request($prompt, $suggestions_request = false, $json_response = true, $max_tokens = null) {
         if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
 
         $url = 'https://api.avalai.ir/v1/chat/completions';
-        $body = $this->build_request_body($prompt, $suggestions_request ? 2048 : 12000);
+        $body = $this->build_request_body($prompt, $max_tokens ? $max_tokens : ($suggestions_request ? 2048 : 12000));
         if ($json_response) {
             $body['response_format'] = array('type' => 'json_object');
         }
@@ -135,7 +135,8 @@ class WILA_AvalAI_Client {
 
         if ($code !== 200) {
             $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
-            return new WP_Error('ai_error', $msg);
+            // Keep 429/503 visible to the client so the bulk queue can back off and retry.
+            return new WP_Error($code === 429 ? 'ai_rate_limited' : 'ai_error', $msg, in_array($code, array(429, 503), true) ? array('status' => $code) : array());
         }
         if (!isset($data['choices'][0]['message']['content'])) {
             return new WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
@@ -405,30 +406,43 @@ class WILA_AvalAI_Client {
     }
 
     /**
-     * تولید یک‌مرحله‌ای محتوای محصول از داده‌های ردیف شیت (بدون طرح میانی)
+     * تولید یک‌مرحله‌ای محتوای محصول از ردیف شیت؛ پرامپت فشرده و فقط با ستون‌های غیرخالی
      */
     public function generate_bulk_product_content($params, $row) {
         $kind = WILA_Content_Targets::KIND_PRODUCT;
-        $sheet = array(
-            'نام محصول' => $row['name'], 'توضیحات' => $row['description'], 'یادداشت' => $row['notes'],
-            'ویژگی‌های زیره' => $row['sole'], 'ویژگی‌های رویه' => $row['upper'], 'ویژگی آستر و کفی' => $row['lining'], 'ویژگی‌های کلی' => $row['general'],
-            'کلیدواژه کانونی' => $params['focus_keyword'], 'عبارات کلیدی مترادف و فرعی' => $row['related_keywords'],
+        $labels = array(
+            'name' => 'نام محصول', 'focus_keyword' => 'کلیدواژه کانونی', 'related_keywords' => 'کلیدواژه‌های فرعی',
+            'description' => 'توضیحات', 'notes' => 'یادداشت', 'sole' => 'زیره', 'upper' => 'رویه', 'lining' => 'آستر و کفی', 'general' => 'ویژگی‌های کلی',
         );
-        $prompt = $this->build_commerce_system_prompt($params, $kind) . "\n" . $this->build_seo_title_rules($kind) .
-            "داده‌های ردیف شیت (تنها منبع اطلاعات فنی؛ هر ویژگی خارج از آن را نساز):\n" . wp_json_encode($sheet, JSON_UNESCAPED_UNICODE) . "\n" .
-            "محتوای جامع محصول را به HTML تولید کن و این بخش‌ها را به‌ترتیب منطقی داشته باش: مقدمه با پاسخ مستقیم و کاربرد اصلی؛ نقد و بررسی تخصصی بر پایه ویژگی‌های زیره، رویه، آستر/کفی و ویژگی‌های کلی (مزایا و محدودیت‌های صادقانه و نیز مناسب چه افرادی است)؛ جدول مشخصات با تگ <table> که فقط ردیف‌هایی از داده‌های شیت دارد؛ ۴ تا ۶ پرسش متداول (FAQ) با پاسخ کوتاه و مبتنی بر داده؛ جمع‌بندی. " .
-            "اصول سئو ۲۰۲۶: پوشش موجودیت‌ها (جنس‌ها، اجزای کفش، کاربرد) و روابطشان، نیت جستجوی تجاری، E-E-A-T بدون ساختن تجربه شخصی، آزمایش، آمار یا گارانتی. H1 و لینک خارجی نساز و لینک اجباری دسته‌بندی/محصولات مرتبط را رعایت کن. " .
-            "برای تصویر، ۲ تا ۳ باکس در جاهای مناسب دقیقاً با این HTML درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> product-name.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.\n" .
-            "پاسخ را دقیقاً با این برچسب‌ها برگردان:\n" .
-            "===WILA_CONTENT_START===\n[HTML کامل بدنه محتوا]\n===WILA_CONTENT_END===\n" .
-            "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد، با یک ایموجی]\n===WILA_SEO_TITLE_END===\n" .
-            "===WILA_META_DESCRIPTION_START===\n[توضیحات متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===\n" .
-            "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
-        $raw = $this->send_ai_request($prompt, false, false);
+        $data = array();
+        foreach ($labels as $key => $label) {
+            $value = $key === 'focus_keyword' ? $params['focus_keyword'] : (isset($row[$key]) ? trim($row[$key]) : '');
+            if ($value !== '') $data[$label] = $value;
+        }
+        $links = array();
+        foreach ($params['internal_links'] as $link) $links[] = $link['anchor'] . ' => ' . $link['url'];
+
+        $need_title = empty($row['seo_title']);
+        $need_meta = empty($row['meta_description']);
+        $need_syn = empty($row['related_keywords']);
+
+        $prompt = "نویسنده سئوی فارسی هستی. برای محصول زیر توضیحات HTML بنویس.\n" .
+            "قواعد: فقط از داده‌ها استفاده کن؛ مشخصات، گارانتی، تخفیف، آمار و تجربه شخصی نساز. H1، لینک خارجی، لینک صفحه اول، باکس تصویر و پرامپت تصویر ننویس. جمله‌ها کوتاه و معلوم؛ هر بخش حداکثر ۳۰۰ واژه بدون H2/H3. کلیدواژه کانونی را طبیعی در ۱۰۰ واژه نخست و چند زیرعنوان بیاور.\n" .
+            "ساختار: مقدمه با پاسخ مستقیم؛ H2 نقد و بررسی تخصصی (مزایا، محدودیت‌ها، مناسب چه کسی؛ موجودیت‌ها و اجزا را نام ببر)؛ H2 جدول مشخصات (<table> فقط از داده‌ها)؛ H2 پرسش‌های متداول (۴ تا ۶)؛ جمع‌بندی. حدود " . (int) $params['word_count'] . " واژه.\n" .
+            ($links ? "لینک داخلی اجباری با <a href=\"URL\"> و انکر طبیعی:\n" . implode("\n", $links) . "\n" : '') .
+            "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
+            "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
+        if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو ۵۰ تا ۶۰ کاراکتر، کلیدواژه در ابتدا، یک ایموجی مرتبط، بدون نام سایت]\n===WILA_SEO_TITLE_END===";
+        if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===";
+        if ($need_syn) $prompt .= "\n===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
+
+        // Persian text costs roughly 2-3 tokens per word; the cap leaves room for HTML markup and model reasoning.
+        $max_tokens = (int) min(8000, max(3000, $params['word_count'] * 4.5));
+        $raw = $this->send_ai_request($prompt, false, false, $max_tokens);
         if (is_wp_error($raw)) return $raw;
         $result = $this->parse_full_content_payload($raw, $params);
         if (is_wp_error($result)) return $result;
-        $result['seo_title'] = $this->normalize_seo_title($result['seo_title'], $kind);
+        $result['seo_title'] = $need_title ? $this->normalize_seo_title($result['seo_title'], $kind) : '';
         $result['slug'] = '';
         return $result;
     }
@@ -503,11 +517,8 @@ class WILA_AvalAI_Client {
         }
 
         if ($this->params_kind($params) !== WILA_Content_Targets::KIND_ARTICLE) {
-            // Product and category pages carry no featured image prompt and never link to the homepage;
-            // image placeholders stay only when the bulk generator asks for them.
-            if (empty($params['keep_image_placeholders'])) {
-                $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
-            }
+            // Product and category pages carry no image boxes or featured image prompt and never link to the homepage.
+            $content = trim(preg_replace('~<div\b[^>]*wila-image-placeholder[^>]*>.*?</div>~is', '', $content));
             $featured_prompt = '';
             $content = $this->strip_homepage_links($content);
         }

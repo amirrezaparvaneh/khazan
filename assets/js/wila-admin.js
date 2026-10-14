@@ -473,9 +473,10 @@
         const hasApproval = map.includes('approved');
         res.matches.forEach((m, i) => {
           b.rows[i].match = m;
-          if (m.matched && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
+          if (m.matched && !m.generated && (!hasApproval || b.rows[i].approved)) b.selected[i] = true;
         });
-        app.toast(`${toPersianDigits(res.matches.filter(m => m.matched).length)} از ${toPersianDigits(b.rows.length)} ردیف به محصولات سایت متصل شد.`);
+        const already = res.matches.filter(m => m.matched && m.generated).length;
+        app.toast(`${toPersianDigits(res.matches.filter(m => m.matched).length)} از ${toPersianDigits(b.rows.length)} ردیف به محصولات سایت متصل شد.${already ? ` ${toPersianDigits(already)} مورد قبلاً تولید شده و انتخاب نشد.` : ''}`);
       } catch (e) { b.rows = []; app.toast('خطا: ' + e.message); }
       b.matching = false;
       this.render();
@@ -484,6 +485,12 @@
     bulkVisibleIndexes: function () {
       const b = this.state.bulk;
       return b.rows.map((r, i) => i).filter(i => b.filter === 'all' || (b.filter === 'approved' ? b.rows[i].approved : !b.rows[i].approved));
+    },
+
+    // ردیف‌های مجاز برای «انتخاب همه»: متصل‌شده و بدون سابقه تولید (موارد قبلاً تولیدشده فقط دستی انتخاب می‌شوند)
+    bulkSelectableIndexes: function () {
+      const b = this.state.bulk;
+      return this.bulkVisibleIndexes().filter(i => b.rows[i].match && b.rows[i].match.matched && !b.rows[i].match.generated);
     },
 
     bulkLog: function (type, text) {
@@ -527,21 +534,41 @@
       this.bulkLog('info', `شروع پردازش ${toPersianDigits(queue.length)} محصول.`);
       this.render();
       const sleep = ms => new Promise(r => setTimeout(r, ms));
-      for (const i of queue) {
+      // انتظار قابل‌قطع با دکمه توقف
+      const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
+      const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
+      for (let n = 0; n < queue.length; n++) {
+        const i = queue[n];
         while (b.paused && !b.stopRequested) await sleep(300);
         if (b.stopRequested) break;
         const row = b.rows[i];
         row.run = 'running'; this.bulkLog('info', `در حال تولید: ${row.match.title}`); this.bulkRefreshUi();
-        try {
-          const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match.product_id, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks } }) });
-          if (!r.success) throw new Error(r.message || 'تولید انجام نشد.');
-          row.run = 'done'; row.editUrl = r.edit_url;
-          this.bulkLog('ok', `انجام شد: ${row.match.title} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
-        } catch (e) {
-          row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
-          this.bulkLog('err', `خطا در ${row.match.title}: ${row.error}`);
+        for (let attempt = 0; attempt <= 2; attempt++) {
+          try {
+            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match.product_id, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks } }) });
+            if (!r.success) {
+              const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err;
+            }
+            row.run = 'done'; row.editUrl = r.edit_url; row.match.generated = r.generated;
+            this.bulkLog('ok', `انجام شد: ${row.match.title} (لینک داخلی: ${toPersianDigits(r.internal_link_count)})`);
+            break;
+          } catch (e) {
+            const temporary = e.temporary || e instanceof TypeError; // TypeError: خطای شبکه در fetch
+            if (temporary && attempt < 2 && !b.stopRequested) {
+              const delay = 10000 * Math.pow(2, attempt);
+              this.bulkLog('info', `خطای موقت (${e.message}) در ${row.match.title}؛ تلاش مجدد ${toPersianDigits(attempt + 1)} از ۲ پس از ${toPersianDigits(delay / 1000)} ثانیه.`);
+              this.bulkRefreshUi();
+              await wait(delay);
+              continue;
+            }
+            row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
+            this.bulkLog('err', `خطا در ${row.match.title}: ${row.error}`);
+            break;
+          }
         }
         b.done++; this.bulkRefreshUi();
+        // فاصله ۳ ثانیه‌ای بین محصولات برای جلوگیری از Rate Limit
+        if (n < queue.length - 1 && !b.stopRequested) await wait(3000);
       }
       this.bulkLog('info', b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش صف به پایان رسید.');
       b.running = false; b.paused = false;
@@ -782,7 +809,8 @@
         const visible = this.bulkVisibleIndexes();
         const matchedCount = b.rows.filter(r => r.match && r.match.matched).length;
         const selectedCount = Object.keys(b.selected).filter(i => b.selected[i]).length;
-        const allVisibleSelected = visible.length && visible.every(i => b.selected[i]);
+        const selectable = this.bulkSelectableIndexes();
+        const allVisibleSelected = selectable.length > 0 && selectable.every(i => b.selected[i]);
         const locked = b.running ? 'disabled' : '';
         contentHtml = `<div class="wila-card">
           <h3 style="margin-top:0">تولید محتوای انبوه از شیت (CSV Bulk Generator)</h3>
@@ -808,11 +836,12 @@
             <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}> لینک‌سازی داخلی خودکار (دسته‌بندی محصول + ۲ محصول هم‌دسته)</label>
             <p style="margin:12px 0 6px;font-size:.85rem">${toPersianDigits(matchedCount)} از ${toPersianDigits(b.rows.length)} ردیف متصل شد؛ ${toPersianDigits(selectedCount)} ردیف انتخاب شده است.</p>
             <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
-              <th><input type="checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${locked}></th><th>#</th><th>نام محصول (شیت)</th><th>تایید سئو</th><th>تطبیق</th><th>محصول سایت</th><th>وضعیت پردازش</th>
+              <th><input type="checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>تایید سئو</th><th>تطبیق</th><th>محصول سایت</th><th>وضعیت پردازش</th>
             </tr></thead><tbody>${visible.map(i => {
               const r = b.rows[i], m = r.match;
               const matchHtml = !m ? '—' : m.matched ? `✅ متصل شد <span class="wila-badge wila-badge-neutral">${m.via === 'slug' ? 'با نامک' : m.via === 'name_ambiguous' ? 'با نام (چند مورد مشابه)' : 'با نام'}</span>` : '❌ پیدا نشد';
-              return `<tr><td><input type="checkbox" class="wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${m && m.matched && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${r.approved ? '✅' : '—'}</td><td>${matchHtml}</td><td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td><td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td></tr>`;
+              const genHtml = m && m.generated ? `<div style="margin-top:4px;font-size:.75rem;color:#047857">🟢 قبلاً تولید شده (در تاریخ ${formatJalali(m.generated.at)})</div>` : '';
+              return `<tr><td><input type="checkbox" class="wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${m && m.matched && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${r.approved ? '✅' : '—'}</td><td>${matchHtml}${genHtml}</td><td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td><td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td></tr>`;
             }).join('')}</tbody></table></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
               <button id="wila-bulk-start" class="wila-btn wila-btn-primary" ${b.running ? 'disabled' : ''}>${b.running ? 'در حال پردازش...' : 'شروع تولید انبوه'}</button>
@@ -1122,7 +1151,16 @@
       const bulkLinks = this.root.querySelector('#wila-bulk-links'); if (bulkLinks) bulkLinks.addEventListener('change', e => { bulk.autoLinks = e.target.checked; });
       this.root.querySelectorAll('.wila-bulk-row').forEach(box => box.addEventListener('change', e => { bulk.selected[e.target.dataset.index] = e.target.checked; this.render(); }));
       const bulkAll = this.root.querySelector('#wila-bulk-select-all');
-      if (bulkAll) bulkAll.addEventListener('change', e => { this.bulkVisibleIndexes().forEach(i => { if (bulk.rows[i].match && bulk.rows[i].match.matched) bulk.selected[i] = e.target.checked; }); this.render(); });
+      if (bulkAll) {
+        const visibleSelected = this.bulkVisibleIndexes().filter(i => bulk.selected[i]).length;
+        bulkAll.indeterminate = !bulkAll.checked && visibleSelected > 0;
+        bulkAll.addEventListener('change', e => {
+          // تیک‌خوردن: انتخاب ردیف‌های مجاز؛ برداشتن تیک: برداشتن تیک همه ردیف‌های قابل‌مشاهده
+          if (e.target.checked) this.bulkSelectableIndexes().forEach(i => { bulk.selected[i] = true; });
+          else this.bulkVisibleIndexes().forEach(i => { delete bulk.selected[i]; });
+          this.render();
+        });
+      }
       const bulkStart = this.root.querySelector('#wila-bulk-start'); if (bulkStart) bulkStart.addEventListener('click', () => this.startBulk());
       const bulkPause = this.root.querySelector('#wila-bulk-pause'); if (bulkPause) bulkPause.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); });
       const bulkStop = this.root.querySelector('#wila-bulk-stop'); if (bulkStop) bulkStop.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.bulkRefreshUi(); });

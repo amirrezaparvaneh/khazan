@@ -81,9 +81,19 @@ class WILA_Bulk_Generator {
                 $found = $by_slug[$slug];
                 $via = 'slug';
             }
-            $matches[] = $found ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status']) : array('matched' => false);
+            $matches[] = $found ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status'], 'generated' => self::get_generated_info($found['id'])) : array('matched' => false);
         }
         return $matches;
+    }
+
+    const GENERATED_META = '_wila_csv_generated_at';
+
+    /**
+     * سابقه تولید از طریق CSV برای یک محصول (یا null)
+     */
+    private static function get_generated_info($product_id) {
+        $info = json_decode((string) get_post_meta($product_id, self::GENERATED_META, true), true);
+        return is_array($info) && !empty($info['at']) ? $info : null;
     }
 
     private static function clean_row($row) {
@@ -130,13 +140,12 @@ class WILA_Bulk_Generator {
             'h1_title'          => $context['title'],
             'focus_keyword'     => $focus,
             'long_tail'         => $row['related_keywords'],
-            'word_count'        => 1200,
+            'word_count'        => 1000,
             'content_type'      => WILA_Content_Targets::kind_label(WILA_Content_Targets::KIND_PRODUCT),
             'funnel_stage'      => 'BOFU',
             'description'       => '',
             'internal_links'    => $internal_links,
             'use_orphan_links'  => false,
-            'keep_image_placeholders' => true,
             'target'            => $context,
         );
 
@@ -162,12 +171,16 @@ class WILA_Bulk_Generator {
         ));
         if (is_wp_error($applied)) return $applied;
 
+        $generated = array('at' => current_time('mysql'), 'model' => WILA_AvalAI_Client::MODEL, 'mode' => $mode);
+        update_post_meta($product_id, self::GENERATED_META, wp_json_encode($generated));
+
         return array(
             'product_id'          => $product_id,
             'mode'                => $mode,
             'edit_url'            => $applied['edit_url'],
             'internal_link_count' => $result['internal_link_count'],
             'seo_title'           => $seo_title,
+            'generated'           => $generated,
         );
     }
 }
