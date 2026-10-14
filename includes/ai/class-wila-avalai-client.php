@@ -411,7 +411,7 @@ class WILA_AvalAI_Client {
         $kind = WILA_Content_Targets::KIND_PRODUCT;
         $sheet = array(
             'نام محصول' => $row['name'], 'توضیحات' => $row['description'], 'یادداشت' => $row['notes'],
-            'ویژگی‌های زیره' => $row['sole'], 'ویژگی‌های رویه، آستر و کفی' => $row['upper'], 'ویژگی‌های کلی' => $row['general'],
+            'ویژگی‌های زیره' => $row['sole'], 'ویژگی‌های رویه' => $row['upper'], 'ویژگی آستر و کفی' => $row['lining'], 'ویژگی‌های کلی' => $row['general'],
             'کلیدواژه کانونی' => $params['focus_keyword'], 'عبارات کلیدی مترادف و فرعی' => $row['related_keywords'],
         );
         $prompt = $this->build_commerce_system_prompt($params, $kind) . "\n" . $this->build_seo_title_rules($kind) .

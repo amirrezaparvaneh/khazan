@@ -87,7 +87,7 @@ class WILA_Bulk_Generator {
     }
 
     private static function clean_row($row) {
-        $fields = array('name', 'slug', 'description', 'notes', 'sole', 'upper', 'general', 'seo_title', 'meta_description', 'focus_keyword', 'related_keywords');
+        $fields = array('name', 'slug', 'description', 'notes', 'sole', 'upper', 'lining', 'general', 'seo_title', 'meta_description', 'focus_keyword', 'related_keywords');
         $clean = array();
         foreach ($fields as $field) {
             $clean[$field] = isset($row[$field]) ? sanitize_textarea_field(wp_unslash((string) $row[$field])) : '';

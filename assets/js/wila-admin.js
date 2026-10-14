@@ -382,8 +382,9 @@
     // ---------- تولید انبوه از شیت (CSV) ----------
     parseCsv: function (text) {
       text = String(text).replace(/^﻿/, '');
-      const first = text.split(/\r?\n/)[0] || '';
-      const count = d => (first.match(new RegExp(d === '\t' ? '\t' : '\\' + d, 'g')) || []).length;
+      // جداکننده از چند خط نخست تشخیص داده می‌شود تا ردیف اول خالی یا بی‌هدر گمراه‌کننده نباشد
+      const sample = text.split(/\r?\n/).slice(0, 8).join('\n');
+      const count = d => (sample.match(new RegExp(d === '\t' ? '\t' : '\\' + d, 'g')) || []).length;
       const delim = [',', ';', '\t'].sort((a, b) => count(b) - count(a))[0];
       const rows = []; let row = [], cell = '', quoted = false;
       for (let i = 0; i < text.length; i++) {
@@ -401,16 +402,43 @@
       return rows.filter(r => r.some(c => String(c).trim() !== ''));
     },
 
+    normalizeCsvHeader: function (header) {
+      return String(header == null ? '' : header)
+        .replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, '')
+        .replace(/[‌‏‎]/g, ' ')
+        .replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[()（）\[\]]/g, ' ')
+        .replace(/\s+/g, ' ').trim().toLowerCase();
+    },
+
+    // تطبیق زیررشته‌ای هدر؛ ترتیب قاعده‌ها مهم است (مثلاً «توضیحات متا» پیش از «توضیحات»)
     mapCsvHeader: function (header) {
-      const h = String(header).replace(/‌/g, ' ').replace(/[\u{1F300}-\u{1FAFF}☀-➿️]/gu, '').replace(/[ي]/g, 'ی').replace(/[ك]/g, 'ک').trim();
-      const rules = [
-        ['approved', /تایید|تأیید|approved/i], ['seo_title', /عنوان\s*سئو|seo\s*title/i], ['meta_description', /متا|meta/i],
-        ['focus_keyword', /کانونی|focus/i], ['related_keywords', /مترادف|فرعی|related/i], ['slug', /نامک|slug|لینک/i],
-        ['name', /نام\s*محصول|name|product/i], ['notes', /یادداشت|note/i], ['sole', /زیره|sole/i],
-        ['upper', /رویه|آستر|کفی|upper/i], ['general', /کلی|general/i], ['description', /توضیحات|description/i]
-      ];
-      const hit = rules.find(([, re]) => re.test(h));
-      return hit ? hit[0] : null;
+      const h = this.normalizeCsvHeader(header);
+      if (!h) return null;
+      const has = (...words) => words.some(w => h.includes(w));
+      if (has('عنوان سئو')) return 'seo_title';
+      if (has('توضیحات متا')) return 'meta_description';
+      if (has('تایید', 'تأیید', 'approved')) return 'approved';
+      if (has('نام محصول')) return 'name';
+      if (has('لینک محصول')) return 'product_url';
+      if (has('نامک', 'slug')) return 'slug';
+      if (has('کلیدواژه کانونی', 'focus')) return 'focus_keyword';
+      if (has('مترادف', 'related')) return 'related_keywords';
+      if (has('یادداشت')) return 'notes';
+      if (has('زیره')) return 'sole';
+      if (has('رویه')) return 'upper'; // ستون ترکیبی «رویه، آستر و کفی» هم همین‌جا می‌آید
+      if (has('آستر', 'کفی')) return 'lining';
+      if (has('ویژگی های کلی', 'ویژگی کلی')) return 'general';
+      if (has('توضیحات')) return 'description';
+      return null;
+    },
+
+    // ردیف هدر را در ۵ ردیف نخست پیدا می‌کند (ردیف‌های خالی قبلاً حذف شده‌اند)
+    findCsvHeaderRow: function (table) {
+      for (let i = 0; i < Math.min(5, table.length); i++) {
+        const map = table[i].map(h => this.mapCsvHeader(h));
+        if (map.includes('name') || map.includes('slug') || map.includes('product_url')) return { index: i, map };
+      }
+      return null;
     },
 
     isApprovedValue: function (value) {
@@ -424,17 +452,23 @@
       try {
         const table = this.parseCsv(await file.text());
         if (table.length < 2) throw new Error('فایل خالی است یا ردیف داده ندارد.');
-        const map = table[0].map(h => this.mapCsvHeader(h));
-        if (!map.includes('name') && !map.includes('slug')) throw new Error('ستون «نام محصول» یا «نامک» در فایل پیدا نشد.');
-        b.rows = table.slice(1).map(cells => {
+        const found = this.findCsvHeaderRow(table);
+        if (!found) {
+          const seen = table.slice(0, 5).map(r => r.map(c => String(c).trim()).filter(Boolean).join(' | ')).filter(Boolean);
+          console.log('WILA CSV headers (first rows):', seen);
+          throw new Error('ستون «نام محصول» یا «نامک» در فایل پیدا نشد. هدرهای خوانده‌شده: ' + (seen[0] || '—'));
+        }
+        const map = found.map;
+        console.log('WILA CSV header row:', found.index + 1, table[found.index], map);
+        b.rows = table.slice(found.index + 1).map(cells => {
           const row = { approved: false, run: '', match: null };
           map.forEach((key, idx) => { if (key) row[key] = (cells[idx] || '').trim(); });
           row.approved = this.isApprovedValue(row.approved);
           return row;
-        }).filter(r => r.name || r.slug);
+        }).filter(r => r.name || r.slug || r.product_url);
         b.fileName = file.name; b.selected = {}; b.log = []; b.filter = 'all'; b.matching = true;
         this.render();
-        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || '' })) }) });
+        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || r.product_url || '' })) }) });
         if (!res.success) throw new Error(res.message || 'تطبیق انجام نشد.');
         const hasApproval = map.includes('approved');
         res.matches.forEach((m, i) => {
@@ -752,7 +786,7 @@
         const locked = b.running ? 'disabled' : '';
         contentHtml = `<div class="wila-card">
           <h3 style="margin-top:0">تولید محتوای انبوه از شیت (CSV Bulk Generator)</h3>
-          <p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه/آستر/کفی و ویژگی‌های کلی. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>
+          <p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>
           <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="wila-input" style="width:100%" ${locked}>
           ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
           ${b.rows.length && !b.matching ? `
