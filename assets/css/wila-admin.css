@@ -1,4 +1,6 @@
-/* IranSans (FaNum: Persian digits) and a Latin-digit twin for LTR values such as API keys and URLs */
+@import url('https://fonts.googleapis.com/css2?family=Alan+Sans:wght@400;600;700;900&display=swap');
+
+/* IranSans: Persian glyph fallback behind Alan Sans (Alan Sans has no Arabic-script glyphs) */
 @font-face {
   font-family: 'KhazanIranSans';
   font-style: normal;
@@ -38,45 +40,8 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'KhazanIranSansLatin';
-  font-style: normal;
-  font-weight: 400;
-  src: url('../fonts/IRAN.woff2') format('woff2'),
-       url('../fonts/IRAN.woff') format('woff');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'KhazanIranSansLatin';
-  font-style: normal;
-  font-weight: 600;
-  src: url('../fonts/IRAN_SemiBold.woff2') format('woff2'),
-       url('../fonts/IRAN_SemiBold.woff') format('woff');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'KhazanIranSansLatin';
-  font-style: normal;
-  font-weight: 700;
-  src: url('../fonts/IRANBold.woff2') format('woff2'),
-       url('../fonts/IRANBold.woff') format('woff');
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'KhazanIranSansLatin';
-  font-style: normal;
-  font-weight: 900;
-  src: url('../fonts/IRANBlack.woff2') format('woff2'),
-       url('../fonts/IRANBlack.woff') format('woff');
-  font-display: swap;
-}
-
-
 :root {
-  --wila-font: 'KhazanIranSans', Tahoma, sans-serif;
+  --wila-font: 'Alan Sans', 'KhazanIranSans', sans-serif;
   --wila-bg: #faf8f7;
   --wila-card-bg: #ffffff;
   --wila-border: #eddcd6;
@@ -1144,22 +1109,16 @@ img.khazan-watermark {
 .khazan-3d-btn:focus-visible { outline: none; }
 .khazan-3d-btn:focus-visible .btn-top { box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.25), inset 0 1px 0 rgba(255, 255, 255, .3); }
 
-/* Font scope: only inside the Khazan container */
-#wila-app-root.khazan-app-shell,
-#wila-app-root .khazan-main,
-#wila-app-root .khazan-sidebar,
-#wila-app-root input,
-#wila-app-root textarea,
-#wila-app-root select,
-#wila-app-root button,
-#wila-app-root table {
-  font-family: 'KhazanIranSans', Tahoma, sans-serif;
-}
-/* LTR values (API keys, URLs, code) keep Latin digits */
-#wila-app-root code,
-#wila-app-root [dir="ltr"],
-#wila-app-root input[style*="direction:ltr"],
-#wila-app-root textarea[style*="direction:ltr"],
-#wila-app-root strong[dir="ltr"] {
-  font-family: 'KhazanIranSansLatin', Tahoma, sans-serif;
+/* Font scope: Alan Sans for Latin, IranSans fills in Persian glyphs; scoped to the Khazan container only */
+.khazan-app-shell,
+.khazan-app-shell *,
+.khazan-main,
+.khazan-main *,
+.khazan-sidebar,
+.khazan-sidebar *,
+.khazan-main input,
+.khazan-main button,
+.khazan-main select,
+.khazan-main textarea {
+  font-family: 'Alan Sans', 'KhazanIranSans', sans-serif !important;
 }

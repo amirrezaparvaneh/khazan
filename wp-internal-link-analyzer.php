@@ -100,6 +100,11 @@ final class WP_Internal_Link_Analyzer {
         return 'data:image/svg+xml;base64,' . base64_encode($svg);
     }
 
+    public function print_font_preconnect() {
+        echo '<link rel="preconnect" href="https://fonts.googleapis.com">' . "\n";
+        echo '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' . "\n";
+    }
+
     public function print_menu_styles() {
         echo '<style id="khazan-menu-style">
 #adminmenu li#toplevel_page_wila-dashboard > a.menu-top,
@@ -120,6 +125,8 @@ final class WP_Internal_Link_Analyzer {
         if ($hook_suffix !== 'toplevel_page_wila-dashboard') {
             return;
         }
+
+        add_action('admin_head', array($this, 'print_font_preconnect'), 1);
 
         wp_enqueue_style(
             'wila-admin-style',
