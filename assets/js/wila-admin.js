@@ -596,6 +596,11 @@
       return v !== '' && (/✅|✔|✓|☑/.test(v) || ['true', '1', 'yes', 'y', 'x', 'بله', 'تایید', 'تأیید', 'تایید شده'].includes(v));
     },
 
+    formatFileSize: function (bytes) {
+      if (!bytes) return '';
+      return bytes < 1024 * 1024 ? toPersianDigits((bytes / 1024).toFixed(1)) + ' کیلوبایت' : toPersianDigits((bytes / 1024 / 1024).toFixed(2)) + ' مگابایت';
+    },
+
     loadBulkFile: async function (file) {
       if (!file) return;
       const b = this.state.bulk;
@@ -616,7 +621,7 @@
           row.approved = this.isApprovedValue(row.approved);
           return row;
         }).filter(r => r.name || r.slug || r.product_url);
-        b.fileName = file.name; b.selected = {}; b.log = []; b.filter = 'all'; b.view = 'found'; b.matching = true;
+        b.fileName = file.name; b.fileSize = file.size; b.selected = {}; b.log = []; b.filter = 'all'; b.view = 'found'; b.matching = true;
         this.render();
         const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ file_name: b.fileName, rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || r.product_url || '', focus_keyword: r.focus_keyword || '' })) }) });
         if (!res.success) throw new Error(res.message || 'تطبیق انجام نشد.');
@@ -1051,12 +1056,22 @@
           <p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>
           <div class="khazan-toolbar">
             <div class="khazan-field khazan-field-file"><label>فایل CSV</label>
-              <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="wila-input" ${locked}></div>
-            ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>فیلتر وضعیت تولید محتوا</label>
+              <label class="khazan-dropzone ${b.fileName ? 'has-file' : ''} ${locked ? 'is-locked' : ''}" id="wila-bulk-dropzone" for="wila-bulk-file">
+                <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="khazan-file-hidden" ${locked}>
+                ${b.fileName ? `
+                  <span class="khazan-dz-icon khazan-dz-ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg></span>
+                  <span class="khazan-dz-text"><strong dir="ltr">${escapeHtml(b.fileName)}</strong><small>${b.fileSize ? 'حجم فایل: ' + this.formatFileSize(b.fileSize) : ''}</small></span>
+                  <span class="khazan-pill-btn">تغییر فایل</span>
+                ` : `
+                  <span class="khazan-dz-icon"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h8M11 9H8"/></svg></span>
+                  <span class="khazan-dz-text"><strong>فایل CSV رو بکش و بنداز اینجا، یا کلیک کن تا انتخاب بشه</strong><small>پشتیبانی از فرمت CSV با کدگذاری UTF-8</small></span>
+                `}
+              </label></div>
+            ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
               <select id="wila-bulk-status" class="wila-select">
-                <option value="all" ${b.status === 'all' ? 'selected' : ''}>همه ردیف‌ها</option>
-                <option value="pending" ${b.status === 'pending' ? 'selected' : ''}>فقط در انتظار تولید محتوا (بدون محتوا)</option>
-                <option value="generated" ${b.status === 'generated' ? 'selected' : ''}>قبلاً تولیدشده‌ها</option>
+                <option value="all" ${b.status === 'all' ? 'selected' : ''}>همه محصولات شیت</option>
+                <option value="pending" ${b.status === 'pending' ? 'selected' : ''}>فقط محصولاتی که هنوز براشون محتوا ساخته نشده (در انتظار تولید)</option>
+                <option value="generated" ${b.status === 'generated' ? 'selected' : ''}>محصولاتی که قبلاً براشون محتوا ساختی</option>
               </select></div>
             <div class="khazan-field"><label>حالت درج محتوا</label>
               <select id="wila-bulk-mode" class="wila-select" ${locked}>
@@ -1072,7 +1087,7 @@
               <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
               <label class="khazan-toggle"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-switch"></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>
             </div>
-            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 ${toPersianDigits(matchedCount)} از ${toPersianDigits(b.rows.length)} ردیف متصل شد</span><span class="khazan-status-pill khazan-status-alt">☑️ ${toPersianDigits(selectedCount)} ردیف انتخاب شده</span></div>
+            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span></div>
             <div class="khazan-subtabs">
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'found' ? 'active' : ''}" data-view="found">🟢 محصولات موجود در سایت (متصل‌شده) <em>${toPersianDigits(matchedCount)}</em></button>
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(b.rows.length - matchedCount)}</em></button>
@@ -1442,6 +1457,17 @@
       });
       const bulkFile = this.root.querySelector('#wila-bulk-file');
       if (bulkFile) bulkFile.addEventListener('change', e => this.loadBulkFile(e.target.files[0]));
+      const dropzone = this.root.querySelector('#wila-bulk-dropzone');
+      if (dropzone && !this.state.bulk.running) {
+        ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('is-drag'); }));
+        ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('is-drag'); }));
+        dropzone.addEventListener('drop', e => {
+          const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (!f) return;
+          if (!/\.csv$/i.test(f.name) && f.type !== 'text/csv') { this.toast('خطا: فقط فایل CSV قابل قبوله.'); return; }
+          this.loadBulkFile(f);
+        });
+      }
       const bulk = this.state.bulk;
       const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
       this.root.querySelectorAll('.wila-bulk-view').forEach(btn => btn.addEventListener('click', e => { bulk.view = e.currentTarget.getAttribute('data-view'); this.render(); }));

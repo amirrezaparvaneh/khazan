@@ -797,3 +797,32 @@
 @media (max-width: 960px) {
   .khazan-main { width: 100%; flex: none; }
 }
+
+/* CSV dropzone */
+.khazan-file-hidden { position: absolute !important; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); pointer-events: none; }
+#wila-app-root label.khazan-dropzone {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 92px;
+  margin: 0;
+  padding: 18px 20px;
+  text-align: center;
+  background: #fffbf7;
+  border: 2px dashed #f59e0b;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 400;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.khazan-dropzone:hover, .khazan-dropzone.is-drag { background: #fff3e0; border-color: #c2410c; }
+.khazan-dropzone.is-drag { transform: scale(1.01); }
+.khazan-dropzone.is-locked { opacity: 0.6; cursor: not-allowed; }
+.khazan-dz-icon { flex: none; display: inline-flex; color: #b91c1c; }
+.khazan-dz-ok { color: #16a34a; }
+.khazan-dz-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: center; }
+.khazan-dropzone.has-file .khazan-dz-text { text-align: right; }
+.khazan-dz-text strong { font-size: 0.9rem; color: #3b1f1a; overflow-wrap: anywhere; }
+.khazan-dz-text small { font-size: 0.75rem; color: #78716c; font-weight: 400; }
