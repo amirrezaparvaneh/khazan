@@ -1,69 +1,53 @@
+<?php
+/**
+ * مدیریت مقصدهای تولید محتوا (محصول و دسته‌بندی محصول): فهرست، زمینه برای هوش مصنوعی و انتشار مستقیم
+ *
+ * @package WP_Internal_Link_Analyzer
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 class WILA_Content_Targets {
 
     const KIND_ARTICLE  = 'article';
+    const KIND_PRODUCT  = 'product';
+    const KIND_CATEGORY = 'product_cat';
 
     /**
-     * پست‌تایپ محصول (پیش‌فرض: product؛ قابل override توسط فیلتر وردپرس یا تنظیمات)
+     * نوع محتوای محصول: تنظیمات افزونه، سپس فیلتر، سپس product و در نهایت اولین نوع عمومی که نامش شامل product باشد
      */
-    public static function get_product_post_type() {
-        $pt = get_option('wila_product_post_type', '');
-        if (!empty($pt)) return $pt;
-        return apply_filters('wila_content_product_post_type', 'product');
+    public static function product_post_type() {
+        $type = sanitize_key(get_option('wila_product_post_type', ''));
+        if ($type === '') $type = sanitize_key(apply_filters('wila_product_post_type', 'product'));
+        if (post_type_exists($type)) return $type;
+        foreach (get_post_types(array('public' => true), 'names') as $name) {
+            if (stripos($name, 'product') !== false) return $name;
+        }
+        return $type;
     }
 
     /**
-     * تاکسونومی دسته‌بندی محصول (پیش‌فرض: product_cat)
+     * تاکسونومی دسته‌بندی محصول: تنظیمات، فیلتر، product_cat، سپس تاکسونومی سلسله‌مراتبی عمومی متصل به نوع محصول
      */
-    public static function get_product_category_taxonomy() {
-        $tax = get_option('wila_product_category_taxonomy', '');
-        if (!empty($tax)) return $tax;
-        return apply_filters('wila_content_product_category_taxonomy', 'product_cat');
-    }
-
-    public static function KIND_PRODUCT() { return self::get_product_post_type(); }
-    public static function KIND_CATEGORY() { return self::get_product_category_taxonomy(); }
-
-    public static function normalize_kind($kind) {
-        $kind = sanitize_key($kind);
-        $pt = self::get_product_post_type();
-        $tax = self::get_product_category_taxonomy();
-        if ($kind === $pt || $kind === $tax) return $kind;
-        return self::KIND_ARTICLE;
-    }
-
-    public static function is_target_kind($kind) {
-        return $kind === self::get_product_post_type() || $kind === self::get_product_category_taxonomy();
-    }
-
-    public static function kind_label($kind) {
-        $pt = self::get_product_post_type();
-        $tax = self::get_product_category_taxonomy();
-        if ($kind === self::KIND_ARTICLE) return 'مقاله';
-        if ($kind === $pt) {
-            $obj = get_post_type_object($pt);
-            return $obj ? $obj->labels->singular_name : 'محصول';
+    public static function category_taxonomy() {
+        $tax = sanitize_key(get_option('wila_product_category_taxonomy', ''));
+        if ($tax === '') $tax = sanitize_key(apply_filters('wila_product_category_taxonomy', 'product_cat'));
+        if (taxonomy_exists($tax)) return $tax;
+        foreach (get_object_taxonomies(self::product_post_type(), 'objects') as $object) {
+            if ($object->public && $object->hierarchical) return $object->name;
         }
-        if ($kind === $tax) {
-            $obj = get_taxonomy($tax);
-            return $obj ? $obj->labels->singular_name : 'دسته‌بندی';
-        }
-        return 'محتوا';
-    }
-
-    private static function kind_available($kind) {
-        if ($kind === 'article') return true;
-        if ($kind === self::get_product_post_type()) return post_type_exists($kind);
-        if ($kind === self::get_product_category_taxonomy()) return taxonomy_exists($kind);
-        return false;
+        return $tax;
     }
 
     public static function normalize_kind($kind) {
         $kind = sanitize_key($kind);
-        return in_array($kind, array(self::get_product_post_type(), self::get_product_category_taxonomy()), true) ? $kind : self::KIND_ARTICLE;
+        return in_array($kind, array(self::KIND_PRODUCT, self::KIND_CATEGORY), true) ? $kind : self::KIND_ARTICLE;
     }
 
     public static function is_target_kind($kind) {
-        return $kind === self::get_product_post_type() || $kind === self::get_product_category_taxonomy();
+        return $kind === self::KIND_PRODUCT || $kind === self::KIND_CATEGORY;
     }
 
     public static function kind_label($kind) {
@@ -76,8 +60,8 @@ class WILA_Content_Targets {
     }
 
     private static function kind_available($kind) {
-        if ($kind === self::KIND_PRODUCT) return post_type_exists('product');
-        if ($kind === self::KIND_CATEGORY) return taxonomy_exists('product_cat');
+        if ($kind === self::KIND_PRODUCT) return post_type_exists(self::product_post_type());
+        if ($kind === self::KIND_CATEGORY) return taxonomy_exists(self::category_taxonomy());
         return true;
     }
 
@@ -86,14 +70,13 @@ class WILA_Content_Targets {
      */
     public static function list_targets($kind, $search = '') {
         if (!self::is_target_kind($kind) || !self::kind_available($kind)) {
-            return new WP_Error('target_kind_unavailable', 'نوع محتوای درخواستی در این سایت فعال نیست.', array('status' => 400));
+            return new WP_Error('target_kind_unavailable', 'ووکامرس یا نوع محتوای درخواستی در این سایت فعال نیست.', array('status' => 400));
         }
 
         $items = array();
-        $pt = self::get_product_post_type();
-        if ($kind === $pt) {
+        if ($kind === self::KIND_PRODUCT) {
             $args = array(
-                'post_type'      => 'product',
+                'post_type'      => self::product_post_type(),
                 'post_status'    => array('publish', 'draft', 'pending', 'private'),
                 'posts_per_page' => 300,
                 'orderby'        => 'title',
@@ -107,7 +90,7 @@ class WILA_Content_Targets {
             return $items;
         }
 
-        $terms = get_terms(array('taxonomy' => self::get_product_category_taxonomy(), 'hide_empty' => false, 'number' => 300, 'search' => $search, 'orderby' => 'name'));
+        $terms = get_terms(array('taxonomy' => self::category_taxonomy(), 'hide_empty' => false, 'number' => 300, 'search' => $search, 'orderby' => 'name'));
         if (is_wp_error($terms)) return $terms;
         foreach ($terms as $term) {
             $link = get_term_link($term);
@@ -137,7 +120,7 @@ class WILA_Content_Targets {
         if (!$id || !self::is_target_kind($kind) || !self::kind_available($kind)) {
             return new WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
         }
-        return $kind === self::get_product_post_type() ? self::product_context($id) : self::category_context($id);
+        return $kind === self::KIND_PRODUCT ? self::product_context($id) : self::category_context($id);
     }
 
     private static function plain($html, $words) {
@@ -146,7 +129,7 @@ class WILA_Content_Targets {
 
     private static function product_context($id) {
         $post = get_post($id);
-        if (!$post || $post->post_type !== 'product') {
+        if (!$post || $post->post_type !== self::product_post_type()) {
             return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         $context = array(
@@ -181,7 +164,7 @@ class WILA_Content_Targets {
      * دسته‌بندی‌های والد محصول؛ فقط عمیق‌ترین دسته‌ها (آن‌هایی که والد دسته دیگری از همین محصول نیستند)
      */
     private static function product_parent_categories($id) {
-        $terms = get_the_terms($id, 'product_cat');
+        $terms = get_the_terms($id, self::category_taxonomy());
         if (!is_array($terms)) return array();
         $parent_ids = array_map('intval', wp_list_pluck($terms, 'parent'));
         $categories = array();
@@ -204,18 +187,18 @@ class WILA_Content_Targets {
     }
 
     private static function category_context($id) {
-        $term = get_term($id, 'product_cat');
+        $term = get_term($id, self::category_taxonomy());
         if (!$term || is_wp_error($term)) {
             return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
         $link = get_term_link($term);
-        $children = get_terms(array('taxonomy' => 'product_cat', 'parent' => $id, 'hide_empty' => false, 'number' => 20));
+        $children = get_terms(array('taxonomy' => self::category_taxonomy(), 'parent' => $id, 'hide_empty' => false, 'number' => 20));
         $products = get_posts(array(
-            'post_type'      => 'product',
+            'post_type'      => self::product_post_type(),
             'post_status'    => 'publish',
             'posts_per_page' => 12,
             'fields'         => 'ids',
-            'tax_query'      => array(array('taxonomy' => 'product_cat', 'field' => 'term_id', 'terms' => $id)),
+            'tax_query'      => array(array('taxonomy' => self::category_taxonomy(), 'field' => 'term_id', 'terms' => $id)),
         ));
         $context = array(
             'kind'            => self::KIND_CATEGORY,
@@ -231,7 +214,7 @@ class WILA_Content_Targets {
             }, $children))),
         );
         if ($term->parent) {
-            $parent = get_term($term->parent, 'product_cat');
+            $parent = get_term($term->parent, self::category_taxonomy());
             $parent_link = $parent && !is_wp_error($parent) ? get_term_link($parent) : null;
             if ($parent_link && !is_wp_error($parent_link)) $context['parent_category'] = array('name' => $parent->name, 'url' => $parent_link);
         }
@@ -255,12 +238,12 @@ class WILA_Content_Targets {
             'synonyms' => isset($data['keyword_synonyms']) ? sanitize_text_field($data['keyword_synonyms']) : '',
         );
 
-        return $kind === self::get_product_post_type() ? self::apply_to_product($id, $content, $seo) : self::apply_to_category($id, $content, $seo);
+        return $kind === self::KIND_PRODUCT ? self::apply_to_product($id, $content, $seo) : self::apply_to_category($id, $content, $seo);
     }
 
     private static function apply_to_product($id, $content, $seo) {
         $post = get_post($id);
-        if (!$post || $post->post_type !== self::get_product_post_type()) {
+        if (!$post || $post->post_type !== self::product_post_type()) {
             return new WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
         if (!current_user_can('edit_post', $id)) {
@@ -278,7 +261,7 @@ class WILA_Content_Targets {
     }
 
     private static function apply_to_category($id, $content, $seo) {
-        $term = get_term($id, self::get_product_category_taxonomy());
+        $term = get_term($id, self::category_taxonomy());
         if (!$term || is_wp_error($term)) {
             return new WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
@@ -286,7 +269,7 @@ class WILA_Content_Targets {
             return new WP_Error('cannot_edit_target', 'اجازه ویرایش این دسته‌بندی را ندارید.', array('status' => 403));
         }
         update_term_meta($id, '_wila_previous_description', $term->description);
-        $result = wp_update_term($id, self::get_product_category_taxonomy(), array('description' => $content));
+        $result = wp_update_term($id, self::category_taxonomy(), array('description' => $content));
         if (is_wp_error($result)) return $result;
 
         // Yoast keeps taxonomy SEO data in a single option keyed by taxonomy and term id.
@@ -295,11 +278,11 @@ class WILA_Content_Targets {
             if (!is_array($option)) $option = array();
             $keys = array('title' => 'wpseo_title', 'desc' => 'wpseo_desc', 'focuskw' => 'wpseo_focuskw', 'synonyms' => 'wpseo_keywordsynonyms');
             foreach ($keys as $key => $meta_key) {
-                if ($seo[$key] !== '') $option['product_cat'][$id][$meta_key] = $seo[$key];
+                if ($seo[$key] !== '') $option[self::category_taxonomy()][$id][$meta_key] = $seo[$key];
             }
             update_option('wpseo_taxonomy_meta', $option);
         }
         $link = get_term_link($term);
-        return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, self::get_product_category_taxonomy()), 'view_url' => is_wp_error($link) ? '' : $link);
+        return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, self::category_taxonomy(), self::product_post_type()), 'view_url' => is_wp_error($link) ? '' : $link);
     }
 }

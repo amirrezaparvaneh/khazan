@@ -187,8 +187,8 @@ class WILA_REST_Controller {
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
             'homepage_keywords' => $homepage_keywords,
-            'product_post_type' => WILA_Content_Targets::get_product_post_type(),
-            'product_category_taxonomy' => WILA_Content_Targets::get_product_category_taxonomy(),
+            'product_post_type' => WILA_Content_Targets::product_post_type(),
+            'product_category_taxonomy' => WILA_Content_Targets::category_taxonomy(),
         ));
     }
 
