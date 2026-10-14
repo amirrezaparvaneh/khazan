@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       لینکر | تحلیل پیشرفته لینک‌سازی داخلی
+ * Plugin Name:       خـزان | دستیار هوشمند تولید محتوا و مهندسی سئو
  * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
  * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با AvalAI و مدل GPT-5.4 Mini
  * Version:           1.0.0
@@ -60,6 +60,7 @@ final class WP_Internal_Link_Analyzer {
         add_action('rest_api_init', array($this, 'register_rest_routes'));
         add_action('admin_menu', array($this, 'register_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_action('admin_head', array($this, 'print_menu_styles'));
     }
 
     public function activate() {
@@ -84,14 +85,35 @@ final class WP_Internal_Link_Analyzer {
 
     public function register_admin_menu() {
         add_menu_page(
-            'لینکر - تحلیل و بهینه‌سازی لینک‌های داخلی',
-            'لینکر',
+            'خـزان - دستیار هوشمند تولید محتوا و مهندسی سئو',
+            'خـزان',
             'manage_options',
             'wila-dashboard',
             array($this, 'render_dashboard_view'),
-            'dashicons-admin-links',
+            $this->get_menu_icon(),
             30
         );
+    }
+
+    private function get_menu_icon() {
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#a7aaad"><path d="M50 4l9 20 14-6-4 22 22-6-11 18 14 8-25 8 4 14-21-6v20h-8V78l-21 6 4-14-25-8 14-8-11-18 22 6-4-22 14 6z"/></svg>';
+        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+    }
+
+    public function print_menu_styles() {
+        echo '<style id="khazan-menu-style">
+#adminmenu li#toplevel_page_wila-dashboard > a.menu-top,
+#adminmenu li#toplevel_page_wila-dashboard.wp-has-current-submenu > a.menu-top {
+  background: linear-gradient(135deg, #991b1b 0%, #c2410c 50%, #f59e0b 100%) !important;
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+}
+#adminmenu li#toplevel_page_wila-dashboard > a.menu-top:hover { filter: brightness(1.08); }
+#adminmenu li#toplevel_page_wila-dashboard .wp-menu-name { color: #fff !important; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+#adminmenu li#toplevel_page_wila-dashboard div.wp-menu-image { filter: brightness(0) invert(1); opacity: 1; }
+#adminmenu li#toplevel_page_wila-dashboard div.wp-menu-image::before { color: #fff; }
+</style>';
     }
 
     public function enqueue_admin_assets($hook_suffix) {
@@ -107,9 +129,17 @@ final class WP_Internal_Link_Analyzer {
         );
 
         wp_enqueue_script(
+            'khazan-leaves',
+            WILA_PLUGIN_URL . 'assets/js/khazan-leaves.js',
+            array(),
+            WILA_VERSION . '.' . filemtime(WILA_PLUGIN_DIR . 'assets/js/khazan-leaves.js'),
+            true
+        );
+
+        wp_enqueue_script(
             'wila-admin-script',
             WILA_PLUGIN_URL . 'assets/js/wila-admin.js',
-            array(),
+            array('khazan-leaves'),
             WILA_VERSION . '.' . filemtime(WILA_PLUGIN_DIR . 'assets/js/wila-admin.js'),
             true
         );
@@ -117,11 +147,12 @@ final class WP_Internal_Link_Analyzer {
         wp_localize_script('wila-admin-script', 'wilaData', array(
             'restUrl' => esc_url_raw(rest_url()),
             'nonce'   => wp_create_nonce('wp_rest'),
+            'version' => WILA_VERSION,
         ));
     }
 
     public function render_dashboard_view() {
-        echo '<div id="wila-app-root"></div>';
+        echo '<div id="wila-app-root" class="khazan-app-shell"></div>';
     }
 }
 

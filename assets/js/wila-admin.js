@@ -26,9 +26,65 @@
     }[char]));
   }
 
+
+  const KHAZAN_LEAF_PATH = 'M50 4l9 20 14-6-4 22 22-6-11 18 14 8-25 8 4 14-21-6v20h-8V78l-21 6 4-14-25-8 14-8-11-18 22 6-4-22 14 6z';
+  const KHAZAN_ICONS = {
+    home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>',
+    sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+    wrench: '<path d="M14.7 6.3a4 4 0 005 5L21 13l-8 8a2.1 2.1 0 01-3-3l8-8z"/><path d="M14.7 6.3L12 3.6"/>',
+    book: '<path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5z"/><path d="M4 21.5V4.5M8 7h8"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+    chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+    link: '<path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>',
+    leaf: '<path d="' + KHAZAN_LEAF_PATH + '"/>'
+  };
+
+  function icon(name, size) {
+    const sz = size || 20;
+    return `<svg class="khazan-icon" width="${sz}" height="${sz}" viewBox="0 0 ${name === 'leaf' ? 100 : 24} ${name === 'leaf' ? 100 : 24}" fill="none" stroke="currentColor" stroke-width="${name === 'leaf' ? 4 : 1.7}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${KHAZAN_ICONS[name] || ''}</svg>`;
+  }
+
+  function khazanLogo(size, uid) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true" class="khazan-logo-svg">
+      <defs>
+        <linearGradient id="kz-g-${uid}" x1="15%" y1="0%" x2="85%" y2="100%"><stop offset="0%" stop-color="#b91c1c"/><stop offset="55%" stop-color="#ea580c"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+        <linearGradient id="kz-h-${uid}" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#fff" stop-opacity=".38"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></linearGradient>
+        <filter id="kz-s-${uid}" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#7f1d1d" flood-opacity=".35"/></filter>
+      </defs>
+      <g filter="url(#kz-s-${uid})">
+        <path d="${KHAZAN_LEAF_PATH}" fill="url(#kz-g-${uid})"/>
+        <path d="M50 4l9 20 14-6-4 22 22-6-11 18 14 8-25 8 4 14-21-6v20h-8V4z" fill="#7f1d1d" opacity=".16" transform="translate(100 0) scale(-1 1)"/>
+        <path d="M50 4l-9 20-14-6 4 22-22-6 11 18-14 8 25 8-4 14 21-6V4z" fill="url(#kz-h-${uid})"/>
+      </g>
+      <g stroke="#fde68a" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".9">
+        <path d="M50 94V20M50 70L26 62M50 70l24-8M50 52L22 40M50 52l28-12M50 34l-9-8M50 34l9-8"/>
+      </g>
+    </svg>`;
+  }
+
+  const KHAZAN_NAV = [
+    { key: 'home', tab: 'home', icon: 'home', label: 'خانه', title: 'خانه' },
+    { key: 'generator', tab: 'generator', icon: 'edit', label: 'تولید محتوای تکی', title: 'تولید محتوای تکی' },
+    { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه شیت CSV', title: 'تولید انبوه شیت CSV' },
+    { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
+    { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
+    { key: 'archive', tab: 'generator', scroll: 'wila-archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
+    { key: 'settings', tab: 'settings', icon: 'gear', label: 'تنظیمات هوش مصنوعی', title: 'تنظیمات هوش مصنوعی' }
+  ];
+  const KHAZAN_NAV_EXTRA = [
+    { key: 'overview', tab: 'overview', icon: 'chart', label: 'پیشخوان آماری و اسکن', title: 'پیشخوان آماری و اسکن' },
+    { key: 'planner', tab: 'planner', icon: 'target', label: 'برنامه‌ریز لینک', title: 'برنامه‌ریز لینک' },
+    { key: 'items', tab: 'items', icon: 'link', label: 'کاوشگر پیوندها', title: 'کاوشگر پیوندها' }
+  ];
+
   const app = {
     state: {
-      activeTab: 'overview',
+      activeTab: 'home',
+      activeNav: 'home',
+      pendingScroll: '',
       summary: null,
       items: [],
       orphans: [],
@@ -864,7 +920,26 @@
       const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal, aiSettings, plannerForm, plannerResult, isPlanning, isGeneratingContent } = this.state;
       let contentHtml = '';
 
-      if (activeTab === 'overview') {
+      if (activeTab === 'home') {
+        const histCount = this.state.historyLoading ? '…' : toPersianDigits(this.state.contentHistory.length);
+        const cards = [
+          { go: 'generator', icon: 'edit', title: 'تولید محتوای تکی', desc: 'تولید مقاله، توضیحات محصول و دسته‌بندی با رعایت قوانین سئو و لینک‌سازی هوشمند.', btn: 'باز کردن ماژول' },
+          { go: 'bulk', icon: 'sheet', title: 'تولید انبوه شیت CSV', desc: 'آپلود فایل CSV، تطبیق خودکار با محصولات سایت و تولید صف‌بندی‌شده محتوا.', btn: 'باز کردن ماژول' },
+          { go: 'orphans', icon: 'compass', title: 'صفحات یتیم و لینک‌سازی', desc: 'شناسایی صفحاتی که هیچ لینک ورودی ندارند و ساخت لینک داخلی برای آن‌ها.', btn: 'باز کردن ماژول' },
+          { go: 'seofix', icon: 'wrench', title: 'رفع خطای هوشمند سئو', desc: 'بررسی خطاهای خوانایی و سئو و اصلاح انتخابی متن با هوش مصنوعی.', btn: 'باز کردن ماژول' },
+          { go: 'settings', icon: 'gear', title: 'تنظیمات API', desc: 'ثبت کلید AvalAI، تست اتصال و مدیریت تنظیمات هوش مصنوعی.', btn: 'تنظیمات' },
+          { go: 'archive', icon: 'book', title: 'آمار محتواهای تولیدشده', desc: 'تعداد کل محتواهای ذخیره‌شده در آرشیو: <strong class="khazan-stat">' + histCount + '</strong> محتوا', btn: 'مشاهده آرشیو' }
+        ];
+        contentHtml = `<div class="khazan-home-grid">${cards.map(c => `
+          <div class="khazan-card">
+            <div class="khazan-card-icon">${icon(c.icon, 34)}</div>
+            <div class="khazan-card-body">
+              <h3>${c.title}</h3>
+              <p>${c.desc}</p>
+              <div class="khazan-card-actions"><button type="button" class="khazan-pill-btn khazan-go" data-go="${c.go}">${c.btn}</button></div>
+            </div>
+          </div>`).join('')}</div>`;
+      } else if (activeTab === 'overview') {
         let cardsHtml = '';
         if (summary && summary.breakdown) {
           Object.keys(summary.breakdown).forEach(key => {
@@ -912,7 +987,7 @@
           ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
           ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p>${isArticle ? `<p>نامک: ${esc(this.state.contentOutline.slug)}</p>` : ''}<p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
           ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
-          <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
+          <div id="wila-archive" style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
         </div>`;
       } else if (activeTab === 'seofix') {
         const sf = this.state.seoFix;
@@ -1227,19 +1302,42 @@
           `;
       }
 
+      const activeNav = this.state.activeNav;
+      const isNavActive = (n) => n.tab === activeTab && (n.key === 'archive' ? activeNav === 'archive' : activeNav !== 'archive');
+      const navBtn = (n) => `<button type="button" class="wila-tab-btn khazan-nav-item ${isNavActive(n) ? 'active' : ''}" data-tab="${n.tab}" data-nav="${n.key}" ${n.scroll ? `data-scroll="${n.scroll}"` : ''}>${icon(n.icon, 20)}<span>${n.label}</span></button>`;
+      const current = KHAZAN_NAV.concat(KHAZAN_NAV_EXTRA).find(isNavActive) || KHAZAN_NAV[0];
+      const leavesOn = window.KhazanLeaves && window.KhazanLeaves.isEnabled();
+
       this.root.innerHTML = `
-        <div class="wila-header"><div class="wila-header-title"><h1>لینکر | تحلیل پیوند یکتا و لینک‌سازی</h1></div></div>
-        <div class="wila-tabs">
-          <button class="wila-tab-btn ${activeTab === 'overview' ? 'active' : ''}" data-tab="overview">پیشخوان آماری</button>
-          <button class="wila-tab-btn ${activeTab === 'planner' ? 'active' : ''}" data-tab="planner">🎯 برنامه‌‌ریز لینک</button>
-          <button class="wila-tab-btn ${activeTab === 'generator' ? 'active' : ''}" data-tab="generator">تولیدکننده محتوا</button>
-          <button class="wila-tab-btn ${activeTab === 'bulk' ? 'active' : ''}" data-tab="bulk">تولید انبوه (CSV)</button>
-          <button class="wila-tab-btn ${activeTab === 'seofix' ? 'active' : ''}" data-tab="seofix">🛠 رفع خطای سئو</button>
-          <button class="wila-tab-btn ${activeTab === 'items' ? 'active' : ''}" data-tab="items">کاوشگر پیوندها</button>
-          <button class="wila-tab-btn ${activeTab === 'orphans' ? 'active' : ''}" data-tab="orphans">صفحات یتیم</button>
-          <button class="wila-tab-btn ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">تنظیمات</button>
-        </div>
+        <aside class="khazan-sidebar">
+          <div class="khazan-brand">
+            <div class="khazan-brand-logo">${khazanLogo(58, 'brand')}</div>
+            <div class="khazan-brand-text">
+              <h1>خـزان</h1>
+              <span class="khazan-version">نسخه : ${toPersianDigits(wilaData.version || '')}</span>
+            </div>
+          </div>
+          <p class="khazan-tagline">دستیار هوشمند تولید محتوا و مهندسی سئو</p>
+          <nav class="khazan-nav">
+            ${KHAZAN_NAV.map(navBtn).join('')}
+            <div class="khazan-nav-label">تحلیل لینک</div>
+            ${KHAZAN_NAV_EXTRA.map(navBtn).join('')}
+          </nav>
+          <div class="khazan-watermark" aria-hidden="true">
+            ${khazanLogo(150, 'wm')}
+            <div class="khazan-wm-word">Khazan</div>
+          </div>
+          <div class="khazan-signature">طراحی و توسعه: امیــــــــررضا پـروانه</div>
+        </aside>
+        <main class="khazan-main">
+          <header class="khazan-topbar">
+            <h2>${current.title}</h2>
+            <button type="button" class="khazan-pill-btn khazan-leaf-toggle ${leavesOn ? 'on' : ''}" id="khazan-leaf-toggle">🍁 افکت خزان: ${leavesOn ? 'فعال' : 'غیرفعال'}</button>
+          </header>
+          <div class="khazan-panel">
         <div class="wila-content">${contentHtml}</div>
+          </div>
+        </main>
         ${modal.isOpen ? `
           <div class="wila-modal-backdrop" id="wila-modal-backdrop">
             <div class="wila-modal">
@@ -1256,11 +1354,37 @@
       this.root.querySelectorAll('.wila-tab-btn').forEach(btn => btn.addEventListener('click', e => {
         this.state.activeTab = e.currentTarget.getAttribute('data-tab');
         if (!this.state.activeTab) return;
+        this.state.activeNav = e.currentTarget.getAttribute('data-nav') || this.state.activeTab;
+        this.state.pendingScroll = e.currentTarget.getAttribute('data-scroll') || '';
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         this.render();
       }));
+
+      this.root.querySelectorAll('.khazan-go').forEach(btn => btn.addEventListener('click', e => {
+        const target = KHAZAN_NAV.concat(KHAZAN_NAV_EXTRA).find(n => n.key === e.currentTarget.getAttribute('data-go'));
+        if (!target) return;
+        this.state.activeTab = target.tab;
+        this.state.activeNav = target.key;
+        this.state.pendingScroll = target.scroll || '';
+        if (target.tab === 'orphans') this.fetchOrphans();
+        if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
+        this.render();
+      }));
+
+      const leafToggle = this.root.querySelector('#khazan-leaf-toggle');
+      if (leafToggle && window.KhazanLeaves) leafToggle.addEventListener('click', () => {
+        const on = window.KhazanLeaves.toggle();
+        leafToggle.classList.toggle('on', on);
+        leafToggle.textContent = '🍁 افکت خزان: ' + (on ? 'فعال' : 'غیرفعال');
+      });
+
+      if (this.state.pendingScroll) {
+        const el = document.getElementById(this.state.pendingScroll);
+        this.state.pendingScroll = '';
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
 
       const scanBtn = this.root.querySelector('#wila-start-scan-btn');
       if (scanBtn) scanBtn.addEventListener('click', () => this.startBatchScan());
