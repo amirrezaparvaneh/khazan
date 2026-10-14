@@ -826,3 +826,33 @@ img.khazan-watermark {
   .khazan-sidebar { padding-bottom: 14px; }
   img.khazan-watermark, .khazan-signature { display: none; }
 }
+
+/* CSV dropzone v2 - clean vertical layout */
+#wila-app-root label.khazan-dropzone {
+  flex-direction: column;
+  gap: 10px;
+  padding: 28px;
+  background: #fffaf5;
+  border: 1.5px dashed #fed7aa;
+  border-radius: 16px;
+}
+#wila-app-root label.khazan-dropzone.has-file { flex-direction: row; padding: 18px 20px; }
+.khazan-dropzone:hover, .khazan-dropzone.is-drag { background: #fff4e8; border-color: #fdba74; }
+.khazan-dz-icon-idle { color: #d97706; }
+.khazan-dropzone:not(.has-file) .khazan-dz-text { gap: 6px; }
+.khazan-dropzone:not(.has-file) .khazan-dz-text strong { font-size: 1rem; font-weight: 700; }
+.khazan-dropzone:not(.has-file) .khazan-dz-text small { font-size: 0.82rem; color: #a8a29e; }
+.khazan-dz-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 8px 22px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #991b1b 0%, #c2410c 100%);
+  border-radius: 9999px;
+  box-shadow: 0 3px 10px rgba(153, 27, 27, 0.25);
+  transition: filter 0.15s ease;
+}
+.khazan-dropzone:hover .khazan-dz-cta { filter: brightness(1.08); }

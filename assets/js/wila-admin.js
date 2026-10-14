@@ -1043,8 +1043,9 @@
                   <span class="khazan-dz-text"><strong dir="ltr">${escapeHtml(b.fileName)}</strong><small>${b.fileSize ? 'حجم فایل: ' + this.formatFileSize(b.fileSize) : ''}</small></span>
                   <span class="khazan-pill-btn">تغییر فایل</span>
                 ` : `
-                  <span class="khazan-dz-icon"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h8M11 9H8"/></svg></span>
-                  <span class="khazan-dz-text"><strong>فایل CSV رو بکش و بنداز اینجا، یا کلیک کن تا انتخاب بشه</strong><small>پشتیبانی از فرمت CSV با کدگذاری UTF-8</small></span>
+                  <span class="khazan-dz-icon khazan-dz-icon-idle"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h8M11 9H8"/></svg></span>
+                  <span class="khazan-dz-text"><strong>بارگذاری فایل اکسل / شیت محصولات</strong><small>فایل CSV را اینجا رها کنید یا دکمه زیر را بزنید</small></span>
+                  <span class="khazan-dz-cta">انتخاب فایل از سیستم</span>
                 `}
               </label></div>
             ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
