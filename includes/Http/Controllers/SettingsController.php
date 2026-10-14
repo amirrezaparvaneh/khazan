@@ -6,6 +6,9 @@
 namespace Khazan\Http\Controllers;
 
 use Khazan\Core\Settings;
+use Khazan\Http\Requests\AvailableTaxonomiesRequest;
+use Khazan\Http\Requests\ConnectionTestRequest;
+use Khazan\Http\Requests\SettingsUpdateRequest;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -44,10 +47,8 @@ final class SettingsController extends BaseController {
     }
 
     public function get_available_taxonomies($request) {
-        $post_type = sanitize_key($request['post_type']);
-        if (!post_type_exists($post_type)) {
-            return new \WP_Error('invalid_post_type', 'نوع محتوا یافت نشد.', array('status' => 400));
-        }
+        $post_type = (new AvailableTaxonomiesRequest($request['post_type']))->post_type();
+        if (is_wp_error($post_type)) return $post_type;
         $taxes = get_object_taxonomies($post_type, 'objects');
         $items = array();
         foreach ($taxes as $tax) {
@@ -58,36 +59,15 @@ final class SettingsController extends BaseController {
     }
 
     public function save_settings($request) {
-        $params   = $request->get_json_params();
-        update_option(Settings::OPT_AI_PROVIDER, 'avalai');
-
-        if (isset($params['homepage_keywords'])) {
-            update_option(Settings::OPT_HOMEPAGE_KEYWORDS, sanitize_textarea_field($params['homepage_keywords']));
-        }
-        if (isset($params['avalai_api_key'])) {
-            $key = trim(sanitize_text_field($params['avalai_api_key']));
-            if (!empty($key) && strpos($key, '...') === false) {
-                update_option(Settings::OPT_AVALAI_API_KEY, $key);
-            }
-        }
-        if (isset($params['product_post_type'])) {
-            $pt = sanitize_key($params['product_post_type']);
-            if (post_type_exists($pt)) update_option(Settings::OPT_PRODUCT_POST_TYPE, $pt);
-        }
-        if (isset($params['product_category_taxonomy'])) {
-            $tax = sanitize_key($params['product_category_taxonomy']);
-            if (taxonomy_exists($tax)) update_option(Settings::OPT_PRODUCT_CATEGORY_TAXONOMY, $tax);
+        foreach ((new SettingsUpdateRequest($request->get_json_params()))->options() as $option => $value) {
+            update_option($option, $value);
         }
 
         return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات با موفقیت ذخیره شد.'));
     }
 
     public function test_avalai_connection($request) {
-        $params   = $request->get_json_params();
-        $api_key = isset($params['avalai_api_key']) ? trim(sanitize_text_field($params['avalai_api_key'])) : null;
-        if (!empty($api_key) && strpos($api_key, '...') !== false) {
-            $api_key = null;
-        }
+        $api_key = (new ConnectionTestRequest($request->get_json_params()))->api_key();
 
         $client = new \Khazan\Services\Ai\AiService();
         $result = $client->test_connection($api_key);

@@ -5,6 +5,8 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Http\Requests\ContentDraftRequest;
+
 use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
@@ -137,22 +139,10 @@ final class ContentController extends BaseController {
     }
 
     public function create_content_draft($request) {
-        $params = $request->get_json_params();
-        $title = isset($params['title']) ? sanitize_text_field($params['title']) : '';
-        $content = isset($params['content']) ? wp_kses_post($params['content']) : '';
-        $slug = isset($params['slug']) ? strtolower(trim(sanitize_text_field($params['slug']))) : '';
-        if (!preg_match('/^[a-z]+(?:-[a-z0-9]+)*$/D', $slug)) {
-            return new \WP_Error('invalid_english_slug', 'نامک انگلیسی مرتبط را با حروف لاتین و خط تیره وارد کنید.', array('status' => 400));
-        }
-        if (empty($title) || empty($content)) return new \WP_Error('missing_draft_content', 'عنوان و محتوای پیش‌نویس الزامی هستند.', array('status' => 400));
+        $input = (new ContentDraftRequest($request->get_json_params()))->validated();
+        if (is_wp_error($input)) return $input;
 
-        $seo = array(
-            'title'    => isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title,
-            'desc'     => isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '',
-            'focuskw'  => isset($params['focus_keyword']) ? sanitize_text_field($params['focus_keyword']) : '',
-            'synonyms' => isset($params['keyword_synonyms']) ? sanitize_text_field($params['keyword_synonyms']) : '',
-        );
-        $post_id = (new \Khazan\Repository\ContentTargetRepository())->create_blog_draft($title, $content, $slug, $seo);
+        $post_id = (new \Khazan\Repository\ContentTargetRepository())->create_blog_draft($input['title'], $input['content'], $input['slug'], $input['seo']);
         if (is_wp_error($post_id)) return $post_id;
 
         return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'slug' => get_post_field('post_name', $post_id), 'edit_url' => get_edit_post_link($post_id, 'raw')));

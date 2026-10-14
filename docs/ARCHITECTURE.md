@@ -49,15 +49,17 @@ includes/
     Ai/        AiService (هماهنگ‌کننده)، AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser
     Csv/       TextNormalizer, ProductMatcher, BulkRowProcessor
     Seo/       SeoMetaService
-    Content/   HtmlSanitizer, ContentGuard, ContentRules
+    Content/   HtmlSanitizer, ContentGuard (هماهنگ‌کننده)، ContentRules
+    Content/Guard/  WrapperGuard, LinkGuard, KeywordDensityGuard, HeadingGuard
     Scan/      ScannerService
   Repository/  SiteEntityRepository, ContentTargetRepository, DatabaseRepository,
                BulkHistoryRepository, LinkRepository
-  Http/Requests/     ContentGenerationRequest
+  Http/Requests/     ContentGenerationRequest, ContentDraftRequest, SettingsUpdateRequest, ConnectionTestRequest,
+                     AvailableTaxonomiesRequest, ScanItemRequest, BulkMatchRequest, BulkProcessRequest, ItemsReportRequest
   Legacy کلاس‌های WILA_* تا پایان مهاجرت (بارگذاری از Plugin::$legacy_files)
 templates/     قالب‌های PHP (admin/app-root, font-preconnect, ...)
-assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST و منطق وابسته به API)، khazan-queue.js (state و کنترل صف)،
-               khazan-tabs.js (ناوبری و نماهای تب‌ها)، khazan-leaves.js، wila-admin.js (Entry/Orchestrator ~۳۹۰ خط: state اصلی و رویدادهای فرم‌ها)
+assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-forms.js (رویدادها و کمک‌های فرم)، khazan-queue.js (صف)،
+               khazan-tabs.js (ناوبری و نماها)، khazan-leaves.js، wila-admin.js (Entry Point ~۱۶۰ خط: state، init، render، mixin ماژول‌ها)
 ```
 
 قاعده نام‌گذاری: `Khazan\Services\Csv\ProductMatcher` ⇢ `includes/Services/Csv/ProductMatcher.php` (حروف دقیقاً هم‌نام کلاس).
@@ -76,4 +78,8 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST و منطق
    - `Services\Ai\AiService`: هماهنگ‌کننده `AvalaiHttpClient`، `PromptBuilder`، `ContentParser` و `AiResponseDecoder`. هر ۹ ارجاع کلاس‌های جدید به `WILA_AvalAI_Client` (کنترلرهای محتوا و تنظیمات، `BulkRowProcessor`، `SeoRepairController`) به `AiService` منتقل شد؛ `WILA_AvalAI_Client` فقط Wrapper با ثابت `MODEL` و همان متدهای عمومی است. ارجاع `QueueController` به `WILA_Bulk_Generator` هم به `ProductMatcher` و `BulkRowProcessor` تبدیل شد (در `ContentController` چنین ارجاعی نبود).
    - `Khazan\Http\RestRouter` همه مسیرها (شامل `/seo-repair`) را ثبت می‌کند؛ `Khazan\Admin\SeoRepairPanel` و `Http\Controllers\SeoRepairController` جایگزین `WILA_SEO_Repair` شدند. `Core\Plugin` مستقیماً `RestRouter` و `SeoRepairPanel` را وصل می‌کند؛ `WILA_REST_Controller` و `WILA_SEO_Repair` فقط Wrapper سازگاری‌اند. هیچ کلاس `Khazan\` به کلاس سراسری `WILA_*` ارجاع نمی‌دهد.
    - `khazan-api.js`: `apiFetch` و همه ۲۳ متد وابسته به REST (fetchها، تولید محتوا، رفع سئو، تنظیمات، اسکن). ترتیب بارگذاری: `utils` و `csv` ← `api` و `queue` و `tabs` ← `wila-admin`. `wila-admin.js` از ~۷۶۰ به ~۳۹۰ خط رسید.
-8. **باقی‌مانده:** `ContentGuard` (~۳۳۰ خط) برای تقسیم به لینک/تراکم/هدینگ؛ `Http\Requests\*` برای بقیه کنترلرها؛ ماژول `khazan-forms.js` برای رویدادهای فرم‌ها و مولدها؛ مدیریت خطای شبکه یکپارچه در `apiFetch` (امروز هر متد try/catch خودش را دارد، برای حفظ رفتار دست نخورد)؛ حذف Wrapperهای `WILA_*` پس از انتقال همه فراخوان‌های بیرونی (کران‌جاب‌ها/افزونه‌های جانبی).
+8. **انجام شد (مرحله ۸):**
+   - `khazan-forms.js`: ۱۴ متد کمکی فرم‌ها (برنامه‌ریز، مولد محتوا، رفع سئو، کپی) و `bindFormEvents` (همه رویدادهای input/change/click فرم‌ها). `wila-admin.js` به ~۱۶۰ خط رسید (state، `init`، `render`، `modalHtml`، `bindEvents` و سوار کردن ماژول‌ها). اعتبارسنجی مقادیر ارسالی همچنان در متدهای API/سمت سرور است؛ ماژول فرم‌ها فقط مقادیر را به state می‌رساند.
+   - `Http\Requests\*`: `SettingsUpdateRequest`، `ConnectionTestRequest`، `AvailableTaxonomiesRequest`، `ScanItemRequest`، `BulkMatchRequest`، `BulkProcessRequest`، `ItemsReportRequest` و `ContentDraftRequest`؛ متدهای `SettingsController`، `QueueController`، `ReportController` و `create_content_draft` ۳ تا ۶ خطی شدند.
+   - `ContentGuard` به `Guard\WrapperGuard`، `LinkGuard`، `KeywordDensityGuard` و `HeadingGuard` شکسته شد؛ `ContentGuard` با همان امضا و ثابت‌ها فقط هماهنگ‌کننده است (۵۹ خط).
+9. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)؛ مدیریت خطای شبکه یکپارچه در `apiFetch` (امروز هر متد try/catch خودش را دارد؛ برای حفظ رفتار دست نخورد)؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی (کران‌جاب‌ها/افزونه‌های جانبی)؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights.

@@ -31,15 +31,16 @@ final class AdminAssets {
 
         wp_enqueue_style('wila-admin-style', $this->url('assets/css/wila-admin.css'), array(), WILA_VERSION);
 
-        // ترتیب بارگذاری: ابزارها -> CSV -> API -> صف و تب‌ها -> هسته (wila-admin.js)
+        // ترتیب بارگذاری: ابزارها -> CSV -> API و فرم‌ها -> صف و تب‌ها -> هسته (wila-admin.js)
         $scripts = array(
             'khazan-leaves' => array('assets/js/khazan-leaves.js', array()),
             'khazan-utils'  => array('assets/js/khazan-utils.js', array()),
             'khazan-csv'    => array('assets/js/khazan-csv.js', array()),
             'khazan-api'    => array('assets/js/khazan-api.js', array('khazan-utils')),
+            'khazan-forms'  => array('assets/js/khazan-forms.js', array('khazan-utils')),
             'khazan-queue'  => array('assets/js/khazan-queue.js', array('khazan-utils', 'khazan-csv')),
             'khazan-tabs'   => array('assets/js/khazan-tabs.js', array('khazan-utils')),
-            'wila-admin-script' => array('assets/js/wila-admin.js', array('khazan-leaves', 'khazan-utils', 'khazan-csv', 'khazan-api', 'khazan-queue', 'khazan-tabs')),
+            'wila-admin-script' => array('assets/js/wila-admin.js', array('khazan-leaves', 'khazan-utils', 'khazan-csv', 'khazan-api', 'khazan-forms', 'khazan-queue', 'khazan-tabs')),
         );
         foreach ($scripts as $handle => $script) {
             wp_enqueue_script($handle, $this->url($script[0]), $script[1], $this->version($script[0]), true);

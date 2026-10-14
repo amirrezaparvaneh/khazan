@@ -5,6 +5,8 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Http\Requests\ItemsReportRequest;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -56,7 +58,7 @@ final class ReportController extends BaseController {
 
     public function get_items_report($request) {
         $links = new \Khazan\Repository\LinkRepository();
-        $filter = sanitize_text_field($request->get_param('type'));
+        $filter = (new ItemsReportRequest($request))->type_filter();
         $scanner = new \Khazan\Services\Scan\ScannerService();
         $items = $scanner->get_all_scannable_items();
         $report = array();
@@ -83,8 +85,9 @@ final class ReportController extends BaseController {
 
     public function get_item_details($request) {
         $links = new \Khazan\Repository\LinkRepository();
-        $id = absint($request->get_param('id'));
-        $type = sanitize_text_field($request->get_param('type'));
+        $query = new ItemsReportRequest($request);
+        $id = $query->item_id();
+        $type = $query->item_type();
         
         $out = $links->outgoing_links($id, $type);
         $in  = $links->incoming_links($id, $type);

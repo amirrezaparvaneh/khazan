@@ -5,6 +5,10 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Http\Requests\BulkMatchRequest;
+use Khazan\Http\Requests\BulkProcessRequest;
+use Khazan\Http\Requests\ScanItemRequest;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -21,31 +25,23 @@ final class QueueController extends BaseController {
     }
 
     public function scan_single_item($request) {
-        $params  = $request->get_json_params();
-        $item_id = isset($params['id']) ? absint($params['id']) : 0;
-        $type    = isset($params['type']) ? sanitize_text_field($params['type']) : 'post';
-        if (!$item_id) return new \WP_Error('invalid_id', 'شناسه نامعتبر.', array('status' => 400));
-        
+        $input = (new ScanItemRequest($request->get_json_params()))->validated();
+        if (is_wp_error($input)) return $input;
+
         $scanner = new \Khazan\Services\Scan\ScannerService();
-        $result  = $scanner->scan_item($item_id, $type);
-        return rest_ensure_response(array('success' => true, 'item_id' => $item_id, 'links_found' => isset($result['links_found']) ? $result['links_found'] : 0));
+        $result  = $scanner->scan_item($input['id'], $input['type']);
+        return rest_ensure_response(array('success' => true, 'item_id' => $input['id'], 'links_found' => isset($result['links_found']) ? $result['links_found'] : 0));
     }
 
     public function bulk_match_products($request) {
-        $params = $request->get_json_params();
-        $rows = isset($params['rows']) && is_array($params['rows']) ? array_slice($params['rows'], 0, 1000) : array();
-        $file_name = isset($params['file_name']) ? sanitize_text_field($params['file_name']) : '';
-        $result = \Khazan\Services\Csv\ProductMatcher::match_rows($rows, $file_name);
+        $input = new BulkMatchRequest($request->get_json_params());
+        $result = \Khazan\Services\Csv\ProductMatcher::match_rows($input->rows(), $input->file_name());
         return is_wp_error($result) ? $result : rest_ensure_response(array('success' => true, 'matches' => $result));
     }
 
     public function bulk_process_product($request) {
-        $params = $request->get_json_params();
-        $result = (new \Khazan\Services\Csv\BulkRowProcessor())->process(
-            isset($params['product_id']) ? $params['product_id'] : 0,
-            isset($params['row']) && is_array($params['row']) ? $params['row'] : array(),
-            isset($params['options']) && is_array($params['options']) ? $params['options'] : array()
-        );
+        $input = new BulkProcessRequest($request->get_json_params());
+        $result = (new \Khazan\Services\Csv\BulkRowProcessor())->process($input->product_id(), $input->row(), $input->options());
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 }
