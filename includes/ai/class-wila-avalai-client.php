@@ -17,6 +17,7 @@ class WILA_AvalAI_Client {
     private $api_key;
     private $model;
     private $homepage_keywords;
+    private $http;
 
     public function __construct() {
         $this->provider = 'avalai';
@@ -24,6 +25,7 @@ class WILA_AvalAI_Client {
         
         $this->api_key = trim(get_option('wila_avalai_api_key', ''));
         $this->model   = self::MODEL;
+        $this->http    = new \Khazan\Services\Ai\AvalaiHttpClient($this->api_key, $this->model);
     }
 
     public function is_configured() {
@@ -34,114 +36,17 @@ class WILA_AvalAI_Client {
         return $this->model;
     }
 
-    private function resolve_key($override_key = null) {
-        $saved_key = trim(get_option('wila_avalai_api_key', ''));
-
-        $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $saved_key;
-        if (strpos($key, '...') !== false || empty($key)) $key = $saved_key;
-        return $key;
-    }
-
     public function test_connection($override_key = null) {
         try {
-            $key = $this->resolve_key($override_key);
-            $model = $this->model;
-
-            if (empty($key)) {
-                return new WP_Error('missing_api_key', 'کلید API وارد نشده است.');
-            }
-
-            $start_time = microtime(true);
-
-            $url = 'https://api.avalai.ir/v1/chat/completions';
-            $body = $this->build_request_body('Ping', 16);
-            $response = wp_remote_post($url, array(
-                'headers' => array(
-                    'Content-Type' => 'application/json',
-                    'Authorization' => 'Bearer ' . $key,
-                ),
-                'body' => wp_json_encode($body),
-                'timeout' => 20,
-            ));
-
-            $latency = round((microtime(true) - $start_time) * 1000);
-
-            if (is_wp_error($response)) {
-                return new WP_Error('connection_failed', 'خطا در ارتباط: ' . $response->get_error_message());
-            }
-
-            $code = wp_remote_retrieve_response_code($response);
-            $raw_body = wp_remote_retrieve_body($response);
-            $data = json_decode($raw_body, true);
-
-            if ($code === 200) {
-                return array('success' => true, 'model' => $model, 'latency_ms' => $latency, 'message' => 'ارتباط با موفقیت برقرار شد!');
-            }
-            
-            if ($code === 503 || $code === 429) {
-                return new WP_Error('api_error', 'سرور هوش مصنوعی در حال حاضر ترافیک بالایی دارد. لطفاً مجدداً تلاش کنید.');
-            }
-
-            $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : '';
-            if (empty($err_msg)) {
-                $err_msg = 'کد وضعیت سرور: ' . $code;
-            } else {
-                $err_msg = 'کد وضعیت سرور: ' . $code . ' (' . $err_msg . ')';
-            }
-            return new WP_Error('api_error', $err_msg, array('status' => $code));
+            $key = \Khazan\Services\Ai\AvalaiHttpClient::resolve_key($override_key);
+            return $this->http->ping($key);
         } catch (Exception $e) {
             return new WP_Error('exception_error', 'خطای سیستمی: ' . $e->getMessage());
         }
     }
 
-    /**
-     * بدنه درخواست چت؛ مدل‌های GPT-5 پارامتر max_completion_tokens می‌خواهند و دمای سفارشی را نمی‌پذیرند
-     */
-    private function build_request_body($prompt, $max_tokens) {
-        $body = array(
-            'model' => $this->model,
-            'messages' => array(array('role' => 'user', 'content' => $prompt)),
-        );
-        if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
-            $body['max_completion_tokens'] = $max_tokens;
-        } else {
-            $body['temperature'] = 0.2;
-            $body['max_tokens'] = $max_tokens;
-        }
-        return $body;
-    }
-
     private function send_ai_request($prompt, $suggestions_request = false, $json_response = true, $max_tokens = null) {
-        if (!$this->is_configured()) return new WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
-
-        $url = 'https://api.avalai.ir/v1/chat/completions';
-        $body = $this->build_request_body($prompt, $max_tokens ? $max_tokens : ($suggestions_request ? 2048 : 12000));
-        if ($json_response) {
-            $body['response_format'] = array('type' => 'json_object');
-        }
-
-        $response = wp_remote_post($url, array(
-            'headers' => array(
-                'Content-Type'  => 'application/json',
-                'Authorization' => 'Bearer ' . $this->api_key,
-            ),
-            'body'    => wp_json_encode($body),
-            'timeout' => $suggestions_request ? 35 : 180,
-        ));
-
-        if (is_wp_error($response)) return $response;
-        $code = wp_remote_retrieve_response_code($response);
-        $data = json_decode(wp_remote_retrieve_body($response), true);
-
-        if ($code !== 200) {
-            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
-            // Keep 429/503 visible to the client so the bulk queue can back off and retry.
-            return new WP_Error($code === 429 ? 'ai_rate_limited' : 'ai_error', $msg, in_array($code, array(429, 503), true) ? array('status' => $code) : array());
-        }
-        if (!isset($data['choices'][0]['message']['content'])) {
-            return new WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
-        }
-        return $data['choices'][0]['message']['content'];
+        return $this->http->chat($prompt, $suggestions_request, $json_response, $max_tokens);
     }
 
     public function suggest_seo_repairs($segments, $instructions) {
@@ -624,28 +529,7 @@ class WILA_AvalAI_Client {
     }
 
     private function decode_ai_json($response) {
-        if (is_wp_error($response)) return $response;
-
-        $response = trim((string) $response);
-        $response = preg_replace('/^```(?:json)?\s*/i', '', $response);
-        $response = preg_replace('/\s*```$/', '', $response);
-        $parsed = json_decode(trim($response), true);
-        if (is_array($parsed)) return $parsed;
-
-        $start = strpos($response, '{');
-        $end = strrpos($response, '}');
-        if ($start !== false && $end !== false && $end > $start) {
-            $slice = substr($response, $start, $end - $start + 1);
-            $parsed = json_decode($slice, true);
-            if (is_array($parsed)) return $parsed;
-
-            $cleaned = preg_replace('/,\s*([\}\]])/', '$1', $slice);
-            $cleaned = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $cleaned);
-            $parsed = json_decode($cleaned, true);
-            if (is_array($parsed)) return $parsed;
-        }
-
-        return new WP_Error('invalid_ai_response', 'پاسخ هوش مصنوعی JSON معتبر نیست. دوباره تلاش کنید.');
+        return \Khazan\Services\Ai\AiResponseDecoder::decode_json($response);
     }
 
     private function build_commerce_system_prompt($params, $kind) {

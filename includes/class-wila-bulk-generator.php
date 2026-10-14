@@ -11,98 +11,22 @@ if (!defined('ABSPATH')) {
 
 class WILA_Bulk_Generator {
 
-    /**
-     * یکسان‌سازی متن برای مقایسه: ی/ک عربی، نیم‌فاصله، ارقام، ایموجی و فاصله‌های اضافه
-     */
+    const GENERATED_META = \Khazan\Services\Csv\ProductMatcher::GENERATED_META;
+
     public static function normalize($text) {
-        $text = html_entity_decode(wp_strip_all_tags((string) $text), ENT_QUOTES, 'UTF-8');
-        $text = strtr($text, array(
-            'ي' => 'ی', 'ى' => 'ی', 'ك' => 'ک', 'ۀ' => 'ه', 'ة' => 'ه', 'ـ' => '',
-            "\u{200c}" => ' ', "\u{200f}" => '', "\u{200e}" => '',
-            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4', '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
-            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4', '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
-        ));
-        $text = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}]/u', '', $text);
-        $text = preg_replace('/\s+/u', ' ', $text);
-        return mb_strtolower(trim($text));
+        return \Khazan\Services\Csv\TextNormalizer::normalize($text);
     }
 
     public static function normalize_slug($slug) {
-        $slug = trim((string) $slug);
-        if ($slug === '') return '';
-        if (preg_match('~^https?://~i', $slug)) {
-            $slug = (string) wp_parse_url($slug, PHP_URL_PATH);
-        }
-        $parts = array_filter(explode('/', trim($slug, '/')), 'strlen');
-        $slug = $parts ? end($parts) : '';
-        return mb_strtolower(trim(rawurldecode($slug)));
+        return \Khazan\Services\Csv\TextNormalizer::normalize_slug($slug);
     }
 
-    /**
-     * ایندکس محصولات سایت برای تطبیق: عنوان نرمال‌شده و نامک
-     */
-    private static function build_index() {
-        $by_title = array();
-        $by_slug = array();
-        $posts = get_posts(array(
-            'post_type'      => WILA_Content_Targets::product_post_type(),
-            'post_status'    => array('publish', 'draft', 'pending', 'private'),
-            'posts_per_page' => -1,
-            'no_found_rows'  => true,
-        ));
-        foreach ($posts as $post) {
-            $entry = array('id' => (int) $post->ID, 'title' => get_the_title($post), 'url' => get_permalink($post), 'status' => $post->post_status);
-            $key = self::normalize($post->post_title);
-            $by_title[$key][] = $entry;
-            $by_slug[mb_strtolower(rawurldecode($post->post_name))] = $entry;
-        }
-        return array($by_title, $by_slug);
-    }
-
-    /**
-     * تطبیق دومرحله‌ای: ۱) نام محصول ۲) نامک
-     */
     public static function match_rows($rows, $file_name = '') {
-        if (!post_type_exists(WILA_Content_Targets::product_post_type())) {
-            return new WP_Error('product_type_unavailable', 'نوع محتوای محصول در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
-        }
-        list($by_title, $by_slug) = self::build_index();
-        $matches = array();
-        $history_keys = array();
-        foreach ($rows as $row) {
-            $name = self::normalize(isset($row['name']) ? $row['name'] : '');
-            $slug = self::normalize_slug(isset($row['slug']) ? $row['slug'] : '');
-            $history_keys[] = array('name_key' => $name, 'slug_key' => $slug);
-            $found = null;
-            $via = '';
-            if ($name !== '' && isset($by_title[$name])) {
-                $found = $by_title[$name][0];
-                $via = 'name';
-                if (count($by_title[$name]) > 1) $via = 'name_ambiguous';
-            } elseif ($slug !== '' && isset($by_slug[$slug])) {
-                $found = $by_slug[$slug];
-                $via = 'slug';
-            }
-            // پیش‌ثبت کلیدواژه کانونی شیت تا لینک‌های محصولات دیگر به این محصول از ابتدا انکر درست داشته باشند.
-            if ($found && !empty($row['focus_keyword'])) WILA_Content_Targets::remember_csv_focus($found['id'], $row['focus_keyword']);
-            $matches[] = $found ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status'], 'generated' => self::get_generated_info($found['id'])) : array('matched' => false);
-        }
-        // سابقه آپلود قبلی برای هر ردیف؛ ردیف‌های تازه همین حالا ثبت می‌شوند
-        $history = WILA_Bulk_History::sync($history_keys, $file_name);
-        foreach ($matches as $i => $match) {
-            $matches[$i]['history'] = isset($history[$i]) ? $history[$i] : null;
-        }
-        return $matches;
+        return \Khazan\Services\Csv\ProductMatcher::match_rows($rows, $file_name);
     }
 
-    const GENERATED_META = '_wila_csv_generated_at';
-
-    /**
-     * سابقه تولید از طریق CSV برای یک محصول (یا null)
-     */
     private static function get_generated_info($product_id) {
-        $info = json_decode((string) get_post_meta($product_id, self::GENERATED_META, true), true);
-        return is_array($info) && !empty($info['at']) ? $info : null;
+        return \Khazan\Services\Csv\ProductMatcher::generated_info($product_id);
     }
 
     private static function clean_row($row) {

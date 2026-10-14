@@ -1,0 +1,149 @@
+<?php
+/**
+ * AvalAI HTTP transport: request body, headers, timeouts and error mapping only.
+ * Prompt building and response post-processing live elsewhere.
+ *
+ * @package WP_Internal_Link_Analyzer
+ */
+
+namespace Khazan\Services\Ai;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+final class AvalaiHttpClient {
+
+    const ENDPOINT = 'https://api.avalai.ir/v1/chat/completions';
+
+    const PING_TIMEOUT        = 20;
+    const SUGGESTION_TIMEOUT  = 35;
+    const GENERATION_TIMEOUT  = 180;
+    const SUGGESTION_TOKENS   = 2048;
+    const GENERATION_TOKENS   = 12000;
+
+    /** @var string */
+    private $api_key;
+
+    /** @var string */
+    private $model;
+
+    public function __construct($api_key, $model) {
+        $this->api_key = (string) $api_key;
+        $this->model   = (string) $model;
+    }
+
+    public function is_configured() {
+        return $this->api_key !== '';
+    }
+
+    /**
+     * Uses the override key unless it is empty or a masked value ("abc...xyz").
+     */
+    public static function resolve_key($override_key = null) {
+        $saved_key = trim(get_option('wila_avalai_api_key', ''));
+
+        $key = !empty($override_key) ? trim(sanitize_text_field($override_key)) : $saved_key;
+        if (strpos($key, '...') !== false || empty($key)) {
+            $key = $saved_key;
+        }
+        return $key;
+    }
+
+    /**
+     * بدنه درخواست چت؛ مدل‌های GPT-5 پارامتر max_completion_tokens می‌خواهند و دمای سفارشی را نمی‌پذیرند
+     */
+    public function build_request_body($prompt, $max_tokens) {
+        $body = array(
+            'model'    => $this->model,
+            'messages' => array(array('role' => 'user', 'content' => $prompt)),
+        );
+        if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
+            $body['max_completion_tokens'] = $max_tokens;
+        } else {
+            $body['temperature'] = 0.2;
+            $body['max_tokens']  = $max_tokens;
+        }
+        return $body;
+    }
+
+    /**
+     * Sends a chat completion and returns the message content, or WP_Error.
+     *
+     * @return string|\WP_Error
+     */
+    public function chat($prompt, $suggestions_request = false, $json_response = true, $max_tokens = null) {
+        if (!$this->is_configured()) {
+            return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
+        }
+
+        $tokens = $max_tokens ? $max_tokens : ($suggestions_request ? self::SUGGESTION_TOKENS : self::GENERATION_TOKENS);
+        $body   = $this->build_request_body($prompt, $tokens);
+        if ($json_response) {
+            $body['response_format'] = array('type' => 'json_object');
+        }
+
+        $response = $this->post($this->api_key, $body, $suggestions_request ? self::SUGGESTION_TIMEOUT : self::GENERATION_TIMEOUT);
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code !== 200) {
+            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
+            // Keep 429/503 visible to the client so the bulk queue can back off and retry.
+            return new \WP_Error($code === 429 ? 'ai_rate_limited' : 'ai_error', $msg, in_array($code, array(429, 503), true) ? array('status' => $code) : array());
+        }
+        if (!isset($data['choices'][0]['message']['content'])) {
+            return new \WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
+        }
+        return $data['choices'][0]['message']['content'];
+    }
+
+    /**
+     * Connectivity check used by the settings screen.
+     *
+     * @return array|\WP_Error
+     */
+    public function ping($key) {
+        if (empty($key)) {
+            return new \WP_Error('missing_api_key', 'کلید API وارد نشده است.');
+        }
+
+        $start    = microtime(true);
+        $response = $this->post($key, $this->build_request_body('Ping', 16), self::PING_TIMEOUT);
+        $latency  = round((microtime(true) - $start) * 1000);
+
+        if (is_wp_error($response)) {
+            return new \WP_Error('connection_failed', 'خطا در ارتباط: ' . $response->get_error_message());
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code === 200) {
+            return array('success' => true, 'model' => $this->model, 'latency_ms' => $latency, 'message' => 'ارتباط با موفقیت برقرار شد!');
+        }
+
+        if ($code === 503 || $code === 429) {
+            return new \WP_Error('api_error', 'سرور هوش مصنوعی در حال حاضر ترافیک بالایی دارد. لطفاً مجدداً تلاش کنید.');
+        }
+
+        $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : '';
+        $err_msg = empty($err_msg) ? 'کد وضعیت سرور: ' . $code : 'کد وضعیت سرور: ' . $code . ' (' . $err_msg . ')';
+        return new \WP_Error('api_error', $err_msg, array('status' => $code));
+    }
+
+    private function post($key, array $body, $timeout) {
+        return wp_remote_post(self::ENDPOINT, array(
+            'headers' => array(
+                'Content-Type'  => 'application/json',
+                'Authorization' => 'Bearer ' . $key,
+            ),
+            'body'    => wp_json_encode($body),
+            'timeout' => $timeout,
+        ));
+    }
+}

@@ -32,7 +32,7 @@ mkdir -p "${TMP_DIR}/${PLUGIN_SLUG}"
 
 # Copy runtime files and assets
 echo "📦 Packaging plugin files..."
-cp -r assets/ includes/ "${MAIN_FILE}" README.md "${TMP_DIR}/${PLUGIN_SLUG}/"
+cp -r assets/ includes/ templates/ "${MAIN_FILE}" README.md "${TMP_DIR}/${PLUGIN_SLUG}/"
 
 # Build zip archive inside the temporary directory
 echo "🗜️  Compressing into ${ZIP_NAME}..."
