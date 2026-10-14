@@ -56,7 +56,7 @@ final class AvalaiHttpClient {
     public function build_request_body($prompt, $max_tokens) {
         $body = array(
             'model'    => $this->model,
-            'messages' => array(array('role' => 'user', 'content' => $prompt)),
+            'messages' => is_array($prompt) ? $prompt : array(array('role' => 'user', 'content' => $prompt)),
         );
         if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
             $body['max_completion_tokens'] = $max_tokens;
@@ -69,6 +69,7 @@ final class AvalaiHttpClient {
 
     /**
      * Sends a chat completion and returns the message content, or WP_Error.
+     * $prompt may be a plain string or a standard messages array.
      *
      * @return string|\WP_Error
      */
