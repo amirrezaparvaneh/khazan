@@ -8,11 +8,20 @@
 
 namespace Khazan\Repository;
 
+use Khazan\Services\Seo\SeoMetaService;
+
 if (!defined('ABSPATH')) {
     exit;
 }
 
 final class ContentTargetRepository {
+
+    /** @var SeoMetaService */
+    private $seo;
+
+    public function __construct(SeoMetaService $seo = null) {
+        $this->seo = $seo ?: new SeoMetaService();
+    }
 
     /**
      * فهرست محصولات یا دسته‌بندی‌ها برای انتخاب در رابط کاربری
@@ -210,19 +219,12 @@ final class ContentTargetRepository {
         if (!$post || $post->post_type !== \WILA_Content_Targets::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
         }
-        // RankMath کلیدواژه اصلی و مترادف‌ها را در یک فهرست دارد؛ Yoast مترادف‌ها را JSON ذخیره می‌کند.
-        $rank_list = \WILA_Seo_Meta::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
-        $focus = $rank_list ? $rank_list[0] : (string) get_post_meta($id, '_yoast_wpseo_focuskw', true);
-        $synonyms = $rank_list ? array_slice($rank_list, 1) : \WILA_Seo_Meta::parse_yoast_synonyms(get_post_meta($id, '_yoast_wpseo_keywordsynonyms', true));
-        $title = (string) get_post_meta($id, 'rank_math_title', true);
-        if ($title === '') $title = (string) get_post_meta($id, '_yoast_wpseo_title', true);
-        $desc = (string) get_post_meta($id, 'rank_math_description', true);
-        if ($desc === '') $desc = (string) get_post_meta($id, '_yoast_wpseo_metadesc', true);
+        $seo = $this->seo->read_post_seo($id);
         return array(
             'title'   => get_the_title($id),
             'url'     => get_permalink($id),
             'content' => $post->post_content,
-            'seo'     => array('title' => $title, 'desc' => $desc, 'focuskw' => $focus, 'synonyms' => implode(', ', $synonyms)),
+            'seo'     => $seo,
         );
     }
 
@@ -231,20 +233,12 @@ final class ContentTargetRepository {
         if (!$term || is_wp_error($term)) {
             return new \WP_Error('invalid_target', 'دسته‌بندی یافت نشد.', array('status' => 404));
         }
-        $option = get_option('wpseo_taxonomy_meta', array());
-        $meta = is_array($option) && isset($option[\WILA_Content_Targets::category_taxonomy()][$id]) ? (array) $option[\WILA_Content_Targets::category_taxonomy()][$id] : array();
-        $synonyms = \WILA_Seo_Meta::parse_yoast_synonyms($meta['wpseo_keywordsynonyms'] ?? '');
         $link = get_term_link($term);
         return array(
             'title'   => $term->name,
             'url'     => is_wp_error($link) ? '' : $link,
             'content' => $term->description,
-            'seo'     => array(
-                'title'    => (string) ($meta['wpseo_title'] ?? ''),
-                'desc'     => (string) ($meta['wpseo_desc'] ?? ''),
-                'focuskw'  => (string) ($meta['wpseo_focuskw'] ?? ''),
-                'synonyms' => implode(', ', $synonyms),
-            ),
+            'seo'     => $this->seo->read_term_seo(\WILA_Content_Targets::category_taxonomy(), $id),
         );
     }
 
@@ -274,9 +268,7 @@ final class ContentTargetRepository {
      * ذخیره متای سئو محصول در یوست و رنک‌مث (فقط مقادیر غیرخالی)
      */
     public function write_post_seo($id, $seo) {
-        foreach (\WILA_Seo_Meta::post_meta_map($seo) as $meta_key => $value) {
-            update_post_meta($id, $meta_key, $value);
-        }
+        $this->seo->write_post_seo($id, $seo);
     }
 
     /**
@@ -330,17 +322,36 @@ final class ContentTargetRepository {
         $result = wp_update_term($id, \WILA_Content_Targets::category_taxonomy(), array('description' => $content));
         if (is_wp_error($result)) return $result;
 
-        // Yoast keeps taxonomy SEO data in a single option keyed by taxonomy and term id.
-        if (defined('WPSEO_VERSION')) {
-            $option = get_option('wpseo_taxonomy_meta', array());
-            if (!is_array($option)) $option = array();
-            foreach (\WILA_Seo_Meta::term_meta_map($seo) as $meta_key => $value) {
-                $option[\WILA_Content_Targets::category_taxonomy()][$id][$meta_key] = $value;
-            }
-            update_option('wpseo_taxonomy_meta', $option);
-        }
+        $this->seo->write_term_seo(\WILA_Content_Targets::category_taxonomy(), $id, $seo);
         $link = get_term_link($term);
         return array('target_id' => $id, 'edit_url' => get_edit_term_link($id, \WILA_Content_Targets::category_taxonomy(), \WILA_Content_Targets::product_post_type()), 'view_url' => is_wp_error($link) ? '' : $link);
+    }
+
+    public function find_product_id_by_title($name) {
+        global $wpdb;
+        if ($name === '') return 0;
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_title = %s AND post_status IN ('draft', 'pending', 'private', 'publish') ORDER BY ID DESC LIMIT 1",
+            \WILA_Content_Targets::product_post_type(),
+            $name
+        ));
+    }
+
+    /**
+     * ساخت محصول پیش‌نویس از ردیف شیت (نام و نامک)؛ وردپرس اگر نامک تکراری باشد پسوند عددی می‌دهد
+     */
+    public function create_draft_product($row) {
+        if ($row['name'] === '') return new \WP_Error('missing_product_name', 'برای ساخت محصول جدید، نام محصول در ردیف الزامی است.', array('status' => 400));
+        $type = get_post_type_object(\WILA_Content_Targets::product_post_type());
+        if (!$type || !current_user_can($type->cap->create_posts)) return new \WP_Error('cannot_create_product', 'اجازه ساخت محصول جدید را ندارید.', array('status' => 403));
+
+        $post_id = wp_insert_post(array(
+            'post_type'   => \WILA_Content_Targets::product_post_type(),
+            'post_status' => 'draft',
+            'post_title'  => $row['name'],
+            'post_name'   => $row['slug'] !== '' ? sanitize_title(\Khazan\Services\Csv\TextNormalizer::normalize_slug($row['slug'])) : '',
+        ), true);
+        return $post_id;
     }
 
     /**

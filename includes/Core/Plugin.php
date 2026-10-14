@@ -9,6 +9,7 @@ namespace Khazan\Core;
 
 use Khazan\Admin\AdminAssets;
 use Khazan\Admin\AdminMenu;
+use Khazan\Repository\DatabaseRepository;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -57,8 +58,7 @@ final class Plugin {
 
     public static function activate() {
         self::load_legacy();
-        \WILA_DB::create_tables();
-        update_option('wila_db_version', WILA_VERSION);
+        (new DatabaseRepository())->create_tables();
     }
 
     public static function deactivate() {
@@ -84,9 +84,7 @@ final class Plugin {
     }
 
     public function maybe_upgrade_database() {
-        if (get_option('wila_db_installed_version') !== WILA_VERSION) {
-            \WILA_DB::create_tables();
-        }
+        (new DatabaseRepository())->maybe_upgrade();
     }
 
     public function register_rest_routes() {

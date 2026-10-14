@@ -73,7 +73,7 @@ class WILA_Content_Targets {
      * اگر هیچ‌کدام نبود رشته خالی برمی‌گردد و لینک قفل‌شده ساخته نمی‌شود.
      */
     public static function product_link_anchor($id) {
-        $rank = WILA_Seo_Meta::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
+        $rank = \Khazan\Services\Seo\SeoMetaService::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
         if ($rank) return $rank[0];
         foreach (array('_yoast_wpseo_focuskw', self::CSV_FOCUS_META) as $meta_key) {
             $value = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, $meta_key, true)));
