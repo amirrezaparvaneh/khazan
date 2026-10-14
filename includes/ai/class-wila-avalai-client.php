@@ -421,7 +421,10 @@ class WILA_AvalAI_Client {
             return new WP_Error('seo_fix_rejected', 'متن اصلاح‌شده طول غیرعادی داشت (احتمال بازنویسی کلی) و جایگزین نشد. لطفاً دوباره امتحان کنید.', array('status' => 502));
         }
 
-        $content = WILA_Content_Guard::wrap(WILA_Html_Sanitizer::clean($content, $kind));
+        $content = WILA_Html_Sanitizer::clean($content, $kind);
+        $content = WILA_Content_Guard::enforce_link_anchors($content);
+        $content = WILA_Content_Guard::enforce_heading_keyphrases($content, $seo['focuskw'], $seo['synonyms']);
+        $content = WILA_Content_Guard::wrap($content);
         return array(
             'content'          => $content,
             'seo_title'        => sanitize_text_field(self::extract_block($raw, 'WILA_SEO_TITLE')),
@@ -558,8 +561,10 @@ class WILA_AvalAI_Client {
         $focus = isset($params['focus_keyword']) ? (string) $params['focus_keyword'] : '';
         $content = WILA_Content_Guard::enforce_link_anchors($content, $this->locked_anchor_map(isset($params['internal_links']) ? $params['internal_links'] : array()));
         $content = WILA_Content_Guard::ensure_external_link($content, $focus);
-        $content = WILA_Content_Guard::limit_heading_keyword($content, $focus, $keyword_synonyms);
-        $content = WILA_Content_Guard::cap_keyword_density($content, $focus, $keyword_synonyms);
+        // مترادف‌هایی که در Yoast ذخیره می‌شوند (ستون شیت در تولید انبوه) ملاک هدینگ‌ها هستند.
+        $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
+        $content = WILA_Content_Guard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
+        $content = WILA_Content_Guard::cap_keyword_density($content, $focus, $guard_synonyms);
         $content = WILA_Content_Guard::wrap($content);
 
         $external_links = $this->extract_external_links($content);

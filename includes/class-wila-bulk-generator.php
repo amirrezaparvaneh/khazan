@@ -83,6 +83,8 @@ class WILA_Bulk_Generator {
                 $found = $by_slug[$slug];
                 $via = 'slug';
             }
+            // پیش‌ثبت کلیدواژه کانونی شیت تا لینک‌های محصولات دیگر به این محصول از ابتدا انکر درست داشته باشند.
+            if ($found && !empty($row['focus_keyword'])) WILA_Content_Targets::remember_csv_focus($found['id'], $row['focus_keyword']);
             $matches[] = $found ? array('matched' => true, 'via' => $via, 'product_id' => $found['id'], 'title' => $found['title'], 'url' => $found['url'], 'status' => $found['status'], 'generated' => self::get_generated_info($found['id'])) : array('matched' => false);
         }
         // سابقه آپلود قبلی برای هر ردیف؛ ردیف‌های تازه همین حالا ثبت می‌شوند
@@ -131,6 +133,7 @@ class WILA_Bulk_Generator {
             $mode = 'replace';
         }
 
+        WILA_Content_Targets::remember_csv_focus($product_id, $row['focus_keyword']);
         $context = WILA_Content_Targets::get_context(WILA_Content_Targets::KIND_PRODUCT, $product_id);
         if (is_wp_error($context)) return $context;
         if (function_exists('set_time_limit')) @set_time_limit(240);
@@ -159,6 +162,7 @@ class WILA_Bulk_Generator {
             'h1_title'          => $context['title'],
             'focus_keyword'     => $focus,
             'long_tail'         => $row['related_keywords'],
+            'seo_synonyms'      => $row['related_keywords'],
             'word_count'        => 1000,
             'content_type'      => WILA_Content_Targets::kind_label(WILA_Content_Targets::KIND_PRODUCT),
             'funnel_stage'      => 'BOFU',

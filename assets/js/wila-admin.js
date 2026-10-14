@@ -553,7 +553,7 @@
         }).filter(r => r.name || r.slug || r.product_url);
         b.fileName = file.name; b.selected = {}; b.log = []; b.filter = 'all'; b.matching = true;
         this.render();
-        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ file_name: b.fileName, rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || r.product_url || '' })) }) });
+        const res = await this.apiFetch('/bulk/match', { method: 'POST', body: JSON.stringify({ file_name: b.fileName, rows: b.rows.map(r => ({ name: r.name || '', slug: r.slug || r.product_url || '', focus_keyword: r.focus_keyword || '' })) }) });
         if (!res.success) throw new Error(res.message || 'تطبیق انجام نشد.');
         const hasApproval = map.includes('approved');
         res.matches.forEach((m, i) => {

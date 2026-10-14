@@ -316,8 +316,10 @@ class WILA_REST_Controller {
             foreach ($orphans['list'] as $orphan) {
                 if ($target && (int) $orphan['id'] === (int) $target['id'] && $orphan['type'] === $content_kind) continue;
                 if (!empty($orphan['url']) && !empty($orphan['title'])) {
-                    $anchor = $orphan['type'] === WILA_Content_Targets::product_post_type() ? WILA_Content_Targets::product_link_anchor($orphan['id']) : $orphan['title'];
-                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $orphan['type'] === WILA_Content_Targets::product_post_type());
+                    // محصول با کلیدواژه کانونی: انکر قفل‌شده؛ بدون آن، نام کامل محصول بدون دستکاری
+                    $focus_anchor = $orphan['type'] === WILA_Content_Targets::product_post_type() ? WILA_Content_Targets::product_link_anchor($orphan['id']) : '';
+                    $anchor = $focus_anchor !== '' ? $focus_anchor : $orphan['title'];
+                    $internal_links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $focus_anchor !== '');
                 }
             }
         }

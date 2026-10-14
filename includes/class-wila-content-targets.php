@@ -179,14 +179,14 @@ class WILA_Content_Targets {
     public static function related_products($id, $limit = 5) {
         $ids = array();
         if (function_exists('wc_get_related_products')) {
-            $ids = wc_get_related_products($id, $limit);
+            $ids = wc_get_related_products($id, $limit * 3);
         } else {
             $term_ids = wp_get_post_terms($id, self::category_taxonomy(), array('fields' => 'ids'));
             if (!is_wp_error($term_ids) && $term_ids) {
                 $ids = get_posts(array(
                     'post_type'      => self::product_post_type(),
                     'post_status'    => 'publish',
-                    'posts_per_page' => $limit,
+                    'posts_per_page' => $limit * 3,
                     'post__not_in'   => array($id),
                     'fields'         => 'ids',
                     'no_found_rows'  => true,
@@ -197,29 +197,55 @@ class WILA_Content_Targets {
         $related = array();
         foreach ($ids as $related_id) {
             if (get_post_status($related_id) !== 'publish') continue;
+            // انکرتکست لینک محصول فقط کلیدواژه کانونی مقصد است؛ محصول بدون کلیدواژه کنار گذاشته می‌شود.
+            $anchor = self::product_link_anchor($related_id);
+            if ($anchor === '') continue;
             $related[] = array(
                 'title'  => get_the_title($related_id),
-                'anchor' => self::product_link_anchor($related_id),
+                'anchor' => $anchor,
                 'url'    => get_permalink($related_id),
             );
+            if (count($related) >= $limit) break;
         }
         return $related;
     }
 
+    const CSV_FOCUS_META = '_wila_csv_focus_keyword';
+
     /**
-     * انکرتکست لینک به یک محصول: کلیدواژه کانونی ذخیره‌شده (RankMath یا Yoast) یا نسخه کوتاه‌شده نام محصول
+     * انکرتکست لینک به یک محصول: دقیقاً کلیدواژه کانونی مقصد، بدون کوتاه‌سازی یا تغییر.
+     * ترتیب منبع: RankMath، Yoast، سپس ستون کلیدواژه کانونی شیت CSV که هنگام آپلود ثبت شده است.
+     * اگر هیچ‌کدام نبود رشته خالی برمی‌گردد و لینک قفل‌شده ساخته نمی‌شود.
      */
     public static function product_link_anchor($id) {
-        $focus = '';
-        foreach (array('rank_math_focus_keyword', '_yoast_wpseo_focuskw') as $meta_key) {
-            $value = trim((string) get_post_meta($id, $meta_key, true));
-            if ($value === '') continue;
-            // RankMath ذخیره می‌کند «کلیدواژه اصلی، مترادف‌ها»؛ فقط کلیدواژه اصلی لازم است.
-            $list = WILA_Seo_Meta::split_keywords($value);
-            $focus = $list ? $list[0] : '';
-            break;
+        $rank = WILA_Seo_Meta::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
+        if ($rank) return $rank[0];
+        foreach (array('_yoast_wpseo_focuskw', self::CSV_FOCUS_META) as $meta_key) {
+            $value = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, $meta_key, true)));
+            if ($value !== '') return $value;
         }
-        return $focus !== '' ? $focus : WILA_Content_Rules::short_keyword(get_the_title($id));
+        return '';
+    }
+
+    /**
+     * کلیدواژه کانونی ستون شیت را روی محصول ثبت می‌کند تا محصولات دیگر پیش از تولید محتوای آن هم بتوانند با انکر درست به آن لینک دهند
+     */
+    public static function remember_csv_focus($id, $focus) {
+        $focus = trim(preg_replace('/\s+/u', ' ', sanitize_text_field((string) $focus)));
+        if (!$id || $focus === '' || get_post_type($id) !== self::product_post_type()) return;
+        update_post_meta($id, self::CSV_FOCUS_META, $focus);
+    }
+
+    /**
+     * شناسه محصولِ یک لینک داخلی؛ برای اصلاح انکرتکست پس از تولید محتوا
+     */
+    public static function product_id_from_url($url) {
+        $url = html_entity_decode((string) $url, ENT_QUOTES, 'UTF-8');
+        $site_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+        if ($host !== '' && $host !== $site_host) return 0;
+        $id = url_to_postid($url);
+        return $id && get_post_type($id) === self::product_post_type() ? (int) $id : 0;
     }
 
     private static function category_context($id) {
@@ -275,9 +301,8 @@ class WILA_Content_Targets {
         }
         // RankMath کلیدواژه اصلی و مترادف‌ها را در یک فهرست دارد؛ Yoast مترادف‌ها را JSON ذخیره می‌کند.
         $rank_list = WILA_Seo_Meta::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
-        $yoast_synonyms = json_decode((string) get_post_meta($id, '_yoast_wpseo_keywordsynonyms', true), true);
         $focus = $rank_list ? $rank_list[0] : (string) get_post_meta($id, '_yoast_wpseo_focuskw', true);
-        $synonyms = $rank_list ? array_slice($rank_list, 1) : (is_array($yoast_synonyms) ? $yoast_synonyms : array());
+        $synonyms = $rank_list ? array_slice($rank_list, 1) : WILA_Seo_Meta::parse_yoast_synonyms(get_post_meta($id, '_yoast_wpseo_keywordsynonyms', true));
         $title = (string) get_post_meta($id, 'rank_math_title', true);
         if ($title === '') $title = (string) get_post_meta($id, '_yoast_wpseo_title', true);
         $desc = (string) get_post_meta($id, 'rank_math_description', true);
@@ -297,7 +322,7 @@ class WILA_Content_Targets {
         }
         $option = get_option('wpseo_taxonomy_meta', array());
         $meta = is_array($option) && isset($option[self::category_taxonomy()][$id]) ? (array) $option[self::category_taxonomy()][$id] : array();
-        $synonyms = json_decode((string) ($meta['wpseo_keywordsynonyms'] ?? ''), true);
+        $synonyms = WILA_Seo_Meta::parse_yoast_synonyms($meta['wpseo_keywordsynonyms'] ?? '');
         $link = get_term_link($term);
         return array(
             'title'   => $term->name,
@@ -307,7 +332,7 @@ class WILA_Content_Targets {
                 'title'    => (string) ($meta['wpseo_title'] ?? ''),
                 'desc'     => (string) ($meta['wpseo_desc'] ?? ''),
                 'focuskw'  => (string) ($meta['wpseo_focuskw'] ?? ''),
-                'synonyms' => implode(', ', is_array($synonyms) ? $synonyms : array()),
+                'synonyms' => implode(', ', $synonyms),
             ),
         );
     }
