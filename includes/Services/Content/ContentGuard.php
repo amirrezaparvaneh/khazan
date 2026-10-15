@@ -49,6 +49,10 @@ final class ContentGuard {
         return LinkGuard::neutralize_competing_links($html, $focus, $links, $synonyms);
     }
 
+    public static function lock_product_anchors($html, $links) {
+        return LinkGuard::lock_product_anchors($html, $links);
+    }
+
     public static function enforce_paragraphs($html, $max = 110) {
         return Guard\ParagraphGuard::enforce($html, $max);
     }

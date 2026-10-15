@@ -114,16 +114,17 @@ final class Settings {
     const SEO_TITLE_FEATURE_STOPWORDS = array('فروشگاه', 'فروشگاهی', 'محصولات', 'محصول', 'خرید', 'آنلاین', 'اینترنتی', 'مرکز', 'عرضه', 'بهترین', 'تولیدی', 'و', 'از', 'در', 'با', 'برای');
 
     /** Generic / promotional words that never belong in a keyphrase. */
-    const KEYPHRASE_FILLERS = array('طبیعی', 'طرح', 'کد', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
+    const KEYPHRASE_FILLERS = array('طبیعی', 'طرح', 'کد', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'فروش', 'خرید', 'قیمت');
 
     /** Other materials: dropped unless the phrase would become too short. */
     const KEYPHRASE_MATERIALS = array('جیر', 'پارچه', 'پارچه‌ای', 'مصنوعی');
 
     /**
-     * Conditional modifiers (priority order): dropped from the core [type + gender + model], but used to fill the
+     * Conditional modifiers in priority order: never part of the core [type + gender + model], but used to fill the
      * keyphrase up to 4 words - right after the product type - when the core is shorter and the title has them.
+     * 1) distinguishing usage (طبی، مجلسی، اسپرت، اداری، راحتی، کلاسیک), 2) material (چرم، چرمی), 3) روزمره.
      */
-    const KEYPHRASE_CONDITIONAL = array('چرم', 'چرمی', 'روزمره', 'مجلسی');
+    const KEYPHRASE_CONDITIONAL = array('طبی', 'مجلسی', 'اسپرت', 'اداری', 'راحتی', 'کلاسیک', 'چرم', 'چرمی', 'روزمره');
 
     /** Audience / style qualifiers that are kept next to the product type. */
     const KEYPHRASE_AUDIENCE = array('مردانه', 'زنانه', 'دخترانه', 'پسرانه', 'بچگانه', 'بچه‌گانه', 'نوجوان', 'اسپرت', 'رسمی', 'مجلسی');

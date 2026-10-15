@@ -83,5 +83,21 @@ $rules = ContentRules::writing_rules('product');
 check(strpos($rules, 'دقیقاً ۴ لینک با ۴ URL کاملاً یکتا') !== false && strpos($rules, 'فقط و فقط یک‌بار') !== false && strpos($rules, 'لیست مزایا') !== false && strpos($rules, 'سوالات متداول') !== false && strpos($rules, '<strong>') !== false, 'product rules: 4 unique links, each once, no re-linking in the benefits list or FAQ');
 check(strpos(ContentRules::writing_rules('article'), 'دقیقاً ۴ لینک') === false, 'article rules are unchanged');
 
+echo "7. Planned product anchors are locked (AI cannot distort them)\n";
+$marko = 'https://aka.test/product/marko/';
+$plan = array(
+    array('anchor' => 'انواع کفش طبی مردانه', 'url' => $cat, 'required' => true, 'type' => 'category', 'category_name' => 'کفش طبی مردانه'),
+    array('anchor' => 'کفش طبی مردانه مارکو', 'url' => $marko, 'locked' => true, 'required' => true, 'type' => 'product'),
+);
+$ai = '<p>این مدل را با <a href="' . $marko . '">کفش چرم مارکو</a> مقایسه کنید.</p>';
+$fixed = ContentGuard::lock_product_anchors($ai, $plan);
+check($fixed === '<p>این مدل را با <a href="' . $marko . '">کفش طبی مردانه مارکو</a> مقایسه کنید.</p>', 'AI wrote «کفش چرم مارکو» -> forced to «کفش طبی مردانه مارکو»');
+check(ContentGuard::lock_product_anchors('<a href="https://AKA.test/product/marko#x" class="c">کفش <strong>مارکو</strong></a>', $plan) === '<a href="https://AKA.test/product/marko#x" class="c">کفش طبی مردانه مارکو</a>', 'href variants (case, no slash, #fragment) and nested tags are matched; attributes are kept');
+$ok = '<a href="' . $marko . '">کفش طبی مردانه مارکو</a>';
+check(ContentGuard::lock_product_anchors($ok, $plan) === $ok, 'a correct anchor is left untouched');
+$catHtml = '<a href="' . $cat . '">چیز دیگری</a> <a href="https://fa.wikipedia.org/wiki/x">ویکی</a>';
+check(ContentGuard::lock_product_anchors($catHtml, $plan) === $catHtml, 'category and external links are not touched by the product lock');
+check(ContentGuard::lock_product_anchors($ai, array()) === $ai, 'no plan -> no change');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

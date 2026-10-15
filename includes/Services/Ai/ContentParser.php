@@ -116,6 +116,8 @@ final class ContentParser {
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content, 4, self::category_urls(isset($params['internal_links']) ? $params['internal_links'] : array()));
         // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
+        // قفل نهایی: انکر لینک‌های محصول برنامه‌ریزی‌شده دقیقاً همان انکر استاندارد است (AI نمی‌تواند آن را تحریف کند)
+        $content = \Khazan\Services\Content\ContentGuard::lock_product_anchors($content, isset($params['internal_links']) ? $params['internal_links'] : array());
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
 
         $external_links = self::extract_external_links($content);

@@ -229,6 +229,26 @@ final class LinkGuard {
     }
 
     /**
+     * قفل نهایی انکر لینک‌های محصول برنامه‌ریزی‌شده: متن هر <a> که href آن یکی از محصولات مرتبط برنامه‌ریزی‌شده است، اگر دقیقاً
+     * برابر انکر استاندارد آن محصول نباشد (مثلاً AI به‌جای «کفش طبی مردانه مارکو» نوشته «کفش چرم مارکو») جبراً با همان انکر جایگزین می‌شود.
+     * آخرین گام پیش از wrap اجرا می‌شود تا هیچ گارد دیگری آن را تغییر ندهد. مقایسه href با نرمال‌سازی (اسلش، #، حروف، &amp;).
+     */
+    public static function lock_product_anchors($html, $links) {
+        $planned = array();
+        foreach ((array) $links as $link) {
+            if (empty($link['url']) || empty($link['anchor']) || !isset($link['type']) || $link['type'] !== 'product') continue;
+            $planned[self::url_key($link['url'])] = trim(preg_replace('/\s+/u', ' ', (string) $link['anchor']));
+        }
+        if (!$planned) return (string) $html;
+        return preg_replace_callback('~(<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\2[^>]*>)(.*?)(</a>)~is', function ($m) use ($planned) {
+            $key = self::url_key($m[3]);
+            if (!isset($planned[$key])) return $m[0];
+            $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode(wp_strip_all_tags($m[4]), ENT_QUOTES, 'UTF-8')));
+            return $text === $planned[$key] ? $m[0] : $m[1] . esc_html($planned[$key]) . $m[5];
+        }, (string) $html);
+    }
+
+    /**
      * کلید مقایسه URL: بدون موجودیت‌های HTML، فاصله، اسلش انتهایی و بخش #fragment؛ طرح و میزبان با حروف کوچک
      */
     private static function url_key($url) {

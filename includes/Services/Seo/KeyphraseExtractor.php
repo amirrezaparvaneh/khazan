@@ -80,10 +80,31 @@ final class KeyphraseExtractor {
      */
     public static function optimal($stored, $title, $category = '') {
         $stored = trim(preg_replace('/\s+/u', ' ', (string) $stored));
-        if ($stored !== '' && self::is_valid($stored)) {
-            return self::strip_stop_words($stored);
+        $derived = self::from_title($title, $category);
+        if ($stored === '' || !self::is_valid($stored)) {
+            return $derived;
         }
-        return self::from_title($title, $category);
+        $clean = self::strip_stop_words($stored);
+        return self::conforms($clean, $derived) ? $clean : $derived;
+    }
+
+    /**
+     * Stored keyphrases (Yoast / Rank Math / sheet) are not trusted blindly: a stored phrase is kept only when it
+     * keeps every gender word and every model word of the title-derived phrase and is not shorter than it
+     * (e.g. stored «کفش چرم مارکو» loses «مردانه» -> the title-derived «کفش طبی مردانه مارکو» wins).
+     */
+    public static function conforms($stored, $derived) {
+        $derived_words = array_map(array(__CLASS__, 'key'), self::words($derived));
+        if (!$derived_words) return true;
+        $stored_words = array_map(array(__CLASS__, 'key'), self::words($stored));
+        if (count($stored_words) < count($derived_words)) return false;
+        $lists = Settings::keyphrase_words();
+        $optional = array_flip(array_map(array(__CLASS__, 'key'), $lists['conditional']));
+        foreach ($derived_words as $i => $word) {
+            if ($i === 0 || isset($optional[$word])) continue;   // the product type may be phrased differently; modifiers are optional
+            if (!in_array($word, $stored_words, true)) return false;
+        }
+        return true;
     }
 
     /**

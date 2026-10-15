@@ -59,7 +59,8 @@ check(K::limit('یک دو سه') === 'یک دو سه' && K::cap('') === '' && K:
 check(K::limit('الف ب ج د هـ', 2) === 'الف ب', 'explicit smaller limit works');
 
 echo "4. Stored focus keyphrase is reused when it fits (1-4 words)\n";
-check(K::optimal('کفش مردانه ونس', $title) === 'کفش مردانه ونس', 'a stored 3-word keyphrase is used as it is');
+check(K::optimal('کفش مردانه ونس', $title) === 'کفش مردانه ونس فلوتر', 'a stored 3-word keyphrase that drops part of the model name is replaced by the 4-word title form');
+check(K::optimal('کفش مردانه ونس', 'x') === 'کفش مردانه ونس', 'without a usable title a stored 3-word keyphrase is used as it is');
 check(K::optimal('  کفش   مردانه  ونس فلوتر ', $title) === 'کفش مردانه ونس فلوتر', 'a stored 4-word keyphrase is used (whitespace normalized)');
 check(K::optimal('کفش مردانه چرم طبیعی ونس فلوتر', $title) === 'کفش مردانه ونس فلوتر', 'a stored 5-word keyphrase is NOT used; it is derived from the title instead');
 check(K::optimal('', $title) === 'کفش مردانه ونس فلوتر', 'no stored keyphrase -> derived from the title');
@@ -74,7 +75,7 @@ $d = K::from_title('کیف چرم طبیعی اصل تبریز دست‌دوز �
 check(wc($d) >= 2 && wc($d) <= 4 && strpos($d, 'تبریز') === false && strpos($d, 'طبیعی') === false && strpos($d, 'اصل') === false, 'generic words (طبیعی، اصل، تبریز، لوکس…) never survive: «' . $d . '»');
 check(strpos(K::from_title('کفش اسپرت مردانه چرم اصل تبریز مدل ونس اولد اسکول'), 'مدل') === false, 'the «مدل» marker itself is never part of the phrase');
 check(K::from_title('کفش اسپرت مردانه تبریز چرم اصل ونس اولد اسکول') === 'کفش مردانه اولد اسکول', 'without «مدل»: product type + gender + the last distinctive words');
-check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف چرم زنانه آیسا', 'gender qualifier is preserved next to the type; the free 4th slot goes to «چرم»');
+check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف مجلسی زنانه آیسا', 'gender qualifier is preserved; the free 4th slot goes to the usage word «مجلسی» (before «چرم»)');
 check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی', 'کیف دوشی زنانه') === 'کیف دوشی زنانه آیسا', 'when the category words are given they form the base (کیف دوشی زنانه) and the model name is kept');
 
 echo "6. Robustness\n";
@@ -144,6 +145,29 @@ for ($i = 0; $i < 500; $i++) {
 }
 check($over === 0, '500 random titles: never more than 4 words');
 check($leak === 0, '500 random titles: unconditional stop words never leak (' . $leak . ')');
+
+echo "10. Semantic 4-word formula: what (type + usage) + for whom (gender) + model\n";
+check(K::from_title('کفش طبی مردانه چرم طبیعی تبریز مدل مارکو') === 'کفش طبی مردانه مارکو', '«کفش طبی مردانه چرم طبیعی تبریز مدل مارکو» -> «کفش طبی مردانه مارکو»');
+check(K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر') === 'کفش مردانه ونس فلوتر', '«… مدل ونس فلوتر» -> «کفش مردانه ونس فلوتر» (2-word model: no modifier)');
+check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت چرم زنانه آلفردو', '«بوت زنانه چرم … مدل آلفردو» -> «بوت چرم زنانه آلفردو» (no usage word: material fills the slot)');
+check(K::from_title('کفش مجلسی زنانه چرم مدل لارا') === 'کفش مجلسی زنانه لارا', 'usage (مجلسی) beats material (چرم) for the 4th slot');
+check(K::from_title('کفش اداری مردانه چرم طبیعی مدل آرمان') === 'کفش اداری مردانه آرمان' && K::from_title('صندل راحتی زنانه چرم مدل مهسا') === 'صندل راحتی زنانه مهسا' && K::from_title('کفش کلاسیک مردانه چرمی مدل آرتین') === 'کفش کلاسیک مردانه آرتین', 'اداری / راحتی / کلاسیک are usage words too');
+$genderKept = true;
+foreach (array('کفش طبی مردانه چرم طبیعی تبریز مدل مارکو', 'بوت زنانه چرم طبیعی تبریز مدل آلفردو', 'کفش مجلسی زنانه چرم مدل لارا', 'کیف چرم طبیعی زنانه مدل آیسا', 'کمربند چرم مردانه مدل کلاسیک رویال') as $t) {
+    $o = K::from_title($t); $g = preg_match('/(مردانه|زنانه)/u', $t, $gm) ? $gm[1] : '';
+    $genderKept = $genderKept && ($g === '' || in_array($g, K::words($o), true)) && K::count_words($o) <= 4;
+}
+check($genderKept, 'gender (مردانه / زنانه) is never dropped nor replaced by چرم');
+foreach (array('فروش', 'خرید', 'قیمت') as $w) check(!in_array($w, K::words(K::from_title("خرید کفش $w طبی مردانه مدل مارکو قیمت")), true), "«{$w}» is an unconditional stop word");
+
+echo "11. Stored / incomplete meta is not trusted blindly\n";
+$title = 'کفش طبی مردانه چرم طبیعی تبریز مدل مارکو';
+check(K::optimal('کفش چرم مارکو', $title) === 'کفش طبی مردانه مارکو', 'stored «کفش چرم مارکو» (gender lost) -> rebuilt from the title: «کفش طبی مردانه مارکو»');
+check(K::optimal('کفش مردانه', $title) === 'کفش طبی مردانه مارکو', 'stored phrase without the model name -> rebuilt from the title');
+check(K::optimal('کفش مردانه مارکو', $title) === 'کفش طبی مردانه مارکو', 'stored 3-word phrase while the title supports 4 words -> rebuilt from the title');
+check(K::optimal('', $title) === 'کفش طبی مردانه مارکو', 'no stored meta at all -> built from the title');
+check(K::optimal('کفش طبی مردانه مارکو', $title) === 'کفش طبی مردانه مارکو', 'a conforming stored phrase is kept');
+check(K::optimal('بوت چرم زنانه آلفردو', 'x') === 'بوت چرم زنانه آلفردو', 'without a usable title the stored phrase is kept');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

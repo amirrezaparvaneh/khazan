@@ -121,7 +121,7 @@ foreach (array('article', 'product', 'product_cat') as $k) {
     check(strpos($r, '<p>...</p>') !== false && strpos($r, '۶۰ تا ۹۰ کلمه') !== false && strpos($r, '۱۱۰ کلمه') !== false, "writing_rules($k): explicit <p>, 60-90 words per paragraph");
 }
 $r = ContentRules::writing_rules('product');
-check(strpos($r, '[نوع کالا] + [جنسیت] + [نام اختصاصی مدل]') !== false && strpos($r, 'طبیعی، تبریز، مدل، طرح، اصل، دست‌دوز و کد') !== false && strpos($r, 'بوت چرم زنانه آلفردو') !== false, 'the keyphrase formula, its forbidden words and the 1-word-model چرم rule are dictated');
+check(strpos($r, '[نوع کالا] + [جنسیت] + [نام اختصاصی مدل]') !== false && strpos($r, 'طبیعی، تبریز، مدل، طرح، اصل، دست‌دوز، کد، فروش، خرید و قیمت') !== false && strpos($r, 'کفش طبی مردانه مارکو') !== false && strpos($r, 'بوت چرم زنانه آلفردو') !== false, 'the keyphrase formula, its forbidden words and the 1-word-model چرم rule are dictated');
 check(strpos($r, '«انواع»، «مجموعه مدل‌های» یا «کلکسیون» به‌همراه نام واقعی دسته') !== false, 'the category anchor must be prefix + the real category name');
 
 echo "\n$passed passed, $failed failed\n";
