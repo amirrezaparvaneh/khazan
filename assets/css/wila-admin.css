@@ -1310,3 +1310,62 @@ img.khazan-watermark {
 @media (prefers-reduced-motion: reduce) {
   #wila-app-root .khazan-stat-card, #wila-app-root .khazan-stat-check { transition: none; }
 }
+
+/* Bulk (site products): action bars, scrollable preview table, collapsed summary */
+#wila-app-root .khazan-site-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 10px 14px;
+  background: #fffaf7;
+  border: 1px solid #f3d8d8;
+  border-radius: 12px;
+}
+#wila-app-root .khazan-site-bar-all { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; cursor: pointer; }
+#wila-app-root .khazan-site-bar .khazan-3d-btn { margin-inline-start: auto; }
+#wila-app-root .khazan-site-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #f3d8d8;
+  border-radius: 12px;
+  background: #ffffff;
+}
+#wila-app-root .khazan-site-scroll .wila-table { margin: 0; }
+#wila-app-root .khazan-site-scroll .wila-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff5f0;
+  box-shadow: 0 1px 0 #f3d8d8;
+}
+#wila-app-root .khazan-site-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #3f6212;
+  background: linear-gradient(135deg, #f7fee7 0%, #ecfccb 100%);
+  border: 1px solid #d9f99d;
+  border-radius: 12px;
+}
+#wila-app-root .khazan-site-summary-sep { color: #a3a3a3; }
+#wila-app-root .khazan-link-btn {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: #c2410c;
+  background: none;
+  border: 0;
+  border-bottom: 1.5px dashed currentColor;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+#wila-app-root .khazan-link-btn:hover:not(:disabled) { color: #991b1b; }
+#wila-app-root .khazan-link-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+#wila-app-root #wila-queue-settings { scroll-margin-top: 48px; }

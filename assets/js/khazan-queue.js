@@ -205,6 +205,15 @@
       this.loadSiteProducts();
     },
 
+    // بازکردن دوباره بخش انتخاب محصولات سایت (فهرست و انتخاب‌ها حفظ می‌شوند)
+    reopenSiteSelection: function () {
+      const b = this.state.bulk;
+      if (b.running || !b.site.collapsed) return;
+      b.site.collapsed = false;
+      this.state.pendingScroll = 'wila-bulk-source';
+      this.render();
+    },
+
     // محصولات بارگذاری‌شده از سایت را (بدون تکرار) به جدول صف اضافه می‌کند
     addSiteProductsToQueue: function () {
       const b = this.state.bulk;
@@ -226,6 +235,12 @@
       b.status = 'pending';
       b.view = 'found';
       this.toast(added ? `${toPersianDigits(added)} محصول به صف اضافه شد.` : 'همه این محصولات قبلاً در صف هستند.', added ? 'success' : 'error');
+      if (added) {
+        // مرحله بعد: بخش انتخاب جمع می‌شود و صفحه به تنظیمات و جدول صف اسکرول می‌کند
+        b.site.collapsed = true;
+        b.site.addedCount = added;
+        this.state.pendingScroll = 'wila-queue-settings';
+      }
       this.render();
     },
 
@@ -258,15 +273,16 @@
         siteSearch.addEventListener('input', e => { bulk.site.search = e.target.value; });
         siteSearch.addEventListener('keydown', e => { if (e.key === 'Enter' && !bulk.running) { e.preventDefault(); this.loadSiteProducts(); } });
       }
-      const siteAll = this.root.querySelector('#wila-site-select-all');
-      if (siteAll) siteAll.addEventListener('change', e => {
+      // نوار بالا، نوار پایین و هدر جدول هر سه یک state را عوض می‌کنند و با رندر دوباره هم‌گام می‌شوند
+      this.root.querySelectorAll('.wila-site-select-all').forEach(box => box.addEventListener('change', e => {
         bulk.site.selected = {};
         if (e.target.checked) bulk.site.items.forEach(p => { bulk.site.selected[p.id] = true; });
         this.render();
-      });
+      }));
+      this.root.querySelectorAll('.wila-site-reopen').forEach(btn => btn.addEventListener('click', () => this.reopenSiteSelection()));
       this.root.querySelectorAll('.wila-site-row').forEach(box => box.addEventListener('change', e => { bulk.site.selected[e.target.dataset.id] = e.target.checked; this.render(); }));
       const siteLoad = this.root.querySelector('#wila-site-load'); if (siteLoad) siteLoad.addEventListener('click', () => this.loadSiteProducts());
-      const siteAdd = this.root.querySelector('#wila-site-add'); if (siteAdd) siteAdd.addEventListener('click', () => this.addSiteProductsToQueue());
+      this.root.querySelectorAll('.wila-site-add').forEach(btn => btn.addEventListener('click', () => this.addSiteProductsToQueue()));
       const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
       this.root.querySelectorAll('.wila-bulk-view').forEach(btn => btn.addEventListener('click', e => { bulk.view = e.currentTarget.getAttribute('data-view'); this.render(); }));
       const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
@@ -301,7 +317,7 @@
 
   window.KhazanQueue = {
     initialState: function () {
-      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {} }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
+      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
     },
     methods: methods
   };

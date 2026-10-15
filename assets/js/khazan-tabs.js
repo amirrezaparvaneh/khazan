@@ -227,12 +227,20 @@
         const allVisibleSelected = selectable.length > 0 && selectable.every(i => b.selected[i]);
         const locked = b.running ? 'disabled' : '';
         const siteSelected = b.site.items.filter(p => b.site.selected[p.id]).length;
+        const siteExpanded = b.source === 'site' && !b.site.collapsed;
+        // نوار عملیات بالا و پایین جدول پیش‌نمایش؛ هر دو همیشه هم‌گام‌اند (از یک state رندر می‌شوند)
+        const siteBar = (pos) => `<div class="khazan-site-bar khazan-site-bar-${pos}">
+            <label class="khazan-site-bar-all"><input type="checkbox" class="khazan-checkbox wila-site-select-all" ${siteSelected === b.site.items.length ? 'checked' : ''} ${b.running ? 'disabled' : ''}> انتخاب همه</label>
+            <span class="khazan-status-pill khazan-site-counter">${toPersianDigits(siteSelected)} از ${toPersianDigits(b.site.items.length)} محصول انتخاب شده</span>
+            ${this.btn3d(pos === 'top' ? 'wila-site-add' : 'wila-site-add-bottom', 'btn-warning wila-site-add', `افزودن ${toPersianDigits(siteSelected)} محصول به صف تولید انبوه`, b.running || !siteSelected ? 'disabled' : '')}
+          </div>`;
         contentHtml = `<div class="wila-card">
           <h3 style="margin-top:0">تولید محتوای انبوه</h3>
           <div class="khazan-subtabs" id="wila-bulk-source">
             <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'csv' ? 'active' : ''}" data-source="csv" ${locked}>📄 بارگذاری فایل CSV</button>
             <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'site' ? 'active' : ''}" data-source="site" ${locked}>🛍️ انتخاب از محصولات سایت</button>
           </div>
+          ${b.source === 'site' && b.site.collapsed ? `<div class="khazan-site-summary" id="wila-site-summary"><span>✅ تعداد ${toPersianDigits(b.site.addedCount)} محصول از سایت به صف اضافه شد</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-reopen" ${b.running ? 'disabled' : ''}>تغییر یا انتخاب مجدد محصولات</button></div>` : ''}
           ${b.source === 'csv' ? `<p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>` : '<p style="color:#64748b;font-size:.85rem">محصولات سایت را بر اساس دسته‌بندی یا وضعیت محتوا فیلتر کنید و بدون فایل CSV به صف تولید اضافه کنید. تعداد لینک ورودی محصولات هم‌دسته به‌طور مساوی بین آن‌ها پخش می‌شود.</p>'}
           <div class="khazan-toolbar">
             ${b.source === 'csv' ? `
@@ -260,7 +268,7 @@
                   <span class="khazan-dz-text"><strong>بارگذاری فایل اکسل / شیت محصولات</strong><small>فایل CSV را اینجا رها کنید یا دکمه بالا را بزنید</small></span>
                 `}
               </div></div>
-            ` : `
+            ` : b.site.collapsed ? '' : `
             <div class="khazan-field"><label>دسته‌بندی</label>
               <select id="wila-site-category" class="wila-select" ${locked}>
                 <option value="0">همه دسته‌بندی‌ها</option>
@@ -270,7 +278,6 @@
               <input id="wila-site-search" type="search" class="wila-input" value="${escapeHtml(b.site.search)}" placeholder="بخشی از نام محصول..." ${locked}></div>
             <div class="khazan-field khazan-field-actions">
               ${this.btn3d('wila-site-load', 'btn-primary', b.site.loading ? 'در حال بارگذاری...' : 'بارگذاری محصولات', b.site.loading || b.running ? 'disabled' : '')}
-              ${b.site.items.length ? this.btn3d('wila-site-add', 'btn-warning', `افزودن ${toPersianDigits(siteSelected)} محصول به صف تولید انبوه`, b.running || !siteSelected ? 'disabled' : '') : ''}
             </div>
             `}
             ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
@@ -286,7 +293,7 @@
                 <option value="draft" ${b.mode === 'draft' ? 'selected' : ''}>ذخیره به‌عنوان پیش‌نویس بازبینی (بدون تغییر صفحه زنده)</option>
               </select></div>` : ''}
           </div>
-${b.source === 'site' ? `
+${siteExpanded ? `
           <div class="khazan-stat-cards" role="radiogroup" aria-label="وضعیت محتوای محصولات">
             ${[
               ['all', 'همه محصولات', b.site.counts.total, 'مناسب بازتولید و بالانس سراسری لینک‌ها'],
@@ -300,14 +307,16 @@ ${b.source === 'site' ? `
                 <span class="khazan-stat-hint">${hint}</span>
               </button>`).join('')}
           </div>` : ''}
-          ${b.source === 'site' && (b.site.loaded || b.site.error) ? `<div class="khazan-statusbar"><span class="khazan-status-pill">${b.site.error ? '⚠️ ' + escapeHtml(b.site.error) : `🛍️ ${toPersianDigits(b.site.items.length)} محصول از سایت بارگذاری شد${b.site.hasMore ? ' (سقف نمایش؛ فیلتر را دقیق‌تر کنید)' : ''}`}</span></div>` : ''}
-          ${b.source === 'site' && b.site.loaded && b.site.items.length ? `
-          <div class="wila-table-scroll"><table class="wila-table khazan-site-table"><thead><tr>
-            <th><input type="checkbox" class="khazan-checkbox" id="wila-site-select-all" ${siteSelected === b.site.items.length ? 'checked' : ''} ${b.running ? 'disabled' : ''}></th><th>نام محصول</th><th>دسته‌بندی</th><th>وضعیت محتوا</th>
-          </tr></thead><tbody>${b.site.items.map(p => `<tr><td><input type="checkbox" class="khazan-checkbox wila-site-row" data-id="${p.id}" ${b.site.selected[p.id] ? 'checked' : ''} ${b.running ? 'disabled' : ''}></td><td style="font-weight:600">${escapeHtml(p.title)}</td><td>${escapeHtml((p.categories || []).map(c => c.name).join('، ') || '—')}</td><td>${p.has_description ? '<span class="khazan-badge khazan-badge-ok">📝 دارای توضیحات</span>' : '<span class="khazan-badge khazan-badge-warn">⚪ خالی</span>'}${p.generated ? ` <span class="khazan-badge khazan-badge-done" title="${escapeHtml('تولید شده در ' + formatJalali(p.generated.at))}">🕒 ${escapeHtml(shortJalali(p.generated.at))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
+          ${siteExpanded && (b.site.loaded || b.site.error) ? `<div class="khazan-statusbar"><span class="khazan-status-pill">${b.site.error ? '⚠️ ' + escapeHtml(b.site.error) : `🛍️ ${toPersianDigits(b.site.items.length)} محصول از سایت بارگذاری شد${b.site.hasMore ? ' (سقف نمایش؛ فیلتر را دقیق‌تر کنید)' : ''}`}</span></div>` : ''}
+          ${siteExpanded && b.site.loaded && b.site.items.length ? `
+          ${siteBar('top')}
+          <div class="wila-table-scroll khazan-site-scroll"><table class="wila-table khazan-site-table"><thead><tr>
+            <th><input type="checkbox" class="khazan-checkbox wila-site-select-all" id="wila-site-select-all" ${siteSelected === b.site.items.length ? 'checked' : ''} ${b.running ? 'disabled' : ''}></th><th>نام محصول</th><th>دسته‌بندی</th><th>وضعیت محتوا</th>
+          </tr></thead><tbody>${b.site.items.map(p => `<tr><td><input type="checkbox" class="khazan-checkbox wila-site-row" data-id="${p.id}" ${b.site.selected[p.id] ? 'checked' : ''} ${b.running ? 'disabled' : ''}></td><td style="font-weight:600">${escapeHtml(p.title)}</td><td>${escapeHtml((p.categories || []).map(c => c.name).join('، ') || '—')}</td><td>${p.has_description ? '<span class="khazan-badge khazan-badge-ok">📝 دارای توضیحات</span>' : '<span class="khazan-badge khazan-badge-warn">⚪ خالی</span>'}${p.generated ? ` <span class="khazan-badge khazan-badge-done" title="${escapeHtml('تولید شده در ' + formatJalali(p.generated.at))}">🕒 ${escapeHtml(shortJalali(p.generated.at))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>
+          ${siteBar('bottom')}` : ''}
           ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
           ${b.rows.length && !b.matching ? `
-            <div class="khazan-toggle-grid">
+            <div class="khazan-toggle-grid" id="wila-queue-settings">
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره عنوان سئو، توضیحات متا و کلیدواژه در Yoast و Rank Math</small></span></label>
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>
