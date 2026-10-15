@@ -310,7 +310,7 @@
           this.loadBulkFile(f);
         });
       }
-      this.root.querySelectorAll('.wila-bulk-source').forEach(btn => btn.addEventListener('click', e => this.setBulkSource(e.currentTarget.getAttribute('data-source'))));
+      this.root.querySelectorAll('.wila-bulk-source').forEach(btn => btn.addEventListener('change', e => this.setBulkSource(e.currentTarget.getAttribute('data-source'))));
       this.root.querySelectorAll('.khazan-stat-card').forEach(card => card.addEventListener('click', e => this.setSiteFilter(e.currentTarget.getAttribute('data-site-filter'))));
       const siteCategory = this.root.querySelector('#wila-site-category'); if (siteCategory) siteCategory.addEventListener('change', e => { bulk.site.category = Number(e.target.value) || 0; if (!bulk.running) this.loadSiteProducts(); });
       const siteSearch = this.root.querySelector('#wila-site-search');

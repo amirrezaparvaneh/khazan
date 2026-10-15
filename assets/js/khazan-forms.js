@@ -156,7 +156,7 @@
       this.root.querySelectorAll('select[data-generator-field]').forEach(el => el.addEventListener('change', e => { this.state.generatorForm[e.target.dataset.generatorField] = e.target.value; }));
       const useOrphanLinks = this.root.querySelector('#wila-use-orphan-links');
       if (useOrphanLinks) useOrphanLinks.addEventListener('change', e => { this.state.generatorForm.useOrphanLinks = e.target.checked; });
-      this.root.querySelectorAll('.wila-kind-btn').forEach(btn => btn.addEventListener('click', e => this.setContentKind(e.currentTarget.getAttribute('data-kind'))));
+      this.root.querySelectorAll('.wila-kind-btn').forEach(btn => btn.addEventListener('change', e => this.setContentKind(e.currentTarget.getAttribute('data-kind'))));
       const targetSelect = this.root.querySelector('#wila-target-select');
       if (targetSelect) {
         this.updateTargetOptions();
@@ -176,7 +176,7 @@
         if (badge) { badge.textContent = `${toPersianDigits(len)} کاراکتر (ایده‌آل ۵۰ تا ۶۰)`; badge.style.color = len >= 50 && len <= 60 ? '#16a34a' : '#d97706'; }
       });
       const sf = this.state.seoFix;
-      this.root.querySelectorAll('.wila-seofix-kind').forEach(btn => btn.addEventListener('click', e => this.setSeoFixKind(e.currentTarget.getAttribute('data-kind'))));
+      this.root.querySelectorAll('.wila-seofix-kind').forEach(btn => btn.addEventListener('change', e => this.setSeoFixKind(e.currentTarget.getAttribute('data-kind'))));
       const sfSelect = this.root.querySelector('#wila-seofix-select');
       if (sfSelect) {
         this.updateSeoFixOptions();

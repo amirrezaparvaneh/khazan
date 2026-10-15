@@ -1584,3 +1584,142 @@ img.khazan-watermark {
   #wila-app-root .khazan-backdrop.open,
   #wila-app-root .khazan-menu-toggle { transition: none; }
 }
+
+/* ---------- Segmented radio switch (3D / neumorphic) ---------- */
+#wila-app-root .khazan-radio-inputs {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #e6e6e6, #ffffff);
+  box-sizing: border-box;
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.12), -5px -5px 15px rgba(255, 255, 255, 0.8);
+  padding: 0.5rem;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 280px;
+  font-size: 14px;
+  gap: 0.5rem;
+  margin: 12px 0;
+}
+
+#wila-app-root .khazan-radio-inputs .radio {
+  flex: 1 1 auto;
+  text-align: center;
+  position: relative;
+  margin: 0;
+  cursor: pointer;
+}
+
+#wila-app-root .khazan-radio-inputs .radio input {
+  display: none !important;
+}
+
+#wila-app-root .khazan-radio-inputs .radio .name {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.7rem;
+  border: none;
+  padding: 0.7rem 1.2rem;
+  color: #2d3748;
+  font-weight: 500;
+  font-family: inherit;
+  background: linear-gradient(145deg, #ffffff, #e6e6e6);
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.1), -3px -3px 6px rgba(255, 255, 255, 0.7);
+  transition: all 0.2s ease;
+  overflow: hidden;
+  position: relative;
+  user-select: none;
+}
+
+/* حالت انتخاب‌شده (Checked) */
+#wila-app-root .khazan-radio-inputs .radio input:checked + .name {
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.2), inset -2px -2px 5px rgba(255, 255, 255, 0.1), 3px 3px 8px rgba(59, 130, 246, 0.3);
+  transform: translateY(2px);
+  animation: khazanRadioSelect 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+/* افکت هاور */
+#wila-app-root .khazan-radio-inputs .radio:hover .name {
+  background: linear-gradient(145deg, #f0f0f0, #ffffff);
+  transform: translateY(-1px);
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.1), -4px -4px 8px rgba(255, 255, 255, 0.8);
+}
+
+#wila-app-root .khazan-radio-inputs .radio:hover input:checked + .name {
+  background: linear-gradient(145deg, #3b82f6, #2563eb);
+  transform: translateY(1px);
+}
+
+/* حالت غیرفعال (مثلاً هنگام اجرای صف) */
+#wila-app-root .khazan-radio-inputs .radio input:disabled + .name {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ذرات و درخشش نوری (Particles & Glow Effect) */
+#wila-app-root .khazan-radio-inputs .radio .name::before,
+#wila-app-root .khazan-radio-inputs .radio .name::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#wila-app-root .khazan-radio-inputs .radio input:checked + .name::before {
+  background: #60a5fa;
+  box-shadow: 0 0 6px #60a5fa, 10px -10px 0 #60a5fa, -10px -10px 0 #60a5fa;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: khazanMultiParticlesTop 0.8s ease-out forwards;
+}
+
+#wila-app-root .khazan-radio-inputs .radio input:checked + .name::after {
+  background: #93c5fd;
+  box-shadow: 0 0 8px #93c5fd, 10px 10px 0 #93c5fd, -10px 10px 0 #93c5fd;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: khazanMultiParticlesBottom 0.8s ease-out forwards;
+}
+
+@keyframes khazanRadioSelect {
+  0% { transform: scale(0.95) translateY(2px); }
+  50% { transform: scale(1.05) translateY(-1px); }
+  100% { transform: scale(1) translateY(2px); }
+}
+
+@keyframes khazanMultiParticlesTop {
+  0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  40% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0); box-shadow: 0 0 6px transparent, 20px -20px 0 transparent, -20px -20px 0 transparent; }
+}
+
+@keyframes khazanMultiParticlesBottom {
+  0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  40% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(20px) scale(0); box-shadow: 0 0 8px transparent, 20px 20px 0 transparent, -20px 20px 0 transparent; }
+}
+
+@media (max-width: 480px) {
+  #wila-app-root .khazan-radio-inputs { min-width: 0; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #wila-app-root .khazan-radio-inputs .radio .name,
+  #wila-app-root .khazan-radio-inputs .radio input:checked + .name,
+  #wila-app-root .khazan-radio-inputs .radio input:checked + .name::before,
+  #wila-app-root .khazan-radio-inputs .radio input:checked + .name::after { animation: none; transition: none; }
+}
