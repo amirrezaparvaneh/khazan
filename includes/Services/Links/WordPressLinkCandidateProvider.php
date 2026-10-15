@@ -54,6 +54,7 @@ final class WordPressLinkCandidateProvider implements LinkCandidateProvider {
             'title'               => get_the_title($product_id),
             'url'                 => get_permalink($product_id),
             'anchor'              => $this->targets->product_link_anchor($product_id),
+            'synonyms'            => $this->targets->product_synonyms($product_id),
             'category_ids'        => $ids,
             'primary_category_id' => $this->entities->primary_category_id($product_id, $ids),
         );

@@ -376,6 +376,14 @@ final class ContentTargetRepository {
     }
 
     /**
+     * مترادف‌ها و عبارات فرعی ذخیره‌شده محصول (Yoast / RankMath) به‌صورت فهرست؛ برای جلوگیری از خودرقابتی انکرها
+     */
+    public function product_synonyms($id) {
+        $seo = $this->seo->read_post_seo($id);
+        return SeoMetaService::split_keywords($seo['synonyms'], $seo['focuskw']);
+    }
+
+    /**
      * نام دستهٔ اصلی محصول (Yoast / Rank Math) یا اولین دستهٔ اختصاص‌یافته؛ خالی اگر دسته‌ای نباشد
      */
     public function primary_category_name($id) {

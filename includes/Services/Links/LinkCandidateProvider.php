@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 interface LinkCandidateProvider {
 
     /**
-     * @return array|null {id, title, url, anchor, category_ids:int[], primary_category_id:int}
+     * @return array|null {id, title, url, anchor, synonyms?:string[], category_ids:int[], primary_category_id:int}
      */
     public function product($product_id);
 

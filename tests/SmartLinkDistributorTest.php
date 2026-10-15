@@ -185,5 +185,41 @@ foreach (array_keys($focus) as $pid) {
 check($all, 'whole queue of 10 products with deliberately overlapping keyphrases: zero overlapping outgoing anchors');
 check(Khazan\Services\Seo\KeyphraseExtractor::overlaps('کفش مردانه', 'کفش مردانه ونس') && !Khazan\Services\Seo\KeyphraseExtractor::overlaps('کفش مردانه ونس', 'کفش مردانه اولد') && !Khazan\Services\Seo\KeyphraseExtractor::overlaps('', 'کفش'), 'overlaps(): containment yes, shared prefix only no, empty never');
 
+echo "9. Category and synonym anchors never compete with the page's own keyphrase\n";
+use Khazan\Services\Seo\KeyphraseExtractor as KX;
+$mk = function ($catName, $focus, array $synonyms = array()) {
+    $c = new FakeCatalog(); $c->addCategory(1, $catName);
+    $c->addProduct(1, 'p1', array(1), 1, $focus); $c->products[1]['synonyms'] = $synonyms;
+    $c->addProduct(2, 'p2', array(1), 1, 'بوت مدل برشکا');
+    $c->addProduct(3, 'p3', array(1), 1, 'بوت مدل سلنا');
+    $c->addProduct(4, 'p4', array(1), 1, 'نیم‌بوت چرم زنانه');
+    $c->addProduct(5, 'p5', array(1), 1, 'چرم طبیعی');
+    return new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+};
+$catAnchor = function ($plan) { foreach ($plan['internal_links'] as $l) if ($l['type'] === 'category') return $l['anchor']; return null; };
+$d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو');
+check($catAnchor($d->plan(1, '', array(), 2)) === 'بوت زنانه', 'a general category name that does not collide is used as it is («بوت زنانه»)');
+$d = $mk('کفش مردانه', 'کفش مردانه ونس');
+$a = $catAnchor($d->plan(1, '', array(), 2));
+check($a === 'خرید انواع کفش مردانه', 'a category name contained in the focus keyphrase becomes «خرید انواع …»: ' . $a);
+check(!KX::overlaps($a, 'کفش مردانه ونس') || KX::count_words($a) > KX::count_words('کفش مردانه ونس'), 'and the variant neither equals nor contains the focus keyphrase');
+$d = $mk('نیم‌بوت زنانه', 'نیم‌بوت زنانه');
+$a = $catAnchor($d->plan(1, '', array(), 2));
+check(KX::count_words($a) <= 4 && $a !== '', 'category name identical to the focus never yields an empty or >4-word anchor (' . $a . ')');
+$d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو', array('بوت مدل برشکا', 'چرم طبیعی'));
+$ids = array_column($d->plan(1, '', array(), 4)['related'], 'id');
+check(!in_array(2, $ids, true) && !in_array(5, $ids, true), 'candidates whose anchor equals / contains a synonym of this product are skipped');
+check(in_array(3, $ids, true), 'unrelated model anchors are still linked');
+$d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو', array('بوت'));
+check(in_array(3, array_column($d->plan(1, '', array(), 4)['related'], 'id'), true) === false, 'a one-word synonym that appears inside another anchor rejects it (strict contain)');
+$all = true;
+foreach (array(array('کفش مردانه', 'کفش مردانه ونس'), array('بوت زنانه', 'بوت زنانه آلفردو'), array('کیف', 'کیف دوشی آیسا'), array('کفش اسپرت مردانه', 'کفش اسپرت مردانه اولد')) as $pair) {
+    $p = $mk($pair[0], $pair[1])->plan(1, '', array(), 2);
+    $an = $catAnchor($p);
+    $all = $all && KX::count_words($an) <= 4 && !(KX::overlaps($an, $pair[1]) && KX::count_words($an) >= KX::count_words($pair[1]) && $an !== $pair[0]);
+    foreach ($p['related'] as $r) $all = $all && !KX::overlaps($r['anchor'], $pair[1]);
+}
+check($all, 'several category / keyphrase pairs: no outgoing anchor equals or contains the page keyphrase');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

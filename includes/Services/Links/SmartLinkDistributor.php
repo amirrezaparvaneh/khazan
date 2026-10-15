@@ -55,6 +55,9 @@ final class SmartLinkDistributor {
         $state['done'][$product_id] = true;
 
         $category = $this->own_category($product);
+        if ($category) {
+            $category['anchor'] = $this->category_anchor($category['name'], $product);
+        }
         $related  = $this->pick_related($product, $state, $queue_ids, (int) $limit);
 
         foreach ($related as $entry) {
@@ -66,12 +69,50 @@ final class SmartLinkDistributor {
 
         $links = array();
         if ($category) {
-            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['name']), 'url' => $category['url'], 'required' => true, 'type' => 'category');
+            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['anchor']), 'url' => $category['url'], 'required' => true, 'type' => 'category');
         }
         foreach ($related as $entry) {
             $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($entry['anchor']), 'url' => $entry['url'], 'locked' => true, 'required' => true, 'type' => 'product');
         }
         return array('category' => $category, 'related' => $related, 'internal_links' => $links);
+    }
+
+    /**
+     * Anchor of the category link: the general category name, unless it would compete with the product's own
+     * focus keyphrase or synonyms (equal, containing or contained) - then a descriptive variant such as
+     * «خرید انواع {name}» that neither equals nor contains them (max 4 words).
+     */
+    public function category_anchor($name, array $product) {
+        $name = trim((string) $name);
+        if (!$this->cannibalizes($name, $product, true)) {
+            return $name;
+        }
+        foreach (array('خرید انواع ', 'دسته‌بندی ', 'انواع ', 'مشاهده ') as $prefix) {
+            $variant = $prefix . $name;
+            if (\Khazan\Services\Seo\KeyphraseExtractor::count_words($variant) <= \Khazan\Core\Settings::KEYPHRASE_MAX_WORDS && !$this->cannibalizes($variant, $product, false)) {
+                return $variant;
+            }
+        }
+        return $name;
+    }
+
+    /**
+     * Does $anchor compete with the product's focus keyphrase / synonyms?
+     * $either_direction=true also rejects anchors contained in them; false only equal / containing anchors.
+     * Synonyms always use the strict (equal / containing) test so short generic synonyms do not reject everything.
+     */
+    private function cannibalizes($anchor, array $product, $either_direction) {
+        $k = '\\Khazan\\Services\\Seo\\KeyphraseExtractor';
+        $focus = isset($product['anchor']) ? (string) $product['anchor'] : '';
+        if ($focus !== '' && $k::overlaps($anchor, $focus) && ($either_direction || $k::count_words($anchor) >= $k::count_words($focus))) {
+            return true;
+        }
+        foreach (isset($product['synonyms']) ? (array) $product['synonyms'] : array() as $synonym) {
+            if ($synonym !== '' && $k::overlaps($anchor, $synonym) && $k::count_words($anchor) >= $k::count_words($synonym)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -120,8 +161,8 @@ final class SmartLinkDistributor {
             if ((int) $candidate['id'] === (int) $product['id'] || (string) $candidate['anchor'] === '') {
                 continue;
             }
-            // انکر لینک خروجی نباید با کلیدواژه کانونی همین محصول هم‌پوشانی داشته باشد (رقابت کلیدواژه‌ای / Cannibalization)
-            if (\Khazan\Services\Seo\KeyphraseExtractor::overlaps($candidate['anchor'], isset($product['anchor']) ? $product['anchor'] : '')) {
+            // انکر لینک خروجی نباید با کلیدواژه کانونی یا مترادف‌های اصلی همین محصول هم‌پوشانی داشته باشد (Cannibalization)
+            if ($this->cannibalizes($candidate['anchor'], $product, true)) {
                 continue;
             }
             $score = $this->similarity($product, $candidate);
