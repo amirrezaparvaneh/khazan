@@ -1114,44 +1114,62 @@ img.khazan-watermark {
 #wila-bulk-source { margin: 4px 0 12px; }
 
 /* ==========================================================
-   CSV upload box: floating 3D folder + power-smash button
+   CSV upload box: turquoise floating 3D folder
    (scoped to the plugin root so wp-admin is never affected)
    ========================================================== */
 #wila-app-root .khazan-upload-box { cursor: pointer; user-select: none; }
-#wila-app-root .khazan-upload-box:focus-visible { outline: 3px solid rgba(239, 68, 68, 0.35); outline-offset: 2px; }
+#wila-app-root .khazan-upload-box:focus-visible { outline: 3px solid rgba(33, 147, 176, 0.35); outline-offset: 2px; }
 #wila-app-root .khazan-upload-box.is-locked { cursor: not-allowed; }
 
-#wila-app-root .khazan-folder-anim {
+#wila-app-root .khazan-folder-container {
   --transition: 350ms;
   --folder-W: 120px;
   --folder-H: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px;
+  background: linear-gradient(135deg, #6dd5ed, #2193b0);
+  border-radius: 15px;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+  height: calc(var(--folder-H) * 1.7);
+  width: 220px;
+  margin: 25px auto 10px;
   position: relative;
-  width: var(--folder-W);
-  height: calc(var(--folder-H) + 30px);
-  margin: 0 auto 16px;
+  box-sizing: border-box;
 }
-#wila-app-root .khazan-folder-anim .folder {
-  position: relative;
+
+#wila-app-root .khazan-folder-container .folder {
+  position: absolute;
+  top: -20px;
+  left: calc(50% - 60px);
   width: var(--folder-W);
   height: var(--folder-H);
   animation: khazanFolderFloat 2.5s infinite ease-in-out;
   transition: transform var(--transition) ease;
 }
-#wila-app-root .khazan-folder-anim .folder:hover { transform: scale(1.05); }
-#wila-app-root .khazan-folder-anim .front-side,
-#wila-app-root .khazan-folder-anim .back-side {
+
+#wila-app-root .khazan-folder-container .folder:hover {
+  transform: scale(1.05);
+}
+
+#wila-app-root .khazan-folder-container .folder .front-side,
+#wila-app-root .khazan-folder-container .folder .back-side {
   position: absolute;
   top: 0;
   left: 0;
   transition: transform var(--transition);
   transform-origin: bottom center;
 }
-#wila-app-root .khazan-folder-anim .back-side::before,
-#wila-app-root .khazan-folder-anim .back-side::after {
+
+#wila-app-root .khazan-folder-container .folder .back-side::before,
+#wila-app-root .khazan-folder-container .folder .back-side::after {
   content: "";
   display: block;
-  background-color: #ffffff;
-  opacity: 0.6;
+  background-color: white;
+  opacity: 0.5;
+  z-index: 0;
   width: var(--folder-W);
   height: var(--folder-H);
   position: absolute;
@@ -1161,12 +1179,24 @@ img.khazan-watermark {
   border-radius: 15px;
   transition: transform 350ms;
 }
-/* the folder sheets open when the whole upload box is hovered */
-#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .back-side::before { transform: rotateX(-5deg) skewX(5deg); }
-#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .back-side::after { transform: rotateX(-15deg) skewX(12deg); }
-#wila-app-root .khazan-folder-anim .front-side { z-index: 1; }
-#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .front-side { transform: rotateX(-40deg) skewX(15deg); }
-#wila-app-root .khazan-folder-anim .tip {
+
+#wila-app-root .khazan-folder-container:hover .folder .back-side::before {
+  transform: rotateX(-5deg) skewX(5deg);
+}
+
+#wila-app-root .khazan-folder-container:hover .folder .back-side::after {
+  transform: rotateX(-15deg) skewX(12deg);
+}
+
+#wila-app-root .khazan-folder-container .folder .front-side {
+  z-index: 1;
+}
+
+#wila-app-root .khazan-folder-container:hover .folder .front-side {
+  transform: rotateX(-40deg) skewX(15deg);
+}
+
+#wila-app-root .khazan-folder-container .folder .tip {
   background: linear-gradient(135deg, #ff9a56, #ff6f56);
   width: 80px;
   height: 20px;
@@ -1177,78 +1207,43 @@ img.khazan-watermark {
   left: 0;
   z-index: 2;
 }
-#wila-app-root .khazan-folder-anim .cover {
+
+#wila-app-root .khazan-folder-container .folder .cover {
   background: linear-gradient(135deg, #ffe563, #ffc663);
   width: var(--folder-W);
   height: var(--folder-H);
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
   border-radius: 10px;
 }
-@keyframes khazanFolderFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-14px); }
+
+#wila-app-root .khazan-folder-container .custom-file-upload {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: background var(--transition) ease;
+  display: inline-block;
+  width: 100%;
+  padding: 10px 20px;
+  position: relative;
+  box-sizing: border-box;
 }
 
-#wila-app-root .khazan-smash-btn {
-  position: relative;
-  display: inline-block;
-  margin-top: 6px;
-  padding: 1rem 2rem;
-  overflow: hidden;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  background-color: #ef4444;
-  border: 0;
-  border-bottom: 8px solid #b91c1c;
-  border-radius: 1rem;
-  box-shadow: 0 15px 25px -10px rgba(239, 68, 68, 0.8);
-  cursor: pointer;
-  transition: all 100ms;
-}
-#wila-app-root .khazan-smash-btn:active:not(:disabled) {
-  border-bottom-width: 0px;
-  transform: translateY(8px);
-}
-#wila-app-root .khazan-smash-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-#wila-app-root .khazan-smash-btn:focus-visible { outline: 3px solid rgba(239, 68, 68, 0.35); outline-offset: 3px; }
-#wila-app-root .khazan-smash-btn__overlay {
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
-  pointer-events: none;
-}
-#wila-app-root .khazan-smash-btn__glare {
-  position: absolute;
-  top: 8px;
-  left: 12px;
-  width: 24px;
-  height: 12px;
+#wila-app-root .khazan-folder-container .custom-file-upload:hover {
   background: rgba(255, 255, 255, 0.4);
-  border-radius: 9999px;
-  filter: blur(2px);
-  pointer-events: none;
 }
-#wila-app-root .khazan-smash-btn__content {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
+
+#wila-app-root .khazan-folder-container .custom-file-upload input[type="file"] {
+  display: none !important;
 }
-#wila-app-root .khazan-smash-btn__icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  flex: none;
-  animation: khazanSmashPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-@keyframes khazanSmashPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-@media (prefers-reduced-motion: reduce) {
-  #wila-app-root .khazan-folder-anim .folder,
-  #wila-app-root .khazan-smash-btn__icon { animation: none; }
+
+@keyframes khazanFolderFloat {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+  100% { transform: translateY(0px); }
 }

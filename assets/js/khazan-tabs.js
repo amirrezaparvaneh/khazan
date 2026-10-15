@@ -237,27 +237,26 @@
             ${b.source === 'csv' ? `
             <div class="khazan-field khazan-field-file"><label>فایل CSV</label>
               <div class="khazan-dropzone khazan-upload-box ${b.fileName ? 'has-file' : ''} ${locked ? 'is-locked' : ''}" id="wila-bulk-dropzone" role="button" tabindex="0" aria-label="انتخاب یا رها کردن فایل CSV">
-                <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="khazan-file-hidden" ${locked}>
                 ${b.fileName ? `
+                  <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="khazan-file-hidden" ${locked}>
                   <span class="khazan-dz-icon khazan-dz-ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg></span>
                   <span class="khazan-dz-text"><strong dir="ltr">${escapeHtml(b.fileName)}</strong><small>${b.fileSize ? 'حجم فایل: ' + this.formatFileSize(b.fileSize) : ''}</small></span>
                   <span class="khazan-pill-btn">تغییر فایل</span>
                 ` : `
-                  <div class="khazan-folder-anim" aria-hidden="true">
+                  <div class="khazan-folder-container">
                     <div class="folder">
-                      <div class="front-side"><div class="tip"></div><div class="cover"></div></div>
+                      <div class="front-side">
+                        <div class="tip"></div>
+                        <div class="cover"></div>
+                      </div>
                       <div class="back-side cover"></div>
                     </div>
-                  </div>
-                  <span class="khazan-dz-text"><strong>بارگذاری فایل اکسل / شیت محصولات</strong><small>فایل CSV را اینجا رها کنید یا دکمه زیر را بزنید</small></span>
-                  <button type="button" class="khazan-smash-btn" id="wila-bulk-pick" ${locked}>
-                    <span class="khazan-smash-btn__overlay"></span>
-                    <span class="khazan-smash-btn__glare"></span>
-                    <span class="khazan-smash-btn__content">
-                      <svg class="khazan-smash-btn__icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <label class="custom-file-upload">
+                      <input id="wila-bulk-file" class="title" type="file" accept=".csv,text/csv" ${locked}>
                       انتخاب فایل از سیستم
-                    </span>
-                  </button>
+                    </label>
+                  </div>
+                  <span class="khazan-dz-text"><strong>بارگذاری فایل اکسل / شیت محصولات</strong><small>فایل CSV را اینجا رها کنید یا دکمه بالا را بزنید</small></span>
                 `}
               </div></div>
             ` : `

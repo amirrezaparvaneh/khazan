@@ -229,7 +229,9 @@
       if (dropzone && !this.state.bulk.running) {
         // کلیک روی کل باکس یا دکمه «انتخاب فایل» (و Enter/Space) انتخاب‌گر فایل را باز می‌کند؛ کلیک خودِ input نادیده گرفته می‌شود تا حلقه نشود
         const openPicker = () => { if (bulkFile && !this.state.bulk.running) bulkFile.click(); };
-        dropzone.addEventListener('click', e => { if (e.target !== bulkFile) openPicker(); });
+        // کلیک روی لیبل «انتخاب فایل از سیستم» را خود مرورگر مدیریت می‌کند؛ فقط کلیک‌های بیرون از آن باز کردن انتخاب‌گر را صدا می‌زنند
+        const insideLabel = t => !!(t && t.closest && t.closest('.custom-file-upload'));
+        dropzone.addEventListener('click', e => { if (e.target !== bulkFile && !insideLabel(e.target)) openPicker(); });
         dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } });
         ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('is-drag'); }));
         ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('is-drag'); }));
