@@ -55,6 +55,9 @@ final class QueueController extends BaseController {
             return new \WP_Error('product_type_unavailable', 'نوع محتوای محصول در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
         }
         $result = $targets->list_site_products((new SiteProductsRequest($request))->to_args());
-        return rest_ensure_response(array('success' => true, 'items' => $result['items'], 'has_more' => $result['has_more'], 'categories' => $targets->product_filter_categories()));
+        return rest_ensure_response(array_merge(
+            array('success' => true, 'items' => $result['items'], 'has_more' => $result['has_more'], 'categories' => $targets->product_filter_categories(), 'counts' => $result['counts']),
+            $result['counts']
+        ));
     }
 }

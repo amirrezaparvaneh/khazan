@@ -197,13 +197,21 @@
       this.render();
     },
 
+    // کارت آماری وضعیت محتوا: فیلتر را عوض می‌کند و فهرست را بلافاصله از سرور دوباره می‌خواند
+    setSiteFilter: function (filter) {
+      const b = this.state.bulk;
+      if (b.running || b.site.loading || !['all', 'empty', 'has_content'].includes(filter) || b.site.filter === filter) return;
+      b.site.filter = filter;
+      this.loadSiteProducts();
+    },
+
     // محصولات بارگذاری‌شده از سایت را (بدون تکرار) به جدول صف اضافه می‌کند
     addSiteProductsToQueue: function () {
       const b = this.state.bulk;
       if (b.running) return;
       const known = new Set(b.rows.filter(r => r.match && r.match.matched).map(r => Number(r.match.product_id)));
       let added = 0;
-      b.site.items.forEach(p => {
+      b.site.items.filter(p => b.site.selected[p.id]).forEach(p => {
         if (known.has(Number(p.id))) return;
         const seo = p.seo || {};
         const idx = b.rows.length;
@@ -243,9 +251,20 @@
         });
       }
       this.root.querySelectorAll('.wila-bulk-source').forEach(btn => btn.addEventListener('click', e => this.setBulkSource(e.currentTarget.getAttribute('data-source'))));
-      const siteFilter = this.root.querySelector('#wila-site-filter'); if (siteFilter) siteFilter.addEventListener('change', e => { bulk.site.filter = e.target.value; });
-      const siteCategory = this.root.querySelector('#wila-site-category'); if (siteCategory) siteCategory.addEventListener('change', e => { bulk.site.category = Number(e.target.value) || 0; });
-      const siteSearch = this.root.querySelector('#wila-site-search'); if (siteSearch) siteSearch.addEventListener('input', e => { bulk.site.search = e.target.value; });
+      this.root.querySelectorAll('.khazan-stat-card').forEach(card => card.addEventListener('click', e => this.setSiteFilter(e.currentTarget.getAttribute('data-site-filter'))));
+      const siteCategory = this.root.querySelector('#wila-site-category'); if (siteCategory) siteCategory.addEventListener('change', e => { bulk.site.category = Number(e.target.value) || 0; if (!bulk.running) this.loadSiteProducts(); });
+      const siteSearch = this.root.querySelector('#wila-site-search');
+      if (siteSearch) {
+        siteSearch.addEventListener('input', e => { bulk.site.search = e.target.value; });
+        siteSearch.addEventListener('keydown', e => { if (e.key === 'Enter' && !bulk.running) { e.preventDefault(); this.loadSiteProducts(); } });
+      }
+      const siteAll = this.root.querySelector('#wila-site-select-all');
+      if (siteAll) siteAll.addEventListener('change', e => {
+        bulk.site.selected = {};
+        if (e.target.checked) bulk.site.items.forEach(p => { bulk.site.selected[p.id] = true; });
+        this.render();
+      });
+      this.root.querySelectorAll('.wila-site-row').forEach(box => box.addEventListener('change', e => { bulk.site.selected[e.target.dataset.id] = e.target.checked; this.render(); }));
       const siteLoad = this.root.querySelector('#wila-site-load'); if (siteLoad) siteLoad.addEventListener('click', () => this.loadSiteProducts());
       const siteAdd = this.root.querySelector('#wila-site-add'); if (siteAdd) siteAdd.addEventListener('click', () => this.addSiteProductsToQueue());
       const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
@@ -282,7 +301,7 @@
 
   window.KhazanQueue = {
     initialState: function () {
-      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [] }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
+      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {} }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
     },
     methods: methods
   };

@@ -109,7 +109,9 @@
         const r = await this.apiFetch(`/bulk/site-products?${q}`);
         if (!r.success) throw new Error(r.message || 'فهرست محصولات دریافت نشد.');
         site.items = r.items || []; site.categories = r.categories || []; site.hasMore = !!r.has_more; site.loaded = true;
-      } catch (e) { site.items = []; site.error = e.message; site.loaded = true; }
+        site.counts = { total: Number(r.total_count || 0), empty: Number(r.empty_count || 0), hasContent: Number(r.has_content_count || 0) };
+        site.selected = {}; site.items.forEach(p => { site.selected[p.id] = true; });
+      } catch (e) { site.items = []; site.selected = {}; site.error = e.message; site.loaded = true; }
       site.loading = false;
       this.render();
     },

@@ -14,7 +14,8 @@ if (!defined('ABSPATH')) {
  */
 final class SiteProductsRequest {
 
-    const FILTERS = array('all', 'no_description', 'ungenerated');
+    /** all / empty (no description) / has_content (has description); ungenerated kept for API compatibility. */
+    const FILTERS = array('all', 'empty', 'has_content', 'ungenerated');
     const MAX_LIMIT = 500;
 
     /** @var \WP_REST_Request */
@@ -26,6 +27,7 @@ final class SiteProductsRequest {
 
     public function filter() {
         $filter = sanitize_key((string) $this->request->get_param('filter'));
+        if ($filter === 'no_description') $filter = 'empty';
         return in_array($filter, self::FILTERS, true) ? $filter : 'all';
     }
 

@@ -386,17 +386,21 @@ final class ContentTargetRepository {
     }
 
     /**
-     * Products of the site for the bulk queue (no CSV): category, content state and SEO meta.
+     * Published products for the bulk queue (no CSV): list + content statistics.
      *
-     * @param array $args filter (all|no_description|ungenerated), category (term id), search, limit
-     * @return array{items:array,has_more:bool}
+     * The counters describe the same scope as the list ignoring the content filter (category + search), so the
+     * three stat cards always add up: total_count = empty_count + has_content_count.
+     *
+     * @param array $args filter (all|empty|has_content; legacy: no_description, ungenerated), category (term id), search, limit
+     * @return array{items:array,has_more:bool,counts:array{total_count:int,empty_count:int,has_content_count:int}}
      */
     public function list_site_products(array $args) {
-        $filter   = isset($args['filter']) ? $args['filter'] : 'all';
-        $limit    = isset($args['limit']) ? max(1, (int) $args['limit']) : 300;
+        $filter = isset($args['filter']) ? $args['filter'] : 'all';
+        if ($filter === 'no_description') $filter = 'empty';
+        $limit  = isset($args['limit']) ? max(1, (int) $args['limit']) : 300;
         $query = array(
             'post_type'      => Settings::product_post_type(),
-            'post_status'    => array('publish', 'draft', 'pending', 'private'),
+            'post_status'    => 'publish',
             'posts_per_page' => 200,
             'orderby'        => 'title',
             'order'          => 'ASC',
@@ -406,23 +410,36 @@ final class ContentTargetRepository {
         if (!empty($args['category'])) {
             $query['tax_query'] = array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => array((int) $args['category'])));
         }
-        if ($filter === 'ungenerated') {
-            $query['meta_query'] = array(array('key' => Settings::META_CSV_GENERATED, 'compare' => 'NOT EXISTS'));
-        }
 
         $items = array();
         $has_more = false;
-        for ($page = 1; $page <= 25; $page++) {
+        $counts = array('total_count' => 0, 'empty_count' => 0, 'has_content_count' => 0);
+        for ($page = 1; $page <= 100; $page++) {
             $posts = get_posts($query + array('paged' => $page));
             foreach ($posts as $post) {
                 $has_description = trim(wp_strip_all_tags((string) $post->post_content)) !== '';
-                if ($filter === 'no_description' && $has_description) continue;
-                if (count($items) >= $limit) { $has_more = true; break 2; }
+                $counts['total_count']++;
+                $counts[$has_description ? 'has_content_count' : 'empty_count']++;
+                if (!$this->matches_site_filter($filter, $post, $has_description)) continue;
+                if (count($items) >= $limit) { $has_more = true; continue; }
                 $items[] = $this->site_product_row($post, $has_description);
             }
             if (count($posts) < 200) break;
         }
-        return array('items' => $items, 'has_more' => $has_more);
+        return array('items' => $items, 'has_more' => $has_more, 'counts' => $counts);
+    }
+
+    private function matches_site_filter($filter, $post, $has_description) {
+        switch ($filter) {
+            case 'empty':
+                return !$has_description;
+            case 'has_content':
+                return $has_description;
+            case 'ungenerated':
+                return \Khazan\Services\Csv\ProductMatcher::generated_info($post->ID) === null;
+            default:
+                return true;
+        }
     }
 
     private function site_product_row($post, $has_description) {
