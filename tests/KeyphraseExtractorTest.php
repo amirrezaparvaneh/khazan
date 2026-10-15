@@ -69,18 +69,18 @@ check(K::is_valid('الف ب ج د') && !K::is_valid('الف ب ج د ه') && !K
 echo "5. Short titles are kept; fillers, materials and cities are dropped\n";
 check(K::from_title('کفش مردانه ونس') === 'کفش مردانه ونس', 'a 3-word title is returned unchanged');
 check(K::from_title('کفش مردانه ونس فلوتر') === 'کفش مردانه ونس فلوتر', 'a clean 4-word title is not touched (already within the limit)');
-check(K::from_title('کفش چرم طبیعی مردانه') === 'کفش مردانه', 'a 4-word title still loses «چرم» and «طبیعی» (stop words)');
+check(K::from_title('کفش چرم طبیعی مردانه') === 'کفش چرم مردانه', 'a 4-word title loses «طبیعی» (unconditional) but keeps «چرم» (free slot after the type)');
 $d = K::from_title('کیف چرم طبیعی اصل تبریز دست‌دوز لوکس شیک');
 check(wc($d) >= 2 && wc($d) <= 4 && strpos($d, 'تبریز') === false && strpos($d, 'طبیعی') === false && strpos($d, 'اصل') === false, 'generic words (طبیعی، اصل، تبریز، لوکس…) never survive: «' . $d . '»');
 check(strpos(K::from_title('کفش اسپرت مردانه چرم اصل تبریز مدل ونس اولد اسکول'), 'مدل') === false, 'the «مدل» marker itself is never part of the phrase');
 check(K::from_title('کفش اسپرت مردانه تبریز چرم اصل ونس اولد اسکول') === 'کفش مردانه اولد اسکول', 'without «مدل»: product type + gender + the last distinctive words');
-check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف زنانه آیسا', 'gender qualifier is preserved next to the product type; «مجلسی» is a stop word');
+check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف چرم زنانه آیسا', 'gender qualifier is preserved next to the type; the free 4th slot goes to «چرم»');
 check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی', 'کیف دوشی زنانه') === 'کیف دوشی زنانه آیسا', 'when the category words are given they form the base (کیف دوشی زنانه) and the model name is kept');
 
 echo "6. Robustness\n";
 check(K::from_title('') === '' && K::from_title('   ') === '' && K::limit(null) === '', 'empty input -> empty string');
-check(K::from_title('<b>کفش</b> «مردانه»، چرم طبیعی (اصل) تبریز - مدل: ونس!') === 'کفش مردانه ونس', 'HTML tags and punctuation are stripped: «' . K::from_title('<b>کفش</b> «مردانه»، چرم طبیعی (اصل) تبریز - مدل: ونس!') . '»');
-check(K::from_title("نیم\u{200c}بوت زنانه چرم طبیعی تبریز مدل ماهان") === "نیم\u{200c}بوت زنانه ماهان", 'ZWNJ inside a word is kept and the word counts once');
+check(K::from_title('<b>کفش</b> «مردانه»، چرم طبیعی (اصل) تبریز - مدل: ونس!') === 'کفش چرم مردانه ونس', 'HTML tags and punctuation are stripped: «' . K::from_title('<b>کفش</b> «مردانه»، چرم طبیعی (اصل) تبریز - مدل: ونس!') . '»');
+check(K::from_title("نیم\u{200c}بوت زنانه چرم طبیعی تبریز مدل ماهان") === "نیم\u{200c}بوت چرم زنانه ماهان", 'ZWNJ inside a word is kept and the word counts once');
 check(K::from_title('کفش روزمرۀ مردانه چرم طبیعی تبريز مدل ونس') !== '' && strpos(K::from_title('کفش روزمره مردانه چرم طبيعي تبريز مدل ونس'), 'تبريز') === false, 'Arabic yeh variants (تبريز، طبيعي) are matched against the word lists');
 check(K::from_title('Vans Old Skool Classic Black Leather Sneaker Men') !== '' && wc(K::from_title('Vans Old Skool Classic Black Leather Sneaker Men')) <= 4, 'Latin titles also stay within 4 words');
 check(K::from_title('Nike Air Max 90 Essential Black White') === 'Nike Air Max 90' || wc(K::from_title('Nike Air Max 90 Essential Black White')) <= 4, 'mixed model codes stay within 4 words');
@@ -95,7 +95,7 @@ for ($i = 0; $i < 600; $i++) {
     $t = implode(' ', $ws); $out = K::from_title($t);
     if (wc($out) > 4) $bad++;
     $fill = array_flip(array_merge(\Khazan\Core\Settings::KEYPHRASE_FILLERS, array('مدل')));
-    $distinct = count(array_unique(array_diff($ws, array_keys($fill))));
+    $distinct = count(array_unique(array_diff($ws, array_keys($fill), \Khazan\Core\Settings::KEYPHRASE_CITIES, array("۴۲"))));
     if ($distinct >= 2 && wc($out) < 2) $short++;
     foreach (K::words($out) as $w) if (!in_array($w, $ws, true)) $subsetBad++;
     if (wc(K::optimal($t, $t)) > 4) $bad++;
@@ -111,20 +111,39 @@ $GLOBALS['kp_filter'] = function ($lists) { return 'garbage'; };
 check(K::from_title($title) === 'کفش مردانه ونس فلوتر', 'a malformed filter result falls back to the defaults');
 $GLOBALS['kp_filter'] = null;
 
-echo "9. Stop words are removed from stored keyphrases and from short titles too\n";
-check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', '«بوت زنانه چرم طبیعی تبریز مدل آلفردو» -> «بوت زنانه آلفردو»');
-check(K::optimal('بوت چرم زنانه آلفردو', 'بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', 'a stored «بوت چرم زنانه آلفردو» is cleaned to «بوت زنانه آلفردو»');
-check(K::optimal('کفش روزمره مردانه ونس', 'x') === 'کفش مردانه ونس', 'روزمره is removed from a stored phrase');
-check(K::optimal('کیف مجلسی زنانه آیسا', 'x') === 'کیف زنانه آیسا' && K::optimal('کیف طرح زنانه آیسا', 'x') === 'کیف زنانه آیسا', 'مجلسی and طرح are removed');
+echo "9. Always-removed stop words and conditional modifiers (چرم، چرمی، روزمره، مجلسی)\n";
+check(K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر') === 'کفش مردانه ونس فلوتر', '2-word model: the core is already 4 words -> no چرم / روزمره added: «کفش مردانه ونس فلوتر»');
+check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت چرم زنانه آلفردو', '1-word model: the 4th slot is filled with «چرم» right after the type: «بوت چرم زنانه آلفردو»');
+check(K::count_words(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو')) === 4 && K::count_words(K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر')) === 4, 'both examples reach the 4-word ceiling');
+check(K::optimal('بوت چرم زنانه آلفردو', 'x') === 'بوت چرم زنانه آلفردو', 'a stored «بوت چرم زنانه آلفردو» (core 3 + چرم) is a fixed point');
+check(K::optimal('بوت زنانه آلفردو', 'x') === 'بوت زنانه آلفردو', 'without چرم in the source nothing is invented');
+check(K::from_title('بوت زنانه طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', 'no چرم in the title -> 3 words (nothing to add)');
+check(K::from_title('کفش روزمره زنانه چرم طبیعی تبریز مدل آنا') === 'کفش چرم زنانه آنا', 'priority: چرم before روزمره when only one slot is free');
+check(K::from_title('کیف مجلسی زنانه طبیعی تبریز مدل آیسا') === 'کیف مجلسی زنانه آیسا', 'مجلسی completes the phrase when there is no چرم and a free slot');
+check(K::from_title('کفش زنانه چرم چرمی روزمره مجلسی مدل آنا') === 'کفش چرم چرمی زنانه آنا' || K::count_words(K::from_title('کفش زنانه چرم چرمی روزمره مجلسی مدل آنا')) === 4, 'never more than 4 words even with many modifiers');
+check(K::optimal('کفش روزمره مردانه ونس', 'x') === 'کفش روزمره مردانه ونس', 'a stored 4-word phrase with روزمره keeps it (core 3 + 1 free slot)');
+check(K::optimal('کفش روزمره مردانه ونس فلوتر', 'کفش روزمره مردانه ونس فلوتر') === 'کفش مردانه ونس فلوتر', 'a 5-word stored phrase is rebuilt from the title: the core fills 4 words, روزمره is dropped');
+check(K::cap('بوت زنانه چرم طبیعی آلفردو') === 'بوت چرم زنانه آلفردو' && K::cap(K::cap('بوت زنانه چرم طبیعی آلفردو')) === K::cap('بوت زنانه چرم طبیعی آلفردو'), 'cap() applies the same rules and is idempotent');
 check(K::optimal('چرم طبیعی', 'x') === 'چرم طبیعی', 'a phrase that would end up with < 2 words is kept as stored');
-check(K::cap('بوت چرم زنانه آلفردو') === 'بوت زنانه آلفردو' && K::cap(K::cap('بوت چرم زنانه آلفردو')) === K::cap('بوت چرم زنانه آلفردو'), 'cap() is idempotent and strips stop words');
-$bad = false; foreach (array('چرم', 'چرمی', 'طبیعی', 'تبریز', 'مدل', 'روزمره', 'مجلسی', 'طرح', 'اصل', 'دست‌دوز') as $w) {
-    $o = K::from_title("کفش $w مردانه $w ونس فلوتر $w مدل ماهان"); $o2 = K::optimal("کفش $w مردانه ونس", 'x');
-    if (in_array($w, K::words($o), true) || in_array($w, K::words($o2), true)) { $bad = true; echo "     leaked: $w => $o / $o2\n"; }
+$bad = false; $w4 = true;
+foreach (array('طبیعی', 'تبریز', 'مدل', 'طرح', 'اصل', 'دست‌دوز', 'کد') as $w) {
+    foreach (array(K::from_title("کفش $w مردانه $w ونس فلوتر $w مدل ماهان"), K::optimal("کفش $w مردانه ونس", 'x'), K::cap("کفش $w زنانه آنا")) as $o) {
+        if (in_array($w, K::words($o), true)) { $bad = true; echo "     leaked: $w => $o\n"; }
+    }
 }
-check(!$bad, 'none of چرم، چرمی، طبیعی، تبریز، مدل، روزمره، مجلسی، طرح، اصل، دست‌دوز survives');
-$sh = K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر');
-check($sh === 'کفش مردانه ونس فلوتر' && K::count_words($sh) <= 4, 'the formula example: «کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر» -> «کفش مردانه ونس فلوتر»');
+check(!$bad, 'unconditional stop words (طبیعی، تبریز، مدل، طرح، اصل، دست‌دوز، کد) never survive');
+mt_srand(5); $pool = array('کفش', 'بوت', 'کیف', 'مردانه', 'زنانه', 'چرم', 'چرمی', 'روزمره', 'مجلسی', 'طبیعی', 'تبریز', 'مدل', 'ونس', 'فلوتر', 'آلفردو', 'آیسا', 'اصل', 'طرح', 'کد');
+$over = 0; $leak = 0;
+for ($i = 0; $i < 500; $i++) {
+    $ws = array(); for ($j = 0, $n = mt_rand(3, 11); $j < $n; $j++) $ws[] = $pool[mt_rand(0, 18)];
+    $o = K::from_title(implode(' ', $ws)); $oc = K::cap(implode(' ', $ws));
+    if (K::count_words($o) > 4 || K::count_words($oc) > 4) $over++;
+    $uncond = array('طبیعی', 'تبریز', 'مدل', 'طرح', 'اصل', 'کد');
+    $real = array_diff($ws, $uncond, array('چرم', 'چرمی', 'روزمره', 'مجلسی'));
+    if (count(array_unique($real)) >= 2) foreach ($uncond as $x) { if (in_array($x, K::words($o), true)) $leak++; }
+}
+check($over === 0, '500 random titles: never more than 4 words');
+check($leak === 0, '500 random titles: unconditional stop words never leak (' . $leak . ')');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

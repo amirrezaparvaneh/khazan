@@ -31,10 +31,10 @@ function paragraphs($html) { preg_match_all('~<p\b[^>]*>(.*?)</p>~is', $html, $m
 
 echo "1. Keyphrase formula\n";
 check(K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر') === 'کفش مردانه ونس فلوتر', '«کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر» -> «کفش مردانه ونس فلوتر»');
-check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', '«بوت زنانه چرم طبیعی تبریز مدل آلفردو» -> «بوت زنانه آلفردو»');
-check(K::optimal('بوت چرم زنانه آلفردو', 'بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', 'the stored keyphrase «بوت چرم زنانه آلفردو» is cleaned too');
-$stored = Khazan\Services\Seo\SeoMetaService::post_meta_map(array('title' => 't', 'desc' => 'd', 'focuskw' => 'بوت چرم زنانه آلفردو', 'synonyms' => ''));
-check($stored['_yoast_wpseo_focuskw'] === 'بوت زنانه آلفردو' && strpos($stored['rank_math_focus_keyword'], 'بوت زنانه آلفردو') === 0, 'the same short phrase is what Yoast and Rank Math store');
+check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت چرم زنانه آلفردو', '«بوت زنانه چرم طبیعی تبریز مدل آلفردو» -> «بوت چرم زنانه آلفردو» (1-word model: چرم fills the 4th slot)');
+check(K::optimal('بوت چرم زنانه آلفردو', 'بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت چرم زنانه آلفردو', 'the stored keyphrase «بوت چرم زنانه آلفردو» is already the ideal 4 words');
+$stored = Khazan\Services\Seo\SeoMetaService::post_meta_map(array('title' => 't', 'desc' => 'd', 'focuskw' => 'بوت چرم زنانه آلفردو تبریز', 'synonyms' => ''));
+check($stored['_yoast_wpseo_focuskw'] === 'بوت چرم زنانه آلفردو' && strpos($stored['rank_math_focus_keyword'], 'بوت چرم زنانه آلفردو') === 0, 'the same short phrase is what Yoast and Rank Math store');
 
 echo "2. No outgoing link repeats the page keyphrase\n";
 $cat = 'https://aka.test/product-category/boots/'; $p1 = 'https://aka.test/product/barshka/'; $wiki = 'https://fa.wikipedia.org/wiki/x';
@@ -106,7 +106,7 @@ foreach (array('article', 'product', 'product_cat') as $k) {
     check(strpos($r, '<p>...</p>') !== false && strpos($r, '۶۰ تا ۹۰ کلمه') !== false && strpos($r, '۱۱۰ کلمه') !== false, "writing_rules($k): explicit <p>, 60-90 words per paragraph");
 }
 $r = ContentRules::writing_rules('product');
-check(strpos($r, '[نوع کالا] + [جنسیت] + [نام اختصاصی مدل]') !== false && strpos($r, 'چرم، چرمی، طبیعی، تبریز، مدل، روزمره، مجلسی، طرح، اصل و دست‌دوز') !== false, 'the keyphrase formula and its forbidden words are dictated');
+check(strpos($r, '[نوع کالا] + [جنسیت] + [نام اختصاصی مدل]') !== false && strpos($r, 'طبیعی، تبریز، مدل، طرح، اصل، دست‌دوز و کد') !== false && strpos($r, 'بوت چرم زنانه آلفردو') !== false, 'the keyphrase formula, its forbidden words and the 1-word-model چرم rule are dictated');
 check(strpos($r, 'هرگز نام خام دسته') !== false && strpos($r, 'انواع مدل‌های این دسته‌بندی') !== false, 'the category anchor must be a collection phrase, never the raw name');
 
 echo "\n$passed passed, $failed failed\n";

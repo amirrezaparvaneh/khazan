@@ -114,10 +114,16 @@ final class Settings {
     const SEO_TITLE_FEATURE_STOPWORDS = array('فروشگاه', 'فروشگاهی', 'محصولات', 'محصول', 'خرید', 'آنلاین', 'اینترنتی', 'مرکز', 'عرضه', 'بهترین', 'تولیدی', 'و', 'از', 'در', 'با', 'برای');
 
     /** Generic / promotional words that never belong in a keyphrase. */
-    const KEYPHRASE_FILLERS = array('طبیعی', 'مجلسی', 'طرح', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
+    const KEYPHRASE_FILLERS = array('طبیعی', 'طرح', 'کد', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
 
-    /** Materials: dropped unless the phrase would become too short. */
-    const KEYPHRASE_MATERIALS = array('چرم', 'چرمی', 'جیر', 'پارچه', 'پارچه‌ای', 'مصنوعی');
+    /** Other materials: dropped unless the phrase would become too short. */
+    const KEYPHRASE_MATERIALS = array('جیر', 'پارچه', 'پارچه‌ای', 'مصنوعی');
+
+    /**
+     * Conditional modifiers (priority order): dropped from the core [type + gender + model], but used to fill the
+     * keyphrase up to 4 words - right after the product type - when the core is shorter and the title has them.
+     */
+    const KEYPHRASE_CONDITIONAL = array('چرم', 'چرمی', 'روزمره', 'مجلسی');
 
     /** Audience / style qualifiers that are kept next to the product type. */
     const KEYPHRASE_AUDIENCE = array('مردانه', 'زنانه', 'دخترانه', 'پسرانه', 'بچگانه', 'بچه‌گانه', 'نوجوان', 'اسپرت', 'رسمی', 'مجلسی');
@@ -162,7 +168,7 @@ final class Settings {
      * @return array{fillers:string[],materials:string[],audience:string[],gender:string[],cities:string[]}
      */
     public static function keyphrase_words() {
-        $lists = array('fillers' => self::KEYPHRASE_FILLERS, 'materials' => self::KEYPHRASE_MATERIALS, 'audience' => self::KEYPHRASE_AUDIENCE, 'gender' => self::KEYPHRASE_GENDER, 'cities' => self::KEYPHRASE_CITIES);
+        $lists = array('fillers' => self::KEYPHRASE_FILLERS, 'materials' => self::KEYPHRASE_MATERIALS, 'audience' => self::KEYPHRASE_AUDIENCE, 'gender' => self::KEYPHRASE_GENDER, 'cities' => self::KEYPHRASE_CITIES, 'conditional' => self::KEYPHRASE_CONDITIONAL);
         if (function_exists('apply_filters')) {
             $filtered = apply_filters(self::FILTER_KEYPHRASE_WORDS, $lists);
             if (is_array($filtered)) {

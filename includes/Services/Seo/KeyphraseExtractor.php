@@ -87,8 +87,10 @@ final class KeyphraseExtractor {
     }
 
     /**
-     * Removes stop words (fillers, materials such as «چرم»، cities, digits, the «مدل» marker) from a short phrase
-     * so that [type] + [gender] + [model] remains. The phrase is kept as it is when fewer than 2 words would survive.
+     * Normalises a short phrase to [type] + [gender] + [model]: unconditional stop words (طبیعی، تبریز و شهرها، مدل، طرح،
+     * اصل، دست‌دوز، کد، other fillers/materials, digits) are always removed. Conditional modifiers (چرم، چرمی، روزمره،
+     * مجلسی) are removed from the core but put back right after the product type - in that priority - only while the
+     * core has fewer than 4 words. The phrase is kept as it is when fewer than 2 words would survive.
      */
     public static function strip_stop_words($phrase) {
         $tokens = self::words($phrase);
@@ -98,11 +100,38 @@ final class KeyphraseExtractor {
         foreach (array('fillers', 'materials', 'cities') as $name) {
             foreach ($lists[$name] as $word) $stop[self::key($word)] = true;
         }
-        $kept = array_values(array_filter($tokens, function ($t) use ($stop) {
-            $k = KeyphraseExtractor::key($t);
-            return !isset($stop[$k]) && !preg_match('/^[\d۰-۹٠-٩]+$/u', $k);
-        }));
-        return count($kept) >= Settings::KEYPHRASE_MIN_WORDS ? implode(' ', $kept) : implode(' ', $tokens);
+        $cond = array_flip(array_map(array(__CLASS__, 'key'), $lists['conditional']));
+        $core = array();
+        foreach ($tokens as $t) {
+            $k = self::key($t);
+            if (isset($stop[$k]) || isset($cond[$k]) || preg_match('/^[\d۰-۹٠-٩]+$/u', $k)) continue;
+            $core[] = $t;
+        }
+        $result = self::fill_conditionals($core, $tokens);
+        return count($result) >= Settings::KEYPHRASE_MIN_WORDS ? implode(' ', $result) : implode(' ', $tokens);
+    }
+
+    /**
+     * Puts conditional modifiers found in $source back into $core, right after the first word (the product type),
+     * highest priority first, until the phrase reaches the 4-word ceiling.
+     */
+    private static function fill_conditionals(array $core, array $source) {
+        $slots = Settings::KEYPHRASE_MAX_WORDS - count($core);
+        if ($slots <= 0 || !$core) return $core;
+        $lists = Settings::keyphrase_words();
+        $have = array_map(array(__CLASS__, 'key'), $core);
+        $picked = array();
+        foreach ($lists['conditional'] as $word) {
+            $ck = self::key($word);
+            if (in_array($ck, $have, true)) continue;
+            foreach ($source as $t) {
+                if (self::key($t) === $ck) { $picked[] = $t; break; }
+            }
+        }
+        $picked = array_slice($picked, 0, $slots);
+        if (!$picked) return $core;
+        array_splice($core, 1, 0, $picked);
+        return $core;
     }
 
     /**
@@ -120,7 +149,7 @@ final class KeyphraseExtractor {
         $lists = Settings::keyphrase_words();
         $key = array(__CLASS__, 'key');
         $set = function ($list) use ($key) { return array_flip(array_map($key, $list)); };
-        $fillers = $set($lists['fillers']); $materials = $set($lists['materials']); $audience = $set($lists['audience']); $gender = $set($lists['gender']); $cities = $set($lists['cities']);
+        $fillers = $set($lists['fillers']); $materials = $set($lists['materials']); $conditional = $set($lists['conditional']); $audience = $set($lists['audience']); $gender = $set($lists['gender']); $cities = $set($lists['cities']);
         $marker = self::key(Settings::KEYPHRASE_MODEL_MARKER);
 
         $marker_at = null;
@@ -128,8 +157,13 @@ final class KeyphraseExtractor {
         $core = $marker_at === null ? $tokens : array_slice($tokens, 0, $marker_at);
         $tail_raw = $marker_at === null ? array() : array_slice($tokens, $marker_at + 1);
 
-        $generic = function ($t) use ($key, $fillers, $materials, $cities) { $k = call_user_func($key, $t); return isset($fillers[$k]) || isset($materials[$k]) || isset($cities[$k]) || preg_match('/^[\d۰-۹٠-٩]+$/u', $k); };
+        $generic = function ($t) use ($key, $fillers, $materials, $cities, $conditional) { $k = call_user_func($key, $t); return isset($fillers[$k]) || isset($materials[$k]) || isset($conditional[$k]) || isset($cities[$k]) || preg_match('/^[\d۰-۹٠-٩]+$/u', $k); };
         $kept = array_values(array_filter($core, function ($t) use ($generic) { return !$generic($t); }));
+        if (!$kept) {
+            // هسته پیش از «مدل» فقط واژه‌های عمومی بود؛ از کل عنوان واژه‌های متمایز را برمی‌دارد
+            $kept = array_values(array_filter($tokens, function ($t) use ($generic, $marker) { return !$generic($t) && self::key($t) !== $marker; }));
+            $marker_at = null;
+        }
 
         // base: the main category words when the title contains all of them, else product type + audience qualifiers
         $core_keys = array_map($key, $core);
@@ -146,13 +180,13 @@ final class KeyphraseExtractor {
                     if ($i > 0 && isset($group[$k]) && !in_array($t, $base, true)) $base[] = $t;
                 }
             }
-            if (!$base) $base = array_slice($core, 0, $min);
+            if (!$base) $base = array_slice($kept ?: $core, 0, $min);
         }
 
         // tail: the model name after «مدل»; without a marker the last distinctive title words
         $base_keys = array_map($key, $base);
         if ($marker_at !== null) {
-            $tail = array_values(array_filter($tail_raw, function ($t) use ($key, $fillers) { return !isset($fillers[call_user_func($key, $t)]); }));
+            $tail = array_values(array_filter($tail_raw, function ($t) use ($generic) { return !$generic($t); }));
         } else {
             $tail = array_values(array_filter($kept, function ($t) use ($key, $base_keys) { return !in_array(call_user_func($key, $t), $base_keys, true); }));
             $tail = array_slice($tail, -2);
@@ -169,15 +203,17 @@ final class KeyphraseExtractor {
         foreach ($result as $t) { $k = self::key($t); if (!isset($seen[$k])) { $seen[$k] = true; $unique[] = $t; } }
         $result = $unique;
 
-        // too short: add back dropped title words in their original order
+        // too short: add back distinctive title words (never fillers / cities / the marker) in their original order
         if (count($result) < $min) {
-            foreach ($tokens as $t) {
+            foreach (array_merge($kept, $tokens) as $t) {
                 $k = self::key($t);
-                if (isset($seen[$k]) || isset($fillers[$k]) && !isset($materials[$k]) && !isset($audience[$k]) || $k === $marker) continue;
+                if (isset($seen[$k]) || isset($fillers[$k]) || isset($cities[$k]) || isset($conditional[$k]) && count($kept) >= $min || $k === $marker) continue;
                 $seen[$k] = true; $result[] = $t;
                 if (count($result) >= $min) break;
             }
         }
+        // the core is [type + gender + model]; with free slots the conditional modifiers (چرم …) complete it to 4 words
+        $result = self::fill_conditionals($result, $tokens);
         return self::limit(implode(' ', $result), $max);
     }
 

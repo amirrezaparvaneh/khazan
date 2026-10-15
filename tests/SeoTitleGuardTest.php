@@ -129,6 +129,9 @@ for ($i = 0; $i < 300; $i++) {
 }
 check($ok, '300 random focus/junk pairs: always focus first, brand last, one emoji, <= 60 chars');
 
+$ref4 = 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
+check(S::guard_title($bad, 'نیم‌بوت چرم زنانه آلفردو', $brand) === $ref4 && len($ref4) <= 60, 'with the 4-word focus (1-word model + چرم) the original reference title is produced and is <= 60 chars');
+
 echo "8. Yoast / Rank Math storage is a clean direct string\n";
 $post = S::post_meta_map(array('title' => '%%title%% %sep% ' . $want . ' %sitedesc%', 'desc' => 'd', 'focuskw' => $focus, 'synonyms' => ''));
 check($post['_yoast_wpseo_title'] === $want && $post['rank_math_title'] === $want, 'template variables (%sep%, %sitedesc%, %%title%%) never reach _yoast_wpseo_title / rank_math_title');
