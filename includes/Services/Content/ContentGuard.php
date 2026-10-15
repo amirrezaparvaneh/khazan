@@ -53,8 +53,8 @@ final class ContentGuard {
         return Guard\ParagraphGuard::enforce($html, $max);
     }
 
-    public static function cap_anchor_length($html, $max = 4) {
-        return LinkGuard::cap_anchor_length($html, $max);
+    public static function cap_anchor_length($html, $max = 4, $category_urls = array()) {
+        return LinkGuard::cap_anchor_length($html, $max, $category_urls);
     }
 
     public static function pick_reference_url($term) {

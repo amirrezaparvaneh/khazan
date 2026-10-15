@@ -113,7 +113,7 @@ final class ContentParser {
         $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
         $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms);
-        $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
+        $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content, 4, self::category_urls(isset($params['internal_links']) ? $params['internal_links'] : array()));
         // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
@@ -171,6 +171,17 @@ final class ContentParser {
             }
         }
         return $links;
+    }
+
+    /**
+     * آدرس لینک‌های دسته‌بندی برنامه‌ریزی‌شده؛ انکر آن‌ها (پیشوند + نام دسته) تا ۵ کلمه مجاز است
+     */
+    public static function category_urls($links) {
+        $urls = array();
+        foreach ((array) $links as $link) {
+            if (!empty($link['url']) && isset($link['type']) && $link['type'] === 'category') $urls[] = $link['url'];
+        }
+        return $urls;
     }
 
     public static function locked_anchor_map($links) {

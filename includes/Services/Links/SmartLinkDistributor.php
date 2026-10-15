@@ -69,7 +69,7 @@ final class SmartLinkDistributor {
 
         $links = array();
         if ($category) {
-            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['anchor']), 'url' => $category['url'], 'required' => true, 'type' => 'category', 'category_name' => $category['name']);
+            $links[] = array('anchor' => $category['anchor'], 'url' => $category['url'], 'required' => true, 'type' => 'category', 'category_name' => $category['name']);
         }
         foreach ($related as $entry) {
             $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($entry['anchor']), 'url' => $entry['url'], 'locked' => true, 'required' => true, 'type' => 'product');
@@ -78,13 +78,29 @@ final class SmartLinkDistributor {
     }
 
     /**
-     * Anchor of the category link. The raw category name (e.g. «بوت زنانه») is never used: all its words usually sit
-     * inside the page's own focus keyphrase, which Yoast / Rank Math report as a competing link. A collection-style
-     * phrase («انواع مدل‌های این دسته‌بندی») is used instead; it shares no word with product keyphrases.
+     * Anchor of the category link: a descriptive prefix + the REAL category name («انواع بوت چرم زنانه»,
+     * «مجموعه مدل‌های …», «کلکسیون …»), 4-5 words. The raw name alone would equal / sit inside the page's own focus
+     * keyphrase and Yoast / Rank Math would report a competing link; the prefix keeps the name and makes it unique.
      */
     public function category_anchor($name, array $product) {
-        $set = \Khazan\Core\Settings::CATEGORY_ANCHORS;
-        return $set[((int) (isset($product['id']) ? $product['id'] : 0)) % count($set)];
+        return self::compose_category_anchor($name, isset($product['id']) ? (int) $product['id'] : 0);
+    }
+
+    /**
+     * Pure helper (also used by LinkGuard): prefix chosen by $seed, shortened to fit the 5-word ceiling.
+     */
+    public static function compose_category_anchor($name, $seed = 0) {
+        $name = trim(preg_replace('/\s+/u', ' ', (string) $name));
+        if ($name === '') return '';
+        $prefixes = \Khazan\Core\Settings::CATEGORY_ANCHOR_PREFIXES;
+        $max = \Khazan\Core\Settings::CATEGORY_ANCHOR_MAX_WORDS;
+        $k = '\\Khazan\\Services\\Seo\\KeyphraseExtractor';
+        $count = count($prefixes);
+        for ($i = 0; $i < $count; $i++) {
+            $prefix = $prefixes[(abs((int) $seed) + $i) % $count];
+            if ($k::count_words($prefix) + $k::count_words($name) <= $max) return $prefix . ' ' . $name;
+        }
+        return $prefixes[0] . ' ' . $k::limit($name, $max - $k::count_words($prefixes[0]));
     }
 
     /**

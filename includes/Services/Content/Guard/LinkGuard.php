@@ -116,7 +116,7 @@ final class LinkGuard {
         foreach ((array) $links as $link) {
             if (empty($link['required']) || empty($link['url']) || empty($link['anchor'])) continue;
             if (isset($present[untrailingslashit($link['url'])])) continue;
-            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html(KeyphraseExtractor::cap($link['anchor'])) . '</a>';
+            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html(isset($link['type']) && $link['type'] === 'category' ? KeyphraseExtractor::limit($link['anchor'], Settings::CATEGORY_ANCHOR_MAX_WORDS) : KeyphraseExtractor::cap($link['anchor'])) . '</a>';
             if (isset($link['type']) && $link['type'] === 'category') {
                 if ($category === null) $category = $anchor;
             } else {
@@ -177,8 +177,10 @@ final class LinkGuard {
     }
 
     /**
-     * پیوند رقیب (Competing Links): هر <a> داخلی که بیش از ۵۰٪ کلماتش در کلیدواژه کانونی/مترادف‌های همین صفحه باشد، یا نام یک دسته‌بندی را
-     * همراه جنسیتِ مشترک با کلیدواژه بیاورد، متنش با عبارت امن «مشاهده سایر مدل‌های این دسته» جایگزین می‌شود (href دست‌نخورده).
+     * پیوند رقیب (Competing Links):
+     *  - لینک دسته‌بندی همیشه «پیشوند توصیفی + نام واقعی دسته» می‌شود (انواع / مجموعه مدل‌های / کلکسیون)؛ متن خام یا هر عبارت دیگری
+     *    با همین قالب جایگزین می‌شود تا هم دسته مشخص باشد و هم انکر دقیقاً با کلیدواژه صفحه یکی نشود.
+     *  - لینک داخلی پیش‌بینی‌نشده‌ای که بیش از ۵۰٪ کلماتش در کلیدواژه/مترادف‌های این صفحه باشد آن‌رپ می‌شود (تگ حذف، متن می‌ماند).
      * لینک خارجی و لینک‌های محصول برنامه‌ریزی‌شده (انکر قفل‌شده با نام اختصاصی مدل مقصد) معاف‌اند.
      */
     public static function neutralize_competing_links($html, $focus, $links = array(), $synonyms = array()) {
@@ -186,30 +188,43 @@ final class LinkGuard {
         $words = function ($text) use ($key) { return array_values(array_unique(array_map($key, KeyphraseExtractor::words($text)))); };
         $own = $words($focus);
         foreach ((array) $synonyms as $synonym) $own = array_merge($own, $words($synonym));
-        if (!$own) return $html;
-        $gender = array_map($key, Settings::KEYPHRASE_GENDER);
-        $own_gender = array_intersect($own, $gender);
 
-        $exempt = array(); $category_names = array();
+        $exempt = array(); $categories = array();
         foreach ((array) $links as $link) {
-            if (!empty($link['url']) && isset($link['type']) && $link['type'] === 'product') $exempt[self::url_key($link['url'])] = true;
-            if (!empty($link['category_name'])) $category_names[] = $words($link['category_name']);
+            if (empty($link['url'])) continue;
+            $url_key = self::url_key($link['url']);
+            if (isset($link['type']) && $link['type'] === 'product') $exempt[$url_key] = true;
+            if (isset($link['type']) && $link['type'] === 'category' && !empty($link['category_name'])) {
+                $categories[$url_key] = array('name' => $link['category_name'], 'anchor' => isset($link['anchor']) ? $link['anchor'] : '');
+            }
         }
         $home_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
         $ratio = Settings::COMPETING_ANCHOR_RATIO;
+        $prefixes = array_map($key, Settings::CATEGORY_ANCHOR_PREFIXES);
 
-        return preg_replace_callback('~(<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\2[^>]*>)(.*?)(</a>)~is', function ($m) use ($words, $own, $own_gender, $exempt, $category_names, $home_host, $ratio) {
+        return preg_replace_callback('~(<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\2[^>]*>)(.*?)(</a>)~is', function ($m) use ($words, $own, $exempt, $categories, $home_host, $ratio, $prefixes, $key) {
+            $url_key = self::url_key($m[3]);
             $host = strtolower((string) wp_parse_url(html_entity_decode($m[3], ENT_QUOTES, 'UTF-8'), PHP_URL_HOST));
-            if (($host !== '' && $host !== $home_host) || isset($exempt[self::url_key($m[3])])) return $m[0];
-            $anchor = $words(html_entity_decode(wp_strip_all_tags($m[4]), ENT_QUOTES, 'UTF-8'));
-            if (!$anchor) return $m[0];
-            $competing = count(array_intersect($anchor, $own)) / count($anchor) > $ratio;
-            if (!$competing && $own_gender && array_intersect($anchor, $own_gender)) {
-                foreach ($category_names as $name_words) {
-                    if ($name_words && !array_diff($name_words, $anchor)) { $competing = true; break; }
+            if (($host !== '' && $host !== $home_host) || isset($exempt[$url_key])) return $m[0];
+            $text = trim(html_entity_decode(wp_strip_all_tags($m[4]), ENT_QUOTES, 'UTF-8'));
+
+            if (isset($categories[$url_key])) {
+                $name_words = $words($categories[$url_key]['name']);
+                $anchor_words = $words($text);
+                $first = KeyphraseExtractor::words($text);
+                $has_prefix = $first && in_array(call_user_func($key, $first[0]), $prefixes, true) || count($first) > 1 && in_array(call_user_func($key, $first[0] . ' ' . $first[1]), array_map($key, Settings::CATEGORY_ANCHOR_PREFIXES), true);
+                if ($has_prefix && !array_diff($name_words, $anchor_words) && KeyphraseExtractor::count_words($text) <= Settings::CATEGORY_ANCHOR_MAX_WORDS) return $m[0];
+                $canonical = $categories[$url_key]['anchor'];
+                if ($canonical === '' || array_diff($name_words, $words($canonical))) {
+                    $canonical = \Khazan\Services\Links\SmartLinkDistributor::compose_category_anchor($categories[$url_key]['name'], crc32($url_key));
                 }
+                return $m[1] . esc_html($canonical) . $m[5];
             }
-            return $competing ? $m[1] . esc_html(Settings::SAFE_LINK_PHRASE) . $m[5] : $m[0];
+
+            if (!$own) return $m[0];
+            $anchor = $words($text);
+            if (!$anchor) return $m[0];
+            return count(array_intersect($anchor, $own)) / count($anchor) > $ratio ? $m[4] : $m[0];
         }, (string) $html);
     }
 
@@ -251,12 +266,18 @@ final class LinkGuard {
      * هیچ لینکی نباید انکری بیش از $max کلمه داشته باشد: کلمات اضافه بعد از </a> به‌صورت متن ساده می‌مانند.
      * انکرهای دارای تگ تو در تو دست‌نخورده می‌مانند.
      */
-    public static function cap_anchor_length($html, $max = Settings::KEYPHRASE_MAX_WORDS) {
-        return preg_replace_callback('~(<a\b[^>]*>)([^<]*)(</a>)~is', function ($m) use ($max) {
+    public static function cap_anchor_length($html, $max = Settings::KEYPHRASE_MAX_WORDS, $category_urls = array()) {
+        $category = array();
+        foreach ((array) $category_urls as $url) $category[self::url_key($url)] = true;
+        return preg_replace_callback('~(<a\b[^>]*>)([^<]*)(</a>)~is', function ($m) use ($max, $category) {
+            $limit = $max;
+            if ($category && preg_match('~\bhref\s*=\s*(["\'])(.*?)\1~is', $m[1], $href) && isset($category[self::url_key($href[2])])) {
+                $limit = max($max, Settings::CATEGORY_ANCHOR_MAX_WORDS);
+            }
             $text = html_entity_decode($m[2], ENT_QUOTES, 'UTF-8');
-            if (KeyphraseExtractor::count_words($text) <= $max) return $m[0];
+            if (KeyphraseExtractor::count_words($text) <= $limit) return $m[0];
             $words = KeyphraseExtractor::words($text);
-            return $m[1] . esc_html(implode(' ', array_slice($words, 0, $max))) . $m[3] . ' ' . esc_html(implode(' ', array_slice($words, $max)));
+            return $m[1] . esc_html(implode(' ', array_slice($words, 0, $limit))) . $m[3] . ' ' . esc_html(implode(' ', array_slice($words, $limit)));
         }, $html);
     }
 }

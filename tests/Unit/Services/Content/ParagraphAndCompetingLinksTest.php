@@ -38,28 +38,43 @@ check($stored['_yoast_wpseo_focuskw'] === 'بوت چرم زنانه آلفردو
 
 echo "2. No outgoing link repeats the page keyphrase\n";
 $cat = 'https://aka.test/product-category/boots/'; $p1 = 'https://aka.test/product/barshka/'; $wiki = 'https://fa.wikipedia.org/wiki/x';
-$focus = 'بوت زنانه آلفردو';
+$focus = 'بوت چرم زنانه آلفردو';
 $links = array(
-    array('anchor' => 'سایر مدل‌های این دسته', 'url' => $cat, 'required' => true, 'type' => 'category', 'category_name' => 'بوت چرم زنانه'),
+    array('anchor' => 'انواع بوت چرم زنانه', 'url' => $cat, 'required' => true, 'type' => 'category', 'category_name' => 'بوت چرم زنانه'),
     array('anchor' => 'بوت مدل برشکا', 'url' => $p1, 'locked' => true, 'required' => true, 'type' => 'product'),
 );
 $html = '<p>ببینید <a href="' . $cat . '">بوت چرم زنانه</a> و <a href="' . $p1 . '">بوت مدل برشکا</a> و <a href="' . $wiki . '">بوت زنانه</a> و <a href="https://aka.test/c/other/">بوت زنانه آلفردو</a> و <a href="https://aka.test/c/two/">کیف مردانه</a>.</p>';
 $out = ContentGuard::neutralize_competing_links($html, $focus, $links, array('پوتین زنانه'));
 preg_match_all('~<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>~', $out, $m);
 $byUrl = array_combine($m[1], $m[2]);
-check($byUrl[$cat] === 'سایر مدل‌های این دسته', 'the raw category anchor «بوت چرم زنانه» (>50% shared) is replaced by the safe phrase');
+check($byUrl[$cat] === 'انواع بوت چرم زنانه', 'the raw category anchor «بوت چرم زنانه» becomes prefix + the real name: «انواع بوت چرم زنانه»');
+$already = ContentGuard::neutralize_competing_links('<a href="' . $cat . '">کلکسیون بوت چرم زنانه</a>', $focus, $links);
+check(strpos($already, '>کلکسیون بوت چرم زنانه</a>') !== false, 'an anchor that already is «کلکسیون» + the real name is left as it is');
+$wrong = ContentGuard::neutralize_competing_links('<a href="' . $cat . '">سایر مدل‌های این دسته</a>', $focus, $links);
+check(strpos($wrong, '>انواع بوت چرم زنانه</a>') !== false && strpos($wrong, 'سایر مدل‌ها') === false, 'a cliché such as «سایر مدل‌های این دسته» is replaced by prefix + the real category name');
 check($byUrl[$p1] === 'بوت مدل برشکا', 'the planned product link keeps its model-name anchor');
 check($byUrl[$wiki] === 'بوت زنانه', 'the external link is never touched');
-check($byUrl['https://aka.test/c/other/'] === 'سایر مدل‌های این دسته', 'an unplanned internal link repeating the keyphrase is neutralized');
+check(strpos($out, '<a href="https://aka.test/c/other/"') === false && strpos($out, 'بوت زنانه آلفردو') !== false, 'an unplanned internal link repeating the keyphrase is unwrapped (text stays, tag goes)');
 check($byUrl['https://aka.test/c/two/'] === 'کیف مردانه', 'an unrelated internal anchor stays');
-$gender = ContentGuard::neutralize_competing_links('<a href="https://aka.test/c/x/">انواع بوت چرم زنانه جدید</a>', $focus, array(array('url' => 'https://aka.test/c/x/', 'type' => 'category', 'category_name' => 'بوت چرم زنانه', 'anchor' => 'x')));
-check(strpos($gender, 'سایر مدل‌های این دسته') !== false, 'an anchor containing the category name + the same gender is neutralized even below 50%');
-check(preg_match('~href="https://aka.test/c/x/"~', $gender) === 1, 'the href is preserved');
 $leak = false;
-foreach ($m[2] as $anchor) { if ($anchor !== 'بوت زنانه' && K::count_words($anchor) && K::overlaps($anchor, $focus)) $leak = true; }
-check(!$leak, 'no internal anchor in the final HTML contains the page keyphrase words');
+preg_match_all('~<a\b[^>]*href="([^"]*)"[^>]*>(.*?)</a>~', $out, $mm);
+foreach ($mm[2] as $i => $anchor) { if ($mm[1][$i] !== $wiki && K::count_words($anchor) >= K::count_words($focus) && K::overlaps($anchor, $focus)) $leak = true; }
+check(!$leak, 'no internal anchor in the final HTML contains the whole page keyphrase');
 $noPlan = ContentGuard::neutralize_competing_links($html, '', $links);
-check($noPlan === $html, 'without a focus keyphrase the HTML is untouched');
+check($noPlan === str_replace('>بوت چرم زنانه</a>', '>انواع بوت چرم زنانه</a>', $html), 'without a focus keyphrase only the category anchor is normalised; every other link is untouched');
+
+echo "2b. Category anchor survives the pipeline (insert + 4-word cap exemption)\n";
+$catLinks = array(array('anchor' => 'مجموعه مدل‌های بوت چرم زنانه', 'url' => $cat, 'required' => true, 'type' => 'category', 'category_name' => 'بوت چرم زنانه'));
+$ins = ContentGuard::ensure_internal_links('<p>متن</p>', $catLinks);
+check(strpos($ins, '>مجموعه مدل‌های بوت چرم زنانه</a>') !== false, 'ensure_internal_links inserts the full 5-word category anchor («چرم» is not stripped, nothing is cut)');
+$capped = ContentGuard::cap_anchor_length($ins, 4, array($cat));
+check(strpos($capped, '>مجموعه مدل‌های بوت چرم زنانه</a>') !== false, 'cap_anchor_length leaves the planned category anchor at 5 words');
+$other = ContentGuard::cap_anchor_length('<a href="https://aka.test/p/zz/">یک دو سه چهار پنج</a>', 4, array($cat));
+check(strpos($other, '>یک دو سه چهار</a> پنج') !== false, 'other anchors are still capped at 4 words');
+$final = ContentGuard::neutralize_competing_links($capped, $focus, $catLinks);
+preg_match('~<a[^>]*>(.*?)</a>~', $final, $fa);
+check(K::count_words($fa[1]) === 5 && !array_diff(K::words('بوت چرم زنانه'), K::words($fa[1])), 'the final anchor «' . $fa[1] . '» contains the real category name and is not equal to the page keyphrase');
+check(!(K::overlaps($fa[1], $focus) && K::count_words($fa[1]) >= K::count_words($focus)), 'it does not contain the whole page keyphrase «بوت چرم زنانه آلفردو» (the Yoast / Rank Math competing-link trigger)');
 
 echo "3. Paragraph guard: explicit <p> everywhere\n";
 $raw = '<h2>عنوان</h2>' . "\nمتن اول است. دوم است.\n\nمتن دوم با <a href=\"/x\">لینک</a> است.\n<ul><li>الف</li></ul>\nمتن آخر<br><br>بعد از br" ;
@@ -107,7 +122,7 @@ foreach (array('article', 'product', 'product_cat') as $k) {
 }
 $r = ContentRules::writing_rules('product');
 check(strpos($r, '[نوع کالا] + [جنسیت] + [نام اختصاصی مدل]') !== false && strpos($r, 'طبیعی، تبریز، مدل، طرح، اصل، دست‌دوز و کد') !== false && strpos($r, 'بوت چرم زنانه آلفردو') !== false, 'the keyphrase formula, its forbidden words and the 1-word-model چرم rule are dictated');
-check(strpos($r, 'هرگز نام خام دسته') !== false && strpos($r, 'انواع مدل‌های این دسته‌بندی') !== false, 'the category anchor must be a collection phrase, never the raw name');
+check(strpos($r, '«انواع»، «مجموعه مدل‌های» یا «کلکسیون» به‌همراه نام واقعی دسته') !== false, 'the category anchor must be prefix + the real category name');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

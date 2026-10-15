@@ -197,11 +197,17 @@ $mk = function ($catName, $focus, array $synonyms = array()) {
     return new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 };
 $catAnchor = function ($plan) { foreach ($plan['internal_links'] as $l) if ($l['type'] === 'category') return $l['anchor']; return null; };
-$generic = Khazan\Core\Settings::CATEGORY_ANCHORS;
-foreach (array(array('بوت زنانه', 'نیم‌بوت زنانه آلفردو'), array('بوت چرم زنانه', 'بوت زنانه آلفردو'), array('کفش مردانه', 'کفش مردانه ونس فلوتر'), array('نیم‌بوت زنانه', 'نیم‌بوت زنانه')) as $pair) {
+$prefixes = Khazan\Core\Settings::CATEGORY_ANCHOR_PREFIXES;
+$prefixOf = function ($anchor, $name) use ($prefixes) { foreach ($prefixes as $pf) if ($anchor === $pf . ' ' . $name) return true; return false; };
+foreach (array(array('بوت چرم زنانه', 'بوت چرم زنانه آلفردو'), array('بوت زنانه', 'نیم‌بوت زنانه آلفردو'), array('کفش مردانه', 'کفش مردانه ونس فلوتر'), array('کفش اسپرت مردانه', 'کفش اسپرت مردانه اولد')) as $pair) {
     $a = $catAnchor($mk($pair[0], $pair[1])->plan(1, '', array(), 2));
-    check(in_array($a, $generic, true) && $a !== $pair[0] && !KX::overlaps($a, $pair[1]) && KX::count_words($a) <= 4, "category «{$pair[0]}» for focus «{$pair[1]}»: never the raw name, a collection phrase («{$a}»), zero overlap");
+    check($prefixOf($a, $pair[0]) && $a !== $pair[0] && KX::count_words($a) >= 3 && KX::count_words($a) <= 5, "category «{$pair[0]}»: prefix + the real name («{$a}»), 3-5 words");
+    check(!(KX::overlaps($a, $pair[1]) && KX::count_words($a) >= KX::count_words($pair[1])), "…and it never contains the whole page keyphrase «{$pair[1]}» (no competing link)");
 }
+$seen = array();
+for ($pid = 1; $pid <= 6; $pid++) { $c2 = new FakeCatalog(); $c2->addCategory(1, 'بوت چرم زنانه'); $c2->addProduct($pid, 'p', array(1), 1, 'بوت چرم زنانه آلفردو'); $x = new SmartLinkDistributor($c2, new InMemoryAssignmentLedger()); $seen[$catAnchor($x->plan($pid, '', array(), 0))] = true; }
+check(count($seen) === count($prefixes) && !array_diff(array_keys($seen), array_map(function ($pf) { return $pf . ' بوت چرم زنانه'; }, $prefixes)), 'all three prefixes (انواع / مجموعه مدل‌های / کلکسیون) are used across products, always with the same real name');
+check(SmartLinkDistributor::compose_category_anchor('بوت چرم زنانه', 1) !== SmartLinkDistributor::compose_category_anchor('بوت چرم زنانه', 2) && KX::count_words(SmartLinkDistributor::compose_category_anchor('یک دو سه چهار', 1)) <= 5 && SmartLinkDistributor::compose_category_anchor('', 1) === '', 'compose_category_anchor: seeded prefix, 5-word ceiling for long names, empty name -> empty');
 $d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو', array('بوت مدل برشکا', 'چرم طبیعی'));
 $ids = array_column($d->plan(1, '', array(), 4)['related'], 'id');
 check(!in_array(2, $ids, true) && !in_array(5, $ids, true), 'candidates whose anchor equals / contains a synonym of this product are skipped');
@@ -212,10 +218,10 @@ $all = true;
 foreach (array(array('کفش مردانه', 'کفش مردانه ونس'), array('بوت زنانه', 'بوت زنانه آلفردو'), array('کیف', 'کیف دوشی آیسا'), array('کفش اسپرت مردانه', 'کفش اسپرت مردانه اولد')) as $pair) {
     $p = $mk($pair[0], $pair[1])->plan(1, '', array(), 2);
     $an = $catAnchor($p);
-    $all = $all && KX::count_words($an) <= 4 && !KX::overlaps($an, $pair[1]) && $an !== $pair[0];
+    $all = $all && KX::count_words($an) <= 5 && $an !== $pair[0] && !(KX::overlaps($an, $pair[1]) && KX::count_words($an) >= KX::count_words($pair[1]));
     foreach ($p['related'] as $r) $all = $all && !KX::overlaps($r['anchor'], $pair[1]);
 }
-check($all, 'several category / keyphrase pairs: no outgoing anchor equals or contains the page keyphrase');
+check($all, 'several category / keyphrase pairs: no outgoing anchor equals or contains the whole page keyphrase');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
