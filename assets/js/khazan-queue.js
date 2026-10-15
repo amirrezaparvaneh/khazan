@@ -30,6 +30,8 @@
       const app = this;
       if (!file) return;
       const b = this.state.bulk;
+      // ردیف‌های صف «محصولات سایت» با بارگذاری CSV پاک نمی‌شوند؛ بعد از تطبیق به انتهای جدول برمی‌گردند
+      const keepSite = b.rows.map((r, i) => ({ row: r, selected: !!b.selected[i] })).filter(x => x.row.source === 'site');
       try {
         const table = this.parseCsv(await file.text());
         if (table.length < 2) throw new Error('فایل خالی است یا ردیف داده ندارد.');
@@ -62,13 +64,22 @@
         const fresh = res.matches.filter(m => !m.history && !m.generated).length;
         app.toast(`${toPersianDigits(res.matches.filter(m => m.matched).length)} از ${toPersianDigits(b.rows.length)} ردیف به محصولات سایت متصل شد. ${toPersianDigits(fresh)} ردیف جدید و ${toPersianDigits(uploaded)} ردیف قبلاً آپلود شده است.${already ? ` ${toPersianDigits(already)} مورد قبلاً تولید شده و انتخاب نشد.` : ''}`);
       } catch (e) { b.rows = []; app.toast('خطا: ' + e.message); }
+      keepSite.forEach(x => { const idx = b.rows.push(x.row) - 1; if (x.selected) b.selected[idx] = true; });
       b.matching = false;
       this.render();
     },
 
+    // ردیف‌های متعلق به منبع داده‌ی فعلی (CSV یا محصولات سایت)؛ دو صف هرگز با هم قاطی نمی‌شوند
+    bulkSourceIndexes: function () {
+      const b = this.state.bulk;
+      return b.rows.map((r, i) => i).filter(i => (b.rows[i].source === 'site' ? 'site' : 'csv') === b.source);
+    },
+
     bulkVisibleIndexes: function () {
       const b = this.state.bulk;
-      return b.rows.map((r, i) => i).filter(i => {
+      // محصولات سایت همگی از قبل در سایت وجود دارند و متصل‌اند؛ تفکیک متصل/یافت‌نشده و فیلتر وضعیت فقط برای CSV معنا دارد
+      if (b.source === 'site') return this.bulkSourceIndexes();
+      return this.bulkSourceIndexes().filter(i => {
         const m = b.rows[i].match;
         // فیلتر وضعیت فقط روی «محتوا تولید شده» است؛ ردیف‌های صرفاً آپلودشده در انتظار تولید محسوب می‌شوند
         const generated = !!(m && m.generated);
@@ -83,7 +94,7 @@
     bulkSelectableIndexes: function () {
       const b = this.state.bulk;
       // در فیلتر «قبلاً تولیدشده‌ها» همه ردیف‌های قابل‌مشاهده برای تولید مجدد قابل انتخابند
-      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && (b.status === 'generated' || !(b.rows[i].match && b.rows[i].match.generated)));
+      return this.bulkVisibleIndexes().filter(i => this.bulkIsTargetable(i) && (b.source === 'site' || b.status === 'generated' || !(b.rows[i].match && b.rows[i].match.generated)));
     },
 
     // ردیف متصل‌شده، یا ردیف یافت‌نشده وقتی «ایجاد خودکار محصول پیش‌نویس» روشن است
@@ -150,7 +161,7 @@
       const isSingle = Number.isInteger(single);
       const queue = isSingle
         ? (this.bulkIsTargetable(single) ? [single] : [])
-        : b.rows.map((r, i) => i).filter(i => b.selected[i] && this.bulkIsTargetable(i) && b.rows[i].run !== 'done');
+        : this.bulkSourceIndexes().filter(i => b.selected[i] && this.bulkIsTargetable(i) && b.rows[i].run !== 'done');
       if (!queue.length) return app.toast('هیچ ردیف متصل‌شده‌ای برای پردازش انتخاب نشده است.', 'error');
       queue.forEach(i => { b.rows[i].run = ''; b.rows[i].error = ''; });
       if (!isSingle && b.mode === 'replace' && !confirm(`توضیحات فعلی ${toPersianDigits(queue.length)} محصول جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
@@ -230,6 +241,15 @@
       this.loadSiteProducts();
     },
 
+    // برگشت از بخش انتخاب محصولات به صف (بدون افزودن محصول جدید)
+    returnToSiteQueue: function () {
+      const b = this.state.bulk;
+      if (b.running || !this.bulkSourceIndexes().length) return;
+      b.site.collapsed = true;
+      this.state.pendingScroll = 'wila-queue-settings';
+      this.render();
+    },
+
     // بازکردن دوباره بخش انتخاب محصولات سایت (فهرست و انتخاب‌ها حفظ می‌شوند)
     reopenSiteSelection: function () {
       const b = this.state.bulk;
@@ -305,6 +325,7 @@
         this.render();
       }));
       this.root.querySelectorAll('.wila-site-reopen').forEach(btn => btn.addEventListener('click', () => this.reopenSiteSelection()));
+      this.root.querySelectorAll('.wila-site-return').forEach(btn => btn.addEventListener('click', () => this.returnToSiteQueue()));
       this.root.querySelectorAll('.wila-site-row').forEach(box => box.addEventListener('change', e => { bulk.site.selected[e.target.dataset.id] = e.target.checked; this.render(); }));
       const siteLoad = this.root.querySelector('#wila-site-load'); if (siteLoad) siteLoad.addEventListener('click', () => this.loadSiteProducts());
       this.root.querySelectorAll('.wila-site-add').forEach(btn => btn.addEventListener('click', () => this.addSiteProductsToQueue()));

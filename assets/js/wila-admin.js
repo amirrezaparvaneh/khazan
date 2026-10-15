@@ -8,6 +8,7 @@
     state: {
       activeTab: 'home',
       activeNav: 'home',
+      navOpen: false,
       pendingScroll: '',
       summary: null,
       items: [],
@@ -81,6 +82,11 @@
     init: function () {
       this.root = document.getElementById('wila-app-root');
       if (!this.root) return;
+      // Escape کشوی منو را می‌بندد (یک بار ثبت می‌شود)
+      if (!this.escapeBound) {
+        this.escapeBound = true;
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && this.state.navOpen) this.setNavOpen(false); });
+      }
       this.fetchSummary();
       this.fetchSettings();
       this.fetchContentHistory();

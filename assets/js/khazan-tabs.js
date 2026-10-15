@@ -57,8 +57,11 @@
       const current = KHAZAN_NAV.concat(KHAZAN_NAV_EXTRA).find(isNavActive) || KHAZAN_NAV[0];
       const leavesOn = window.KhazanLeaves && window.KhazanLeaves.isEnabled();
 
+      const navOpen = !!this.state.navOpen;
       return `
-        <aside class="khazan-sidebar">
+        <div class="khazan-backdrop ${navOpen ? 'open' : ''}" id="khazan-backdrop"></div>
+        <aside class="khazan-sidebar ${navOpen ? 'open' : ''}" id="khazan-sidebar" aria-label="منوی خزان">
+          <button type="button" class="khazan-drawer-close" id="khazan-drawer-close" aria-label="بستن منو">✕</button>
           <div class="khazan-brand">
             <img class="khazan-brand-logo" src="${escapeHtml(wilaData.logoUrl || '')}" alt="خـزان">
             <h1 class="khazan-sr-only">خـزان</h1>
@@ -75,6 +78,7 @@
         </aside>
         <main class="khazan-main">
           <header class="khazan-topbar">
+            <button type="button" class="khazan-menu-toggle" id="khazan-menu-toggle" aria-label="باز یا بسته کردن منو" aria-controls="khazan-sidebar" aria-expanded="${navOpen}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
             <h2>${current.title}</h2>
             ${this.aiBalanceBadge('compact')}
             <button type="button" class="khazan-pill-btn khazan-leaf-toggle ${leavesOn ? 'on' : ''}" id="khazan-leaf-toggle">🍁 افکت خزان: ${leavesOn ? 'فعال' : 'غیرفعال'}</button>
@@ -84,6 +88,18 @@
           </div>
         </main>
         `;
+    },
+
+    // باز/بسته کردن کشوی منو بدون رندر مجدد (تا انیمیشن CSS اجرا شود)؛ state برای رندرهای بعدی حفظ می‌شود
+    setNavOpen: function (open) {
+      const isOpen = !!open;
+      this.state.navOpen = isOpen;
+      const sidebar = this.root.querySelector('#khazan-sidebar');
+      if (sidebar) sidebar.classList.toggle('open', isOpen);
+      const backdrop = this.root.querySelector('#khazan-backdrop');
+      if (backdrop) backdrop.classList.toggle('open', isOpen);
+      const toggle = this.root.querySelector('#khazan-menu-toggle');
+      if (toggle) toggle.setAttribute('aria-expanded', String(isOpen));
     },
 
     // بج زنده «اعتبار حساب API» با دکمه استعلام مجدد؛ variant: compact (نوار بالا) | full (تنظیمات)
@@ -323,8 +339,13 @@
       let contentHtml = '';
         const b = this.state.bulk;
         const visible = this.bulkVisibleIndexes();
-        const matchedCount = b.rows.filter(r => r.match && r.match.matched).length;
-        const selectedCount = Object.keys(b.selected).filter(i => b.selected[i]).length;
+        // فقط ردیف‌های منبع فعلی؛ در حالت محصولات سایت همه ردیف‌ها متصل‌اند و بخش «انتخاب» و «صف» هرگز هم‌زمان نمایش داده نمی‌شوند
+        const srcIdx = this.bulkSourceIndexes();
+        const matchedCount = srcIdx.filter(i => b.rows[i].match && b.rows[i].match.matched).length;
+        const selectedCount = srcIdx.filter(i => b.selected[i]).length;
+        const siteMode = b.source === 'site';
+        const queueVisible = srcIdx.length > 0 && !b.matching && (!siteMode || b.site.collapsed);
+        const viewFound = siteMode || b.view === 'found';
         const selectable = this.bulkSelectableIndexes();
         const allVisibleSelected = selectable.length > 0 && selectable.every(i => b.selected[i]);
         const locked = b.running ? 'disabled' : '';
@@ -349,7 +370,8 @@
             <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'csv' ? 'active' : ''}" data-source="csv" ${locked}>📄 بارگذاری فایل CSV</button>
             <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'site' ? 'active' : ''}" data-source="site" ${locked}>🛍️ انتخاب از محصولات سایت</button>
           </div>
-          ${b.source === 'site' && b.site.collapsed ? `<div class="khazan-site-summary" id="wila-site-summary"><span>✅ تعداد ${toPersianDigits(b.site.addedCount)} محصول از سایت به صف اضافه شد</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-reopen" ${b.running ? 'disabled' : ''}>تغییر یا انتخاب مجدد محصولات</button></div>` : ''}
+          ${siteMode && b.site.collapsed ? `<div class="khazan-site-summary" id="wila-site-summary"><span>✅ تعداد ${toPersianDigits(srcIdx.length)} محصول به صف اضافه شد</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-reopen" ${b.running ? 'disabled' : ''}>تغییر یا بازگشت به انتخاب محصولات</button></div>` : ''}
+          ${siteMode && !b.site.collapsed && srcIdx.length ? `<div class="khazan-site-summary khazan-site-queue-note" id="wila-site-queue-note"><span>🗂️ ${toPersianDigits(srcIdx.length)} محصول در صف تولید است</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-return">بازگشت به صف</button></div>` : ''}
           ${b.source === 'csv' ? `<p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>` : '<p style="color:#64748b;font-size:.85rem">محصولات سایت را بر اساس دسته‌بندی یا وضعیت محتوا فیلتر کنید و بدون فایل CSV به صف تولید اضافه کنید. تعداد لینک ورودی محصولات هم‌دسته به‌طور مساوی بین آن‌ها پخش می‌شود.</p>'}
           <div class="khazan-toolbar">
             ${b.source === 'csv' ? `
@@ -389,12 +411,12 @@
               ${this.btn3d('wila-site-load', 'btn-primary', b.site.loading ? 'در حال بارگذاری...' : 'بارگذاری محصولات', b.site.loading || b.running ? 'disabled' : '')}
             </div>
             `}
-            ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
+            ${queueVisible ? `${siteMode ? '' : `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
               <select id="wila-bulk-status" class="wila-select">
                 <option value="all" ${b.status === 'all' ? 'selected' : ''}>همه محصولات شیت</option>
                 <option value="pending" ${b.status === 'pending' ? 'selected' : ''}>فقط محصولاتی که هنوز براشون محتوا ساخته نشده (در انتظار تولید)</option>
                 <option value="generated" ${b.status === 'generated' ? 'selected' : ''}>محصولاتی که قبلاً براشون محتوا ساختی</option>
-              </select></div>
+              </select></div>`}
             <div class="khazan-field"><label>حالت درج محتوا</label>
               <select id="wila-bulk-mode" class="wila-select" ${locked}>
                 <option value="replace" ${b.mode === 'replace' ? 'selected' : ''}>جایگزینی کامل توضیحات محصول</option>
@@ -424,21 +446,21 @@ ${siteExpanded ? `
           </tr></thead><tbody>${b.site.items.map(p => `<tr><td><input type="checkbox" class="khazan-checkbox wila-site-row" data-id="${p.id}" ${b.site.selected[p.id] ? 'checked' : ''} ${b.running ? 'disabled' : ''}></td><td style="font-weight:600">${escapeHtml(p.title)}</td><td>${escapeHtml((p.categories || []).map(c => c.name).join('، ') || '—')}</td><td>${p.has_description ? '<span class="khazan-badge khazan-badge-ok">📝 دارای توضیحات</span>' : '<span class="khazan-badge khazan-badge-warn">⚪ خالی</span>'}${p.generated ? ` <span class="khazan-badge khazan-badge-done" title="${escapeHtml('تولید شده در ' + formatJalali(p.generated.at))}">🕒 ${escapeHtml(shortJalali(p.generated.at))}</span>` : ''}</td></tr>`).join('')}</tbody></table></div>
           ${siteBar('bottom')}` : ''}
           ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
-          ${b.rows.length && !b.matching ? `
+          ${queueVisible ? `
             <div class="khazan-toggle-grid" id="wila-queue-settings">
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره عنوان سئو، توضیحات متا و کلیدواژه در Yoast و Rank Math</small></span></label>
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
-              <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>
+              ${siteMode ? '' : `<label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>`}
             </div>
-            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>
+            ${siteMode ? `<div class="khazan-statusbar"><span class="khazan-status-pill">🛍️ ${toPersianDigits(srcIdx.length)} محصول در صف (${toPersianDigits(selectedCount)} مورد برای تولید انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>` : `            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>
             <div class="khazan-subtabs">
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'found' ? 'active' : ''}" data-view="found">🟢 محصولات موجود در سایت (متصل‌شده) <em>${toPersianDigits(matchedCount)}</em></button>
-              <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(b.rows.length - matchedCount)}</em></button>
-            </div>
+              <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(srcIdx.length - matchedCount)}</em></button>
+            </div>`}
             ${queueControls('top')}
             <div id="wila-bulk-progress" class="khazan-queue-progress">${this.bulkProgressHtml()}</div>
             <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
-              <th><input type="checkbox" class="khazan-checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>وضعیت</th>${b.view === 'found' ? '<th>محصول سایت</th>' : ''}<th>وضعیت پردازش</th><th>عملیات</th>
+              <th><input type="checkbox" class="khazan-checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>وضعیت</th>${viewFound ? '<th>محصول سایت</th>' : ''}<th>وضعیت پردازش</th><th>عملیات</th>
             </tr></thead><tbody>${visible.length ? visible.map(i => {
               const r = b.rows[i], m = r.match;
               const viaLabel = m && m.via === 'site' ? 'انتخاب از محصولات سایت' : m && m.via === 'created' ? 'ساخته شد' : m && m.via === 'slug' ? 'تطبیق با نامک' : m && m.via === 'name_ambiguous' ? 'تطبیق با نام (چند مورد مشابه)' : 'تطبیق با نام';
@@ -448,8 +470,8 @@ ${siteExpanded ? `
               else if (m.history) badge = `<span class="khazan-badge khazan-badge-done" title="${escapeHtml('آپلود شده در ' + formatJalali(m.history.first_seen) + (m.history.file ? '، فایل ' + m.history.file : ''))}">🕒 آپلود شده: ${escapeHtml(shortJalali(m.history.first_seen))}</span>`;
               else if (m.matched) badge = `<span class="khazan-badge khazan-badge-ok" title="${escapeHtml(viaLabel)}">🟢 متصل شد</span>`;
               else badge = b.createMissing ? '<span class="khazan-badge khazan-badge-warn" title="پس از شروع، محصول پیش‌نویس ساخته می‌شود">➕ ساخت پیش‌نویس</span>' : '<span class="khazan-badge khazan-badge-miss">❌ پیدا نشد</span>';
-              return `<tr><td><input type="checkbox" class="khazan-checkbox wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${badge}</td>${b.view === 'found' ? `<td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td>` : ''}<td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-bulk-single" data-index="${i}" ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}>${m && (m.generated || r.run === 'done') ? '⚙️ تولید مجدد' : '▶ تولید این ردیف'}</button></td></tr>`;
-            }).join('') : `<tr><td colspan="7" style="text-align:center;padding:20px;color:#78716c">${b.view === 'found' ? 'محصول متصل‌شده‌ای برای نمایش وجود ندارد.' : 'همه ردیف‌ها به محصولات سایت متصل شده‌اند.'}</td></tr>`}</tbody></table></div>
+              return `<tr><td><input type="checkbox" class="khazan-checkbox wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${badge}</td>${viewFound ? `<td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td>` : ''}<td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-bulk-single" data-index="${i}" ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}>${m && (m.generated || r.run === 'done') ? '⚙️ تولید مجدد' : '▶ تولید این ردیف'}</button></td></tr>`;
+            }).join('') : `<tr><td colspan="7" style="text-align:center;padding:20px;color:#78716c">${viewFound ? 'محصول متصل‌شده‌ای برای نمایش وجود ندارد.' : 'همه ردیف‌ها به محصولات سایت متصل شده‌اند.'}</td></tr>`}</tbody></table></div>
             ${queueControls('bottom')}
             <div id="wila-bulk-log" style="margin-top:10px;max-height:220px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.8rem;line-height:1.9">${this.bulkLogHtml()}</div>
           ` : ''}
@@ -707,6 +729,7 @@ ${siteExpanded ? `
       this.root.querySelectorAll('.wila-tab-btn').forEach(btn => btn.addEventListener('click', e => {
         this.state.activeTab = e.currentTarget.getAttribute('data-tab');
         if (!this.state.activeTab) return;
+        this.state.navOpen = false;
         this.state.activeNav = e.currentTarget.getAttribute('data-nav') || this.state.activeTab;
         this.state.pendingScroll = e.currentTarget.getAttribute('data-scroll') || '';
         if (this.state.activeTab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
@@ -720,6 +743,7 @@ ${siteExpanded ? `
       this.root.querySelectorAll('.khazan-go').forEach(btn => btn.addEventListener('click', e => {
         const target = KHAZAN_NAV.concat(KHAZAN_NAV_EXTRA).find(n => n.key === e.currentTarget.getAttribute('data-go'));
         if (!target) return;
+        this.state.navOpen = false;
         this.state.activeTab = target.tab;
         this.state.activeNav = target.key;
         this.state.pendingScroll = target.scroll || '';
@@ -729,6 +753,13 @@ ${siteExpanded ? `
         this.render();
       }));
 
+      // منوی همبرگری (موبایل/تبلت): باز و بسته با دکمه، بستن با پس‌زمینه تاریک یا دکمه ✕
+      const menuToggle = this.root.querySelector('#khazan-menu-toggle');
+      if (menuToggle) menuToggle.addEventListener('click', () => this.setNavOpen(!this.state.navOpen));
+      const navBackdrop = this.root.querySelector('#khazan-backdrop');
+      if (navBackdrop) navBackdrop.addEventListener('click', () => this.setNavOpen(false));
+      const drawerClose = this.root.querySelector('#khazan-drawer-close');
+      if (drawerClose) drawerClose.addEventListener('click', () => this.setNavOpen(false));
       this.root.querySelectorAll('.khazan-balance-refresh').forEach(btn => btn.addEventListener('click', () => this.getAiBalance(true)));
       this.root.querySelectorAll('.khazan-stats-refresh').forEach(btn => btn.addEventListener('click', () => this.fetchSiteStats(true)));
       this.root.querySelectorAll('.khazan-quick-empty').forEach(btn => btn.addEventListener('click', () => this.goBulkEmptyProducts()));
