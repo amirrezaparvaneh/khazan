@@ -227,6 +227,10 @@
       if (bulkFile) bulkFile.addEventListener('change', e => this.loadBulkFile(e.target.files[0]));
       const dropzone = this.root.querySelector('#wila-bulk-dropzone');
       if (dropzone && !this.state.bulk.running) {
+        // کلیک روی کل باکس یا دکمه «انتخاب فایل» (و Enter/Space) انتخاب‌گر فایل را باز می‌کند؛ کلیک خودِ input نادیده گرفته می‌شود تا حلقه نشود
+        const openPicker = () => { if (bulkFile && !this.state.bulk.running) bulkFile.click(); };
+        dropzone.addEventListener('click', e => { if (e.target !== bulkFile) openPicker(); });
+        dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPicker(); } });
         ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('is-drag'); }));
         ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('is-drag'); }));
         dropzone.addEventListener('drop', e => {

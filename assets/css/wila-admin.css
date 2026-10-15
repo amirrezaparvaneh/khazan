@@ -805,7 +805,7 @@
 
 /* CSV dropzone */
 .khazan-file-hidden { position: absolute !important; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); pointer-events: none; }
-#wila-app-root label.khazan-dropzone {
+#wila-app-root .khazan-dropzone {
   position: relative;
   display: flex;
   align-items: center;
@@ -862,7 +862,7 @@ img.khazan-watermark {
 }
 
 /* CSV dropzone v2 - clean vertical layout */
-#wila-app-root label.khazan-dropzone {
+#wila-app-root .khazan-dropzone {
   flex-direction: column;
   gap: 10px;
   padding: 28px;
@@ -870,26 +870,11 @@ img.khazan-watermark {
   border: 1.5px dashed #fed7aa;
   border-radius: 16px;
 }
-#wila-app-root label.khazan-dropzone.has-file { flex-direction: row; padding: 18px 20px; }
+#wila-app-root .khazan-dropzone.has-file { flex-direction: row; padding: 18px 20px; }
 .khazan-dropzone:hover, .khazan-dropzone.is-drag { background: #fff4e8; border-color: #fdba74; }
-.khazan-dz-icon-idle { color: #d97706; }
 .khazan-dropzone:not(.has-file) .khazan-dz-text { gap: 6px; }
 .khazan-dropzone:not(.has-file) .khazan-dz-text strong { font-size: 1rem; font-weight: 700; }
 .khazan-dropzone:not(.has-file) .khazan-dz-text small { font-size: 0.82rem; color: #a8a29e; }
-.khazan-dz-cta {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 6px;
-  padding: 8px 22px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #991b1b 0%, #c2410c 100%);
-  border-radius: 9999px;
-  box-shadow: 0 3px 10px rgba(153, 27, 27, 0.25);
-  transition: filter 0.15s ease;
-}
-.khazan-dropzone:hover .khazan-dz-cta { filter: brightness(1.08); }
 
 /* Toggle switch (RTL: knob rests on the right, slides left when checked) */
 .khazan-switch {
@@ -1127,3 +1112,143 @@ img.khazan-watermark {
 .khazan-field-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .khazan-field-actions .khazan-3d-btn { min-width: 10em; }
 #wila-bulk-source { margin: 4px 0 12px; }
+
+/* ==========================================================
+   CSV upload box: floating 3D folder + power-smash button
+   (scoped to the plugin root so wp-admin is never affected)
+   ========================================================== */
+#wila-app-root .khazan-upload-box { cursor: pointer; user-select: none; }
+#wila-app-root .khazan-upload-box:focus-visible { outline: 3px solid rgba(239, 68, 68, 0.35); outline-offset: 2px; }
+#wila-app-root .khazan-upload-box.is-locked { cursor: not-allowed; }
+
+#wila-app-root .khazan-folder-anim {
+  --transition: 350ms;
+  --folder-W: 120px;
+  --folder-H: 80px;
+  position: relative;
+  width: var(--folder-W);
+  height: calc(var(--folder-H) + 30px);
+  margin: 0 auto 16px;
+}
+#wila-app-root .khazan-folder-anim .folder {
+  position: relative;
+  width: var(--folder-W);
+  height: var(--folder-H);
+  animation: khazanFolderFloat 2.5s infinite ease-in-out;
+  transition: transform var(--transition) ease;
+}
+#wila-app-root .khazan-folder-anim .folder:hover { transform: scale(1.05); }
+#wila-app-root .khazan-folder-anim .front-side,
+#wila-app-root .khazan-folder-anim .back-side {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: transform var(--transition);
+  transform-origin: bottom center;
+}
+#wila-app-root .khazan-folder-anim .back-side::before,
+#wila-app-root .khazan-folder-anim .back-side::after {
+  content: "";
+  display: block;
+  background-color: #ffffff;
+  opacity: 0.6;
+  width: var(--folder-W);
+  height: var(--folder-H);
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: bottom center;
+  border-radius: 15px;
+  transition: transform 350ms;
+}
+/* the folder sheets open when the whole upload box is hovered */
+#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .back-side::before { transform: rotateX(-5deg) skewX(5deg); }
+#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .back-side::after { transform: rotateX(-15deg) skewX(12deg); }
+#wila-app-root .khazan-folder-anim .front-side { z-index: 1; }
+#wila-app-root .khazan-upload-box:hover .khazan-folder-anim .front-side { transform: rotateX(-40deg) skewX(15deg); }
+#wila-app-root .khazan-folder-anim .tip {
+  background: linear-gradient(135deg, #ff9a56, #ff6f56);
+  width: 80px;
+  height: 20px;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  position: absolute;
+  top: -10px;
+  left: 0;
+  z-index: 2;
+}
+#wila-app-root .khazan-folder-anim .cover {
+  background: linear-gradient(135deg, #ffe563, #ffc663);
+  width: var(--folder-W);
+  height: var(--folder-H);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+}
+@keyframes khazanFolderFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+
+#wila-app-root .khazan-smash-btn {
+  position: relative;
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1rem 2rem;
+  overflow: hidden;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  background-color: #ef4444;
+  border: 0;
+  border-bottom: 8px solid #b91c1c;
+  border-radius: 1rem;
+  box-shadow: 0 15px 25px -10px rgba(239, 68, 68, 0.8);
+  cursor: pointer;
+  transition: all 100ms;
+}
+#wila-app-root .khazan-smash-btn:active:not(:disabled) {
+  border-bottom-width: 0px;
+  transform: translateY(8px);
+}
+#wila-app-root .khazan-smash-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+#wila-app-root .khazan-smash-btn:focus-visible { outline: 3px solid rgba(239, 68, 68, 0.35); outline-offset: 3px; }
+#wila-app-root .khazan-smash-btn__overlay {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent);
+  pointer-events: none;
+}
+#wila-app-root .khazan-smash-btn__glare {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  width: 24px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 9999px;
+  filter: blur(2px);
+  pointer-events: none;
+}
+#wila-app-root .khazan-smash-btn__content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+#wila-app-root .khazan-smash-btn__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  animation: khazanSmashPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes khazanSmashPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #wila-app-root .khazan-folder-anim .folder,
+  #wila-app-root .khazan-smash-btn__icon { animation: none; }
+}

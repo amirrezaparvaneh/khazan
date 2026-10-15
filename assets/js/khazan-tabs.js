@@ -236,18 +236,30 @@
           <div class="khazan-toolbar">
             ${b.source === 'csv' ? `
             <div class="khazan-field khazan-field-file"><label>فایل CSV</label>
-              <label class="khazan-dropzone ${b.fileName ? 'has-file' : ''} ${locked ? 'is-locked' : ''}" id="wila-bulk-dropzone" for="wila-bulk-file">
+              <div class="khazan-dropzone khazan-upload-box ${b.fileName ? 'has-file' : ''} ${locked ? 'is-locked' : ''}" id="wila-bulk-dropzone" role="button" tabindex="0" aria-label="انتخاب یا رها کردن فایل CSV">
                 <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="khazan-file-hidden" ${locked}>
                 ${b.fileName ? `
                   <span class="khazan-dz-icon khazan-dz-ok"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg></span>
                   <span class="khazan-dz-text"><strong dir="ltr">${escapeHtml(b.fileName)}</strong><small>${b.fileSize ? 'حجم فایل: ' + this.formatFileSize(b.fileSize) : ''}</small></span>
                   <span class="khazan-pill-btn">تغییر فایل</span>
                 ` : `
-                  <span class="khazan-dz-icon khazan-dz-icon-idle"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M8 13h8M8 17h8M11 9H8"/></svg></span>
+                  <div class="khazan-folder-anim" aria-hidden="true">
+                    <div class="folder">
+                      <div class="front-side"><div class="tip"></div><div class="cover"></div></div>
+                      <div class="back-side cover"></div>
+                    </div>
+                  </div>
                   <span class="khazan-dz-text"><strong>بارگذاری فایل اکسل / شیت محصولات</strong><small>فایل CSV را اینجا رها کنید یا دکمه زیر را بزنید</small></span>
-                  <span class="khazan-dz-cta">انتخاب فایل از سیستم</span>
+                  <button type="button" class="khazan-smash-btn" id="wila-bulk-pick" ${locked}>
+                    <span class="khazan-smash-btn__overlay"></span>
+                    <span class="khazan-smash-btn__glare"></span>
+                    <span class="khazan-smash-btn__content">
+                      <svg class="khazan-smash-btn__icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                      انتخاب فایل از سیستم
+                    </span>
+                  </button>
                 `}
-              </label></div>
+              </div></div>
             ` : `
             <div class="khazan-field"><label>وضعیت محتوا</label>
               <select id="wila-site-filter" class="wila-select" ${locked}>
