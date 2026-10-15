@@ -55,6 +55,21 @@ final class KeyphraseExtractor {
         return self::limit(self::from_title($phrase), Settings::KEYPHRASE_MAX_WORDS);
     }
 
+    /**
+     * Two phrases overlap when they are equal or one is a contiguous word sequence of the other
+     * (case / Arabic-yeh-kaf / ZWNJ insensitive). Empty phrases never overlap.
+     */
+    public static function overlaps($a, $b) {
+        $x = array_map(array(__CLASS__, 'key'), self::words($a));
+        $y = array_map(array(__CLASS__, 'key'), self::words($b));
+        if (!$x || !$y) return false;
+        if (count($x) > count($y)) { $t = $x; $x = $y; $y = $t; }
+        for ($i = 0, $n = count($y) - count($x); $i <= $n; $i++) {
+            if (array_slice($y, $i, count($x)) === $x) return true;
+        }
+        return false;
+    }
+
     public static function is_valid($phrase) {
         $n = self::count_words($phrase);
         return $n >= 1 && $n <= Settings::KEYPHRASE_MAX_WORDS;

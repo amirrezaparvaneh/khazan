@@ -62,6 +62,7 @@ check($ok['_yoast_wpseo_focuskw'] === 'کفش مردانه ونس', 'a valid sho
 echo "4. Prompt rules\n";
 foreach (array('article', 'product', 'product_cat') as $kind) {
     $rules = ContentRules::writing_rules($kind);
+    check(strpos($rules, 'بیش از ۹۵٪ جمله‌های متن باید معلوم') !== false && strpos($rules, 'حداکثر ۱ بار') !== false && strpos($rules, 'صنعتگران تبریز این مدل را طراحی و تولید کرده‌اند') !== false && strpos($rules, 'طراحان در بخش زیره از پلی‌اورتان بهره برده‌اند') !== false && strpos($rules, 'رویه کفش از چرم طبیعی تشکیل شده') !== false, "writing_rules($kind) demands >95% active voice, passive patterns at most once, with the three rewrite examples");
     check(strpos($rules, '۲ تا ۴ کلمه') !== false && strpos($rules, 'حداکثر ۴ کلمه') !== false && strpos($rules, 'هرگز کل نام محصول') !== false, "writing_rules($kind) demands a 2-4 word focus_keyword and <= 4 word anchors");
 }
 $pb = new Khazan\Services\Ai\PromptBuilder('');

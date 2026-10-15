@@ -120,6 +120,10 @@ final class SmartLinkDistributor {
             if ((int) $candidate['id'] === (int) $product['id'] || (string) $candidate['anchor'] === '') {
                 continue;
             }
+            // انکر لینک خروجی نباید با کلیدواژه کانونی همین محصول هم‌پوشانی داشته باشد (رقابت کلیدواژه‌ای / Cannibalization)
+            if (\Khazan\Services\Seo\KeyphraseExtractor::overlaps($candidate['anchor'], isset($product['anchor']) ? $product['anchor'] : '')) {
+                continue;
+            }
             $score = $this->similarity($product, $candidate);
             if ($score <= 0) {
                 continue;

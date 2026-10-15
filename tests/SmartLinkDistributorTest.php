@@ -156,5 +156,34 @@ $dist = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 $ids = array_column($dist->plan(1, 'r', array(1), 2)['related'], 'id');
 check(!in_array(2, $ids, true) && count($ids) === 2, 'product 2 (no anchor) is never linked');
 
+echo "8. Outgoing anchors never overlap the current product's focus keyphrase\n";
+$c = new FakeCatalog(); $c->addCategory(1, 'Shoes');
+$c->addProduct(1, 'p1', array(1), 1, 'کفش مردانه ونس');
+$c->addProduct(2, 'p2', array(1), 1, 'کفش مردانه ونس');
+$c->addProduct(3, 'p3', array(1), 1, 'مردانه ونس');
+$c->addProduct(4, 'p4', array(1), 1, 'کفش مردانه ونس فلوتر');
+$c->addProduct(5, 'p5', array(1), 1, 'کفش مردانه اولد اسکول');
+$c->addProduct(6, 'p6', array(1), 1, 'کفش مردانه آرتین');
+$c->addProduct(7, 'p7', array(1), 1, 'بوت چرم');
+$dist = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+$plan = $dist->plan(1, '', array(), 3);
+$ids = array_column($plan['related'], 'id');
+check(!array_intersect($ids, array(2, 3, 4)), 'equal, contained and containing anchors are skipped (picked: ' . implode(',', $ids) . ')');
+check(count($ids) === 3 && !array_diff($ids, array(5, 6, 7)), 'the three non-overlapping products are linked instead');
+check(!in_array(1, $ids, true), 'never links itself');
+$anchors = array_column(array_filter($plan['internal_links'], function ($l) { return $l['type'] === 'product'; }), 'anchor');
+$clean = true; foreach ($anchors as $a) $clean = $clean && !Khazan\Services\Seo\KeyphraseExtractor::overlaps($a, 'کفش مردانه ونس');
+check($clean, 'the final internal_links anchors do not overlap the focus keyphrase');
+
+$c = new FakeCatalog(); $c->addCategory(1, 'Shoes');
+$focus = array(1 => 'کفش مردانه ونس', 2 => 'کفش مردانه ونس فلوتر', 3 => 'ونس', 4 => 'کیف دوشی زنانه آیسا', 5 => 'کیف دوشی زنانه', 6 => 'نیم\u{200c}بوت زنانه لارا', 7 => 'نیم‌بوت زنانه', 8 => 'صندل چرم مهسا', 9 => 'صندل مهسا', 10 => 'کفش اسپرت پارسا');
+foreach ($focus as $id => $a) $c->addProduct($id, "p$id", array(1), 1, $a);
+$all = true; $dist = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+foreach (array_keys($focus) as $pid) {
+    foreach ($dist->plan($pid, 'q', array_keys($focus), 2)['related'] as $r) $all = $all && !Khazan\Services\Seo\KeyphraseExtractor::overlaps($r['anchor'], $focus[$pid]);
+}
+check($all, 'whole queue of 10 products with deliberately overlapping keyphrases: zero overlapping outgoing anchors');
+check(Khazan\Services\Seo\KeyphraseExtractor::overlaps('کفش مردانه', 'کفش مردانه ونس') && !Khazan\Services\Seo\KeyphraseExtractor::overlaps('کفش مردانه ونس', 'کفش مردانه اولد') && !Khazan\Services\Seo\KeyphraseExtractor::overlaps('', 'کفش'), 'overlaps(): containment yes, shared prefix only no, empty never');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
