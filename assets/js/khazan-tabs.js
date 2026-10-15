@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  const { toPersianDigits, formatJalali, shortJalali, escapeHtml } = window.KhazanUtils;
+  const { toPersianDigits, formatJalali, shortJalali, escapeHtml, formatNumber, formatUsd } = window.KhazanUtils;
 
   const KHAZAN_ICONS = {
     home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
@@ -76,6 +76,7 @@
         <main class="khazan-main">
           <header class="khazan-topbar">
             <h2>${current.title}</h2>
+            ${this.aiBalanceBadge('compact')}
             <button type="button" class="khazan-pill-btn khazan-leaf-toggle ${leavesOn ? 'on' : ''}" id="khazan-leaf-toggle">🍁 افکت خزان: ${leavesOn ? 'فعال' : 'غیرفعال'}</button>
           </header>
           <div class="khazan-panel">
@@ -83,6 +84,50 @@
           </div>
         </main>
         `;
+    },
+
+    // بج زنده «اعتبار حساب API» با دکمه استعلام مجدد؛ variant: compact (نوار بالا) | full (تنظیمات)
+    aiBalanceBadge: function (variant) {
+      const st = this.state, data = st.aiBalance && st.aiBalance.balance ? st.aiBalance : null;
+      const refresh = `<button type="button" class="khazan-balance-refresh" aria-label="استعلام مجدد اعتبار" title="استعلام مجدد اعتبار" ${st.aiBalanceLoading ? 'disabled' : ''}><svg class="khazan-spin ${st.aiBalanceLoading ? 'spinning' : ''}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg></button>`;
+      let tone = 'ok', body = '', title = '';
+      if (data) {
+        const b = data.balance, status = data.status || 'ok';
+        tone = status;
+        const toman = b.remaining_irt != null ? `${formatNumber(b.remaining_irt)} تومان` : '';
+        const usd = b.remaining_unit != null ? formatUsd(b.remaining_unit) : '';
+        const warn = status === 'empty' ? 'اعتبار تمام شده است' : status === 'critical' ? 'اعتبار رو به اتمام است' : status === 'low' ? 'اعتبار کم است' : '';
+        title = [b.total_irt != null ? `کل: ${formatNumber(b.total_irt)} تومان` : '', b.used_irt != null ? `مصرف‌شده: ${formatNumber(b.used_irt)} تومان` : '', toman ? `باقی‌مانده: ${toman}` : ''].filter(Boolean).join(' | ');
+        body = `<span class="khazan-balance-label">💳 اعتبار API</span><strong class="khazan-balance-value">${toman || usd}</strong>${toman && usd ? `<span class="khazan-balance-usd">≈ ${usd}</span>` : ''}${warn ? `<span class="khazan-balance-warn">⚠️ ${warn}</span>` : ''}`;
+        if (variant === 'full') {
+          const row = (label, irt, unit) => irt != null ? `<div class="khazan-balance-cell"><small>${label}</small><strong>${formatNumber(irt)} تومان</strong>${unit != null ? `<span>≈ ${formatUsd(unit)}</span>` : ''}</div>` : '';
+          body += `<div class="khazan-balance-grid">${row('اعتبار کل', b.total_irt, b.total_unit)}${row('مصرف‌شده', b.used_irt, b.used_unit)}${row('باقی‌مانده', b.remaining_irt, b.remaining_unit)}</div>`;
+        }
+      } else if (st.aiBalanceLoading) {
+        tone = 'loading'; body = '<span class="khazan-balance-label">⏳ در حال استعلام اعتبار...</span>';
+      } else if (st.aiBalanceErrorCode === 'missing_api_key') {
+        tone = 'error'; body = '<span class="khazan-balance-label">🔑 کلید API ثبت نشده</span>'; title = st.aiBalanceError;
+      } else if (st.aiBalanceErrorCode === 'invalid_api_key') {
+        tone = 'error'; body = '<span class="khazan-balance-label">⛔ کلید API نامعتبر است</span>'; title = st.aiBalanceError;
+      } else if (st.aiBalanceError) {
+        tone = 'error'; body = '<span class="khazan-balance-label">⚠️ اعتبار نامشخص</span>'; title = st.aiBalanceError;
+      } else {
+        tone = 'loading'; body = '<span class="khazan-balance-label">💳 اعتبار API</span><strong class="khazan-balance-value">—</strong>';
+      }
+      return `<div class="khazan-balance is-${tone} khazan-balance-${variant || 'compact'}" role="status" aria-live="polite" ${title ? `title="${escapeHtml(title)}"` : ''}><div class="khazan-balance-main">${body}</div>${refresh}</div>`;
+    },
+
+    // برآورد تقریبی هزینه تولید برای تعداد ردیف انتخاب‌شده (نرخ‌های Core\Settings؛ فقط تخمین است)
+    costEstimateHtml: function (rows) {
+      const pr = this.state.aiPricing;
+      if (!pr || !rows) return '';
+      const unit = pr.per_row_unit * rows;
+      const bal = this.state.aiBalance && this.state.aiBalance.balance;
+      const rate = bal && bal.exchange_rate;
+      const insufficient = bal && bal.remaining_unit != null && unit > bal.remaining_unit;
+      const amount = rate ? `${formatNumber(unit * rate)} تومان (≈ ${formatUsd(unit)})` : formatUsd(unit);
+      const tip = `برآورد بر پایه حدود ${formatNumber(pr.input_tokens)} توکن ورودی و ${formatNumber(pr.output_tokens)} توکن خروجی برای هر محصول؛ هزینه واقعی ممکن است فرق کند.`;
+      return `<span class="khazan-status-pill khazan-cost-estimate ${insufficient ? 'is-warn' : ''}" title="${escapeHtml(tip)}">💰 هزینه تخمینی این پردازش: ~${amount}${insufficient ? ' — اعتبار فعلی کافی نیست' : ''}</span>`;
     },
 
     viewHome: function () {
@@ -111,11 +156,14 @@
 
     // «وضعیت و سلامت محتوایی سایت»: KPI، حلقه‌های پوشش محتوا و نوار تفکیک دسته‌بندی‌ها (SVG/CSS خالص)
     viewDashboard: function () {
-      const st = this.state.siteStats;
+      const raw = this.state.siteStats;
+      // پاسخ ناقص سرور نباید داشبورد را بشکند
+      const valid = raw && raw.products && raw.articles && raw.categories && raw.coverage && raw.khazan;
+      const st = valid ? raw : null;
       const fa = toPersianDigits;
       const header = `<div class="khazan-health-head"><h3>وضعیت و سلامت محتوایی سایت</h3><button type="button" class="khazan-pill-btn khazan-stats-refresh" ${this.state.siteStatsLoading ? 'disabled' : ''}>${this.state.siteStatsLoading ? 'در حال به‌روزرسانی...' : '↻ به‌روزرسانی آمار'}</button></div>`;
       if (!st) {
-        if (this.state.siteStatsError) return `<section class="khazan-health" id="khazan-health">${header}<div class="khazan-health-error">⚠️ ${escapeHtml(this.state.siteStatsError)}</div></section>`;
+        if (this.state.siteStatsError || raw) return `<section class="khazan-health" id="khazan-health">${header}<div class="khazan-health-error">⚠️ ${escapeHtml(this.state.siteStatsError || 'پاسخ آمار سایت نامعتبر است.')}</div></section>`;
         return `<section class="khazan-health" id="khazan-health">${header}<div class="khazan-kpi-grid">${'<div class="khazan-kpi"><div class="wila-skeleton" style="height:12px;width:50%"></div><div class="wila-skeleton" style="height:28px;width:40%;margin-top:12px"></div></div>'.repeat(5)}</div><div class="khazan-health-grid">${'<div class="khazan-health-panel"><div class="wila-skeleton" style="height:120px"></div></div>'.repeat(3)}</div></section>`;
       }
       const CIRC = 2 * Math.PI * 52;
@@ -292,6 +340,7 @@
         const siteBar = (pos) => `<div class="khazan-site-bar khazan-site-bar-${pos}">
             <label class="khazan-site-bar-all"><input type="checkbox" class="khazan-checkbox wila-site-select-all" ${siteSelected === b.site.items.length ? 'checked' : ''} ${b.running ? 'disabled' : ''}> انتخاب همه</label>
             <span class="khazan-status-pill khazan-site-counter">${toPersianDigits(siteSelected)} از ${toPersianDigits(b.site.items.length)} محصول انتخاب شده</span>
+            ${this.costEstimateHtml(siteSelected)}
             ${this.btn3d(pos === 'top' ? 'wila-site-add' : 'wila-site-add-bottom', 'btn-warning wila-site-add', `افزودن ${toPersianDigits(siteSelected)} محصول به صف تولید انبوه`, b.running || !siteSelected ? 'disabled' : '')}
           </div>`;
         contentHtml = `<div class="wila-card">
@@ -381,7 +430,7 @@ ${siteExpanded ? `
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>
             </div>
-            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span></div>
+            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>
             <div class="khazan-subtabs">
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'found' ? 'active' : ''}" data-view="found">🟢 محصولات موجود در سایت (متصل‌شده) <em>${toPersianDigits(matchedCount)}</em></button>
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(b.rows.length - matchedCount)}</em></button>
@@ -640,6 +689,7 @@ ${siteExpanded ? `
               <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات AvalAI</h4>
               <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید API سرویس AvalAI: ${s.hasAvalAIKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
               <input type="text" id="wila-avalai-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasAvalAIKey ? s.avalAIMaskedKey : ''}" placeholder="کلید API AvalAI" />
+              ${this.aiBalanceBadge('full')}
               <p style="font-size:0.75rem; color:#64748b; margin-bottom:0;">مدل ثابت: <code>gpt-5.4-mini</code></p>
             </div>
 
@@ -679,6 +729,7 @@ ${siteExpanded ? `
         this.render();
       }));
 
+      this.root.querySelectorAll('.khazan-balance-refresh').forEach(btn => btn.addEventListener('click', () => this.getAiBalance(true)));
       this.root.querySelectorAll('.khazan-stats-refresh').forEach(btn => btn.addEventListener('click', () => this.fetchSiteStats(true)));
       this.root.querySelectorAll('.khazan-quick-empty').forEach(btn => btn.addEventListener('click', () => this.goBulkEmptyProducts()));
       const leafToggle = this.root.querySelector('#khazan-leaf-toggle');

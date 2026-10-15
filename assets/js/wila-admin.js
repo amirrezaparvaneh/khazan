@@ -55,6 +55,11 @@
       generatedExternalLinks: [],
       contentHistory: [],
       historyLoading: true,
+      aiBalance: null,
+      aiBalanceLoading: false,
+      aiBalanceError: '',
+      aiBalanceErrorCode: '',
+      aiPricing: null,
       siteStats: null,
       siteStatsLoading: false,
       siteStatsError: '',
@@ -80,6 +85,7 @@
       this.fetchSettings();
       this.fetchContentHistory();
       this.fetchSiteStats();
+      this.getAiBalance();
       this.render();
     },
 

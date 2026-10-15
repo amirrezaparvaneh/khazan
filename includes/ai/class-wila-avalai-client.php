@@ -32,6 +32,10 @@ class WILA_AvalAI_Client {
         return $this->service->test_connection($override_key);
     }
 
+    public function get_balance($refresh = false) {
+        return $this->service->get_balance($refresh);
+    }
+
     public function suggest_seo_repairs($segments, $instructions) {
         return $this->service->suggest_seo_repairs($segments, $instructions);
     }

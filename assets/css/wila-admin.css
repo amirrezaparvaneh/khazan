@@ -1436,3 +1436,66 @@ img.khazan-watermark {
   #wila-app-root .khazan-ring-fg { animation: none; }
   #wila-app-root .khazan-split-has, #wila-app-root .khazan-split-empty, #wila-app-root .khazan-kpi { transition: none; }
 }
+
+/* AI credit badge + cost estimate */
+#wila-app-root .khazan-balance {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-inline-start: auto;
+  padding: 5px 6px 5px 12px;
+  font-size: 0.8rem;
+  color: #14532d;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 9999px;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+#wila-app-root .khazan-balance-main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+#wila-app-root .khazan-balance-label { font-weight: 600; }
+#wila-app-root .khazan-balance-value { font-weight: 800; letter-spacing: 0.01em; }
+#wila-app-root .khazan-balance-usd { color: #4d7c0f; font-size: 0.74rem; }
+#wila-app-root .khazan-balance-warn { font-size: 0.74rem; font-weight: 700; }
+#wila-app-root .khazan-balance.is-low { color: #854d0e; background: #fefce8; border-color: #fde047; }
+#wila-app-root .khazan-balance.is-critical,
+#wila-app-root .khazan-balance.is-empty { color: #991b1b; background: #fef2f2; border-color: #fca5a5; }
+#wila-app-root .khazan-balance.is-error { color: #78350f; background: #fffbeb; border-color: #fcd34d; }
+#wila-app-root .khazan-balance.is-loading { color: #57534e; background: #fafaf9; border-color: #e7e5e4; }
+#wila-app-root .khazan-balance-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+#wila-app-root .khazan-balance-refresh:hover:not(:disabled) { opacity: 1; transform: rotate(60deg); }
+#wila-app-root .khazan-balance-refresh:disabled { cursor: progress; }
+#wila-app-root .khazan-spin.spinning { animation: khazanSpin 0.9s linear infinite; }
+@keyframes khazanSpin { to { transform: rotate(360deg); } }
+#wila-app-root .khazan-balance-full { display: flex; width: 100%; margin: 8px 0; padding: 12px 14px; border-radius: 12px; align-items: flex-start; justify-content: space-between; }
+#wila-app-root .khazan-balance-full .khazan-balance-main { flex: 1; }
+#wila-app-root .khazan-balance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: 100%; margin-top: 8px; }
+#wila-app-root .khazan-balance-cell { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; background: rgba(255, 255, 255, 0.65); border-radius: 10px; }
+#wila-app-root .khazan-balance-cell small { font-size: 0.7rem; opacity: 0.75; }
+#wila-app-root .khazan-balance-cell strong { font-size: 0.85rem; }
+#wila-app-root .khazan-balance-cell span { font-size: 0.7rem; opacity: 0.75; }
+#wila-app-root .khazan-topbar { flex-wrap: wrap; }
+#wila-app-root .khazan-cost-estimate { color: #854d0e; background: #fefce8; border-color: #fde68a; }
+#wila-app-root .khazan-cost-estimate.is-warn { color: #991b1b; background: #fef2f2; border-color: #fca5a5; }
+@media (max-width: 782px) {
+  #wila-app-root .khazan-balance-grid { grid-template-columns: 1fr; }
+  #wila-app-root .khazan-balance-compact { order: 3; width: 100%; margin-inline-start: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #wila-app-root .khazan-spin.spinning { animation: none; }
+  #wila-app-root .khazan-balance-refresh { transition: none; }
+}

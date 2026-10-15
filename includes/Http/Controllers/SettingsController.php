@@ -6,6 +6,7 @@
 namespace Khazan\Http\Controllers;
 
 use Khazan\Core\Settings;
+use Khazan\Http\Requests\AiBalanceRequest;
 use Khazan\Http\Requests\AvailableTaxonomiesRequest;
 use Khazan\Http\Requests\ConnectionTestRequest;
 use Khazan\Http\Requests\SettingsUpdateRequest;
@@ -33,6 +34,7 @@ final class SettingsController extends BaseController {
             'homepage_keywords' => $homepage_keywords,
             'product_post_type' => Settings::product_post_type(),
             'product_category_taxonomy' => Settings::category_taxonomy(),
+            'ai_pricing' => \Khazan\Services\Ai\CostEstimator::per_row($avalai_client->get_active_model()),
         ));
     }
 
@@ -76,5 +78,17 @@ final class SettingsController extends BaseController {
             return new \WP_Error($result->get_error_code(), $result->get_error_message(), array('status' => 400));
         }
         return rest_ensure_response($result);
+    }
+
+    /**
+     * Live API credit for the dashboard badge (total / used / remaining in toman and dollars).
+     */
+    public function get_ai_balance($request) {
+        $result = (new \Khazan\Services\Ai\AiService())->get_balance((new AiBalanceRequest($request))->refresh());
+        if (is_wp_error($result)) {
+            $data = $result->get_error_data();
+            return new \WP_Error($result->get_error_code(), $result->get_error_message(), array('status' => is_array($data) && isset($data['status']) ? (int) $data['status'] : 502));
+        }
+        return rest_ensure_response(array_merge(array('success' => true), $result));
     }
 }

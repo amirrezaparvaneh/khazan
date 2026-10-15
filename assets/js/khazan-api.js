@@ -33,6 +33,7 @@
           productPostType: data.product_post_type || 'product',
           productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
         };
+        this.state.aiPricing = data.ai_pricing || null;
         const pts = await this.apiFetch('/post-types');
         this.state.postTypes = pts.items || [];
         if (this.state.aiSettings.productPostType && this.state.postTypes.length) {
@@ -97,6 +98,26 @@
         this.render();
         app.toast('از آرشیو حذف شد.');
       } catch (e) { app.toast('خطا: ' + e.message); }
+    },
+
+    // اعتبار زنده حساب API (کش ۶۰ ثانیه‌ای سمت سرور؛ force=true کش را دور می‌زند). خطا هرگز صفحه را نمی‌شکند
+    getAiBalance: async function (force) {
+      const st = this.state;
+      st.aiBalanceLoading = true;
+      if (force) this.render();
+      try {
+        const r = await this.apiFetch('/settings/ai-balance' + (force ? '?refresh=1' : ''));
+        if (!r || !r.success || !r.balance) { const err = new Error((r && r.message) || 'استعلام اعتبار ناموفق بود.'); err.code = (r && r.code) || 'invalid_response'; throw err; }
+        st.aiBalance = r; st.aiBalanceError = ''; st.aiBalanceErrorCode = '';
+        if (r.estimate) st.aiPricing = r.estimate;
+      } catch (e) {
+        st.aiBalance = null;
+        const network = e && e.name === 'TypeError', badJson = e && e.name === 'SyntaxError';
+        st.aiBalanceErrorCode = (e && e.code) || (network ? 'connection_failed' : 'request_failed');
+        st.aiBalanceError = network ? 'ارتباط با سرور برقرار نشد.' : (badJson ? 'پاسخ نامعتبر از سرور.' : ((e && e.message) || 'استعلام اعتبار ناموفق بود.'));
+      }
+      st.aiBalanceLoading = false;
+      this.render();
     },
 
     // آمار تحلیلی داشبورد (کش ۵ دقیقه‌ای سمت سرور؛ force=true کش را دور می‌زند)

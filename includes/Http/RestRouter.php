@@ -47,6 +47,7 @@ final class RestRouter {
             array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_settings'), 'permission_callback' => array($this, 'check_permission')),
             array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'save_settings'), 'permission_callback' => array($this, 'check_permission'))
         ));
+        register_rest_route($this->namespace, '/settings/ai-balance', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_ai_balance'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/post-types', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_available_post_types'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/taxonomies/(?P<post_type>[^/]+)', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_available_taxonomies'), 'permission_callback' => array($this, 'check_permission')));
 

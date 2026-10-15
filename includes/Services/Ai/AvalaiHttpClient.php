@@ -133,6 +133,44 @@ final class AvalaiHttpClient {
         return new \WP_Error('api_error', $err_msg, array('status' => $code));
     }
 
+    /**
+     * Account credit (GET /user/v1/credit): raw decoded response, or a WP_Error mapped to
+     * missing_api_key / invalid_api_key / api_busy / connection_failed / invalid_response / api_error.
+     *
+     * @return array|\WP_Error
+     */
+    public function balance($key) {
+        $key = trim((string) $key);
+        if ($key === '') {
+            return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.', array('status' => 400));
+        }
+
+        $response = wp_remote_get(Settings::AI_BALANCE_ENDPOINT, array(
+            'headers' => array('Authorization' => 'Bearer ' . $key, 'Accept' => 'application/json'),
+            'timeout' => Settings::TIMEOUT_DEFAULT,
+        ));
+        if (is_wp_error($response)) {
+            return new \WP_Error('connection_failed', 'خطا در ارتباط با سرویس: ' . $response->get_error_message(), array('status' => 502));
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($code === 401 || $code === 403) {
+            return new \WP_Error('invalid_api_key', 'کلید API نامعتبر است یا اجازه دسترسی به اعتبار را ندارد.', array('status' => 400));
+        }
+        if ($code === 429 || $code === 503) {
+            return new \WP_Error('api_busy', 'سرویس هوش مصنوعی اکنون شلوغ است؛ کمی بعد دوباره تلاش کنید.', array('status' => 503));
+        }
+        if ($code !== 200) {
+            return new \WP_Error('api_error', 'استعلام اعتبار ناموفق بود (کد ' . $code . ').', array('status' => 502));
+        }
+        if (!is_array($data)) {
+            return new \WP_Error('invalid_response', 'پاسخ استعلام اعتبار معتبر نیست.', array('status' => 502));
+        }
+        return $data;
+    }
+
     private function post($key, array $body, $timeout) {
         return wp_remote_post(Settings::AI_ENDPOINT, array(
             'headers' => array(

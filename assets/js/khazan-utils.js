@@ -36,7 +36,22 @@
     }[char]));
   }
 
+  // عدد با جداکننده هزارگان فارسی (۱۲۳٬۴۵۰)
+  function formatNumber(value) {
+    const n = Math.round(Number(value) || 0);
+    return toPersianDigits(n.toLocaleString('en-US')).replace(/,/g, '٬');
+  }
+
+  // مبلغ دلاری با اعشار فارسی: ≥ ۱ دلار ۲ رقم، زیر ۱ دلار ۳ رقم، زیر یک سنت ۴ رقم (≈ $۴٫۲۰ / $۰٫۳۱۵ / $۰٫۰۰۳۱)
+  function formatUsd(value) {
+    const n = Number(value) || 0;
+    const digits = n === 0 || n >= 1 ? 2 : (n < 0.01 ? 4 : 3);
+    return '$' + toPersianDigits(n.toFixed(digits)).replace('.', '٫');
+  }
+
   window.KhazanUtils = {
+    formatNumber: formatNumber,
+    formatUsd: formatUsd,
     toPersianDigits: toPersianDigits,
     formatJalali: formatJalali,
     shortJalali: shortJalali,

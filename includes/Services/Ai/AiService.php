@@ -51,6 +51,42 @@ final class AiService {
         }
     }
 
+    /**
+     * Live account credit for the saved API key (cached for 60 s; $refresh bypasses the cache).
+     * Errors are never cached.
+     *
+     * @return array|\WP_Error {balance, status, thresholds, estimate, cached, checked_at}
+     */
+    public function get_balance($refresh = false) {
+        $key = AvalaiHttpClient::resolve_key(null);
+        $hash = md5($key);
+        if (!$refresh) {
+            $cached = get_transient(Settings::TRANSIENT_AI_BALANCE);
+            if (is_array($cached) && isset($cached['hash'], $cached['data']) && $cached['hash'] === $hash) {
+                return array_merge($cached['data'], array('cached' => true));
+            }
+        }
+
+        $raw = $this->http->balance($key);
+        if (is_wp_error($raw)) {
+            return $raw;
+        }
+        $balance = BalanceReport::from_api($raw);
+        if (is_wp_error($balance)) {
+            return $balance;
+        }
+
+        $data = array(
+            'balance'    => $balance,
+            'status'     => BalanceReport::status($balance['remaining_unit']),
+            'thresholds' => array('warn_unit' => Settings::AI_BALANCE_WARN_UNIT, 'critical_unit' => Settings::AI_BALANCE_CRITICAL_UNIT),
+            'estimate'   => CostEstimator::per_row($this->model),
+            'checked_at' => current_time('mysql'),
+        );
+        set_transient(Settings::TRANSIENT_AI_BALANCE, array('hash' => $hash, 'data' => $data), Settings::AI_BALANCE_CACHE_TTL);
+        return array_merge($data, array('cached' => false));
+    }
+
     public function suggest_seo_repairs($segments, $instructions) {
         $parsed = AiResponseDecoder::decode_json($this->send($this->prompts->seo_repairs($segments, $instructions)));
         if (is_wp_error($parsed)) return $parsed;

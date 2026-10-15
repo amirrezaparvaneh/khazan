@@ -58,6 +58,26 @@ final class Settings {
     const AI_MODEL    = 'gpt-5.4-mini';
     const AI_ENDPOINT = 'https://api.avalai.ir/v1/chat/completions';
 
+    /** Account credit endpoint (AvalAI user API: GET /credit -> limit, remaining_irt, remaining_unit, total_unit, exchange_rate, ...). */
+    const AI_BALANCE_ENDPOINT = 'https://api.avalai.ir/user/v1/credit';
+
+    // ---- AI credit: cache, warning thresholds (UNIT = USD) and cost estimation ----
+    const TRANSIENT_AI_BALANCE  = 'wila_ai_balance';
+    const AI_BALANCE_CACHE_TTL  = 60;     // seconds; the refresh button bypasses it
+    const AI_BALANCE_WARN_UNIT  = 1.0;    // below this remaining credit: yellow warning
+    const AI_BALANCE_CRITICAL_UNIT = 0.2; // below this (or empty): red
+    const FILTER_AI_PRICING     = 'wila_ai_pricing';
+
+    /**
+     * Approximate list prices in USD per 1,000 tokens (input / output) by model.
+     * Provider prices change; override with the `wila_ai_pricing` filter. Figures are estimates only.
+     */
+    const AI_DEFAULT_PRICING = array('input_per_1k' => 0.00075, 'output_per_1k' => 0.0045);
+
+    /** Typical tokens of one bulk product row (long prompt rules in, ~1000-word Persian HTML out). */
+    const AI_EST_INPUT_TOKENS_PER_ROW  = 3000;
+    const AI_EST_OUTPUT_TOKENS_PER_ROW = 3000;
+
     // ---- network timeouts (seconds) ----
     const TIMEOUT_DEFAULT = 20;
     const TIMEOUT_LONG    = 35;
@@ -71,6 +91,20 @@ final class Settings {
     const KIND_ARTICLE  = 'article';
     const KIND_PRODUCT  = 'product';
     const KIND_CATEGORY = 'product_cat';
+
+    /**
+     * Per-model pricing (USD / 1K tokens), filterable.
+     *
+     * @return array{input_per_1k:float,output_per_1k:float}
+     */
+    public static function ai_pricing($model = self::AI_MODEL) {
+        $table = apply_filters(self::FILTER_AI_PRICING, array(self::AI_MODEL => self::AI_DEFAULT_PRICING));
+        $row = (is_array($table) && isset($table[$model]) && is_array($table[$model])) ? $table[$model] : self::AI_DEFAULT_PRICING;
+        return array(
+            'input_per_1k'  => isset($row['input_per_1k']) ? (float) $row['input_per_1k'] : self::AI_DEFAULT_PRICING['input_per_1k'],
+            'output_per_1k' => isset($row['output_per_1k']) ? (float) $row['output_per_1k'] : self::AI_DEFAULT_PRICING['output_per_1k'],
+        );
+    }
 
     public static function avalai_api_key() {
         return trim(get_option(self::OPT_AVALAI_API_KEY, ''));
