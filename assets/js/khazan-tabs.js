@@ -136,7 +136,7 @@
     // برآورد تقریبی هزینه تولید برای تعداد ردیف انتخاب‌شده (نرخ‌های Core\Settings؛ فقط تخمین است)
     costEstimateHtml: function (rows) {
       const pr = this.state.aiPricing;
-      if (!pr || !rows) return '';
+      if (!pr || rows == null) return '';
       const unit = pr.per_row_unit * rows;
       const bal = this.state.aiBalance && this.state.aiBalance.balance;
       const rate = bal && bal.exchange_rate;
@@ -353,7 +353,7 @@
         const siteExpanded = b.source === 'site' && !b.site.collapsed;
         // کنترل‌های صف (شروع/مکث/توقف) فقط بالای جدول صف و کنار نوار پیشرفت قرار دارند
         const queueControls = () => `<div class="khazan-queue-controls khazan-queue-controls-top">
-            ${this.btn3d('wila-bulk-start', 'btn-primary wila-bulk-start', b.running ? 'در حال پردازش...' : 'شروع تولید محتوا', b.running ? 'disabled' : '')}
+            ${this.btn3d('wila-bulk-start', 'btn-primary wila-bulk-start', b.running ? 'در حال پردازش...' : 'شروع تولید محتوا', b.running || !selectedCount ? 'disabled' : '')}
             ${this.btn3d('wila-bulk-pause', 'btn-warning wila-bulk-pause', b.paused ? 'ادامه' : 'مکث موقت', !b.running || b.stopRequested ? 'disabled' : '')}
             ${this.btn3d('wila-bulk-stop', 'btn-danger wila-bulk-stop', b.stopRequested && b.running ? 'در حال توقف...' : 'توقف کامل', !b.running || b.stopRequested ? 'disabled' : '')}
           </div>`;

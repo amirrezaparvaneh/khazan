@@ -274,9 +274,10 @@
           focus_keyword: seo.focuskw || '', related_keywords: seo.synonyms || '', seo_title: '', meta_description: '', description: '',
           match: { matched: true, via: 'site', product_id: p.id, title: p.title, url: p.url, status: p.status, generated: p.generated || null, history: null }
         });
-        if (!p.generated) b.selected[idx] = true;
         added++;
       });
+      // صف تازه همیشه بدون انتخاب شروع می‌شود؛ کاربر با «انتخاب همه» یا تیک تک‌تک، موارد تولید را مشخص می‌کند
+      b.rows.forEach((r, i) => { if (r.source === 'site') delete b.selected[i]; });
       b.status = 'pending';
       b.view = 'found';
       this.toast(added ? `${toPersianDigits(added)} محصول به صف اضافه شد.` : 'همه این محصولات قبلاً در صف هستند.', added ? 'success' : 'error');
