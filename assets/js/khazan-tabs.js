@@ -351,11 +351,11 @@
         const locked = b.running ? 'disabled' : '';
         const siteSelected = b.site.items.filter(p => b.site.selected[p.id]).length;
         const siteExpanded = b.source === 'site' && !b.site.collapsed;
-        // کنترل‌های صف (شروع/مکث/توقف) بالا و پایین جدول؛ هر دو از یک state رندر می‌شوند و همیشه هم‌گام‌اند
-        const queueControls = (pos) => `<div class="khazan-queue-controls khazan-queue-controls-${pos}">
-            ${this.btn3d(pos === 'top' ? 'wila-bulk-start' : 'wila-bulk-start-bottom', 'btn-primary wila-bulk-start', b.running ? 'در حال پردازش...' : 'شروع تولید محتوا', b.running ? 'disabled' : '')}
-            ${this.btn3d(pos === 'top' ? 'wila-bulk-pause' : 'wila-bulk-pause-bottom', 'btn-warning wila-bulk-pause', b.paused ? 'ادامه' : 'مکث موقت', !b.running || b.stopRequested ? 'disabled' : '')}
-            ${this.btn3d(pos === 'top' ? 'wila-bulk-stop' : 'wila-bulk-stop-bottom', 'btn-danger wila-bulk-stop', b.stopRequested && b.running ? 'در حال توقف...' : 'توقف کامل', !b.running || b.stopRequested ? 'disabled' : '')}
+        // کنترل‌های صف (شروع/مکث/توقف) فقط بالای جدول صف و کنار نوار پیشرفت قرار دارند
+        const queueControls = () => `<div class="khazan-queue-controls khazan-queue-controls-top">
+            ${this.btn3d('wila-bulk-start', 'btn-primary wila-bulk-start', b.running ? 'در حال پردازش...' : 'شروع تولید محتوا', b.running ? 'disabled' : '')}
+            ${this.btn3d('wila-bulk-pause', 'btn-warning wila-bulk-pause', b.paused ? 'ادامه' : 'مکث موقت', !b.running || b.stopRequested ? 'disabled' : '')}
+            ${this.btn3d('wila-bulk-stop', 'btn-danger wila-bulk-stop', b.stopRequested && b.running ? 'در حال توقف...' : 'توقف کامل', !b.running || b.stopRequested ? 'disabled' : '')}
           </div>`;
         // نوار عملیات بالا و پایین جدول پیش‌نمایش؛ هر دو همیشه هم‌گام‌اند (از یک state رندر می‌شوند)
         const siteBar = (pos) => `<div class="khazan-site-bar khazan-site-bar-${pos}">
@@ -454,7 +454,7 @@ ${siteExpanded ? `
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'found' ? 'active' : ''}" data-view="found">🟢 محصولات موجود در سایت (متصل‌شده) <em>${toPersianDigits(matchedCount)}</em></button>
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(srcIdx.length - matchedCount)}</em></button>
             </div>`}
-            ${queueControls('top')}
+            ${queueControls()}
             <div id="wila-bulk-progress" class="khazan-queue-progress">${this.bulkProgressHtml()}</div>
             <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
               <th><input type="checkbox" class="khazan-checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>وضعیت</th>${viewFound ? '<th>محصول سایت</th>' : ''}<th>وضعیت پردازش</th><th>عملیات</th>
@@ -469,7 +469,6 @@ ${siteExpanded ? `
               else badge = b.createMissing ? '<span class="khazan-badge khazan-badge-warn" title="پس از شروع، محصول پیش‌نویس ساخته می‌شود">➕ ساخت پیش‌نویس</span>' : '<span class="khazan-badge khazan-badge-miss">❌ پیدا نشد</span>';
               return `<tr><td><input type="checkbox" class="khazan-checkbox wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${badge}</td>${viewFound ? `<td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td>` : ''}<td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-bulk-single" data-index="${i}" ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}>${m && (m.generated || r.run === 'done') ? '⚙️ تولید مجدد' : '▶ تولید این ردیف'}</button></td></tr>`;
             }).join('') : `<tr><td colspan="7" style="text-align:center;padding:20px;color:#78716c">${viewFound ? 'محصول متصل‌شده‌ای برای نمایش وجود ندارد.' : 'همه ردیف‌ها به محصولات سایت متصل شده‌اند.'}</td></tr>`}</tbody></table></div>
-            ${queueControls('bottom')}
             <div id="wila-bulk-log" style="margin-top:10px;max-height:220px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.8rem;line-height:1.9">${this.bulkLogHtml()}</div>
           ` : ''}
         </div>`;

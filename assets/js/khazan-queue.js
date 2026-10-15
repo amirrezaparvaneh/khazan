@@ -356,9 +356,9 @@
         });
       }
       // نوار بالا و پایین هر کدام دکمه‌های خودشان را دارند؛ هر المان دقیقاً یک شنونده می‌گیرد (DOM در هر رندر نو می‌شود)
-      this.root.querySelectorAll('.wila-bulk-start').forEach(btn => btn.addEventListener('click', () => this.startBulk()));
-      this.root.querySelectorAll('.wila-bulk-pause').forEach(btn => btn.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); }));
-      this.root.querySelectorAll('.wila-bulk-stop').forEach(btn => btn.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.render(); }));
+      [this.root.querySelector('.wila-bulk-start')].filter(Boolean).forEach(btn => btn.addEventListener('click', () => this.startBulk()));
+      [this.root.querySelector('.wila-bulk-pause')].filter(Boolean).forEach(btn => btn.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); }));
+      [this.root.querySelector('.wila-bulk-stop')].filter(Boolean).forEach(btn => btn.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.render(); }));
     },
   };
 
