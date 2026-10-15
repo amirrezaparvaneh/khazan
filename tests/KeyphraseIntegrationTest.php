@@ -9,6 +9,8 @@ define('ABSPATH', __DIR__ . '/');
 define('WILA_PLUGIN_DIR', dirname(__DIR__) . '/');
 function apply_filters($tag, $value) { return $value; }
 function esc_html($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
+function get_option($k, $d = '') { return $d; }
+function get_bloginfo($k) { return 'Site'; }
 function wp_json_encode($v, $f = 0) { return json_encode($v, $f); }
 function esc_url($s) { return (string) $s; }
 function untrailingslashit($s) { return rtrim((string) $s, '/'); }

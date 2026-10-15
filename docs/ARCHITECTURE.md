@@ -51,7 +51,7 @@ includes/
     Ai/        AiService (هماهنگ‌کننده)، AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser,
                BalanceReport (نرمال‌سازی و وضعیت اعتبار)، CostEstimator (برآورد هزینه)
     Csv/       TextNormalizer, ProductMatcher, BulkRowProcessor
-    Seo/       SeoMetaService, KeyphraseExtractor
+    Seo/       SeoMetaService, KeyphraseExtractor, SeoTitleGuard
     Content/   HtmlSanitizer, ContentGuard (هماهنگ‌کننده)، ContentRules
     Content/Guard/  WrapperGuard, LinkGuard, KeywordDensityGuard, HeadingGuard
     Scan/      ScannerService
@@ -61,7 +61,7 @@ includes/
                      AvailableTaxonomiesRequest, ScanItemRequest, BulkMatchRequest, BulkProcessRequest, ItemsReportRequest,
                      SiteProductsRequest, AiBalanceRequest
   Legacy کلاس‌های WILA_* تا پایان مهاجرت (بارگذاری از Plugin::$legacy_files)
-tests/         تست‌های واحد مستقل از وردپرس (SmartLinkDistributorTest، KeyphraseExtractorTest، KeyphraseIntegrationTest)
+tests/         تست‌های واحد مستقل از وردپرس (SmartLinkDistributorTest، KeyphraseExtractorTest، KeyphraseIntegrationTest، SeoTitleGuardTest)
 templates/     قالب‌های PHP (admin/app-root, font-preconnect, ...)
 assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-forms.js (رویدادها و کمک‌های فرم)، khazan-queue.js (صف)،
                khazan-tabs.js (ناوبری و نماها)، khazan-leaves.js، wila-admin.js (Entry Point ~۱۶۰ خط: state، init، render، mixin ماژول‌ها)
@@ -112,4 +112,11 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
    - **پرامپت:** `ContentRules::writing_rules` قانون ۸ (کانونی دقیقاً ۲ تا ۴ کلمه و نه کل نام محصول؛ همه لینک‌های داخلی ورودی و خروجی با انکر حداکثر ۴ کلمه‌ای) و جمله صریح مشابه در `PromptBuilder::bulk_product`.
    - **رابط:** نام تب «تولید انبوه محتوا» (بدون CSV) در سایدبار، کارت خانه و عنوان صفحه؛ منبع پیش‌فرض «محصولات سایت» (`bulk.source = 'site'`) و سوییچ منبع به‌صورت زیرتب: اول «محصولات سایت»، دوم «بارگذاری فایل CSV». `enterBulkTab()` هنگام ورود به تب (کلیک نوار کناری یا کارت خانه) منبع را روی محصولات سایت می‌گذارد (مگر ردیف CSV بارگذاری شده باشد) و فهرست محصولات را می‌خواند.
    - **تست:** `tests/KeyphraseExtractorTest.php` (مثال مرجع، ورودی‌های ۵ تا ۸ کلمه‌ای ⇒ حداکثر ۴ کلمه، استفاده از عبارت ذخیره‌شده، تست ویژگی روی ۶۰۰ عنوان تصادفی، فیلتر) و `tests/KeyphraseIntegrationTest.php` (`cap_anchor_length`، سقف انکرها، `SeoMetaService`، قوانین پرامپت). اجرا: `php tests/KeyphraseExtractorTest.php`.
-14. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)، از جمله تأیید پاسخ واقعی `/user/v1/credit` و نرخ واقعی مدل در AvalAI و رفتار کشوی منو روی دستگاه‌های واقعی؛ مدیریت خطای شبکه یکپارچه در `apiFetch`؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights؛ صفحه‌بندی واقعی لیست محصولات سایت (فعلاً سقف ۵۰۰ و نشانگر `has_more`).
+14. **انجام شد (فرمول سه‌بخشی عنوان سئوی محصول):**
+   - **قالب:** `[نوع کالا + جنس + جنسیت + مدل] | [مزیت/اصالت + ایموجی] | [نام برند]` با ۵۰ تا ۶۰ کاراکتر (`Settings::SEO_TITLE_MIN_CHARS/MAX_CHARS`). نمونه: «نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم». عنوان مقاله و دسته‌بندی همان قواعد قبلی را دارند.
+   - **برند:** `Settings::brand_name()`: گزینه `wila_brand_name`، سپس فیلتر `wila_brand_name`، سپس `get_bloginfo('name')` (رابط تنظیمات ندارد؛ فقط گزینه و فیلتر).
+   - **ایموجی:** `Settings::SEO_TITLE_EMOJIS` (به ترتیب اولویت): 👝 کیف پول/کمربند، 🎒 کوله، 👜 کیف، 👢 بوت/نیم‌بوت، 👠 پاشنه‌دار/مجلسی/صندل، 👟 کتانی/اسپرت، 👞 کفش مردانه/رسمی و پیش‌فرض.
+   - **پرامپت:** `ContentRules::product_seo_title_rules()` (از `seo_title_rules(product)` فراخوانی می‌شود و به هر سه پرامپت محصول می‌رسد) فرمول، نمونه، فهرست ایموجی‌های مجاز، نام برند و سقف ۶۰ کاراکتر را دیکته می‌کند.
+   - **گارد:** `Services\Seo\SeoTitleGuard::fit()` (خالص) و `SeoMetaService::guard_title()`: برند در انتها اگر نبود اضافه می‌شود و تکراری نمی‌شود؛ دقیقاً یک ایموجی (ایموجی‌های اضافه حذف، نبود آن ⇒ ایموجی دسته)؛ برای رعایت ۶۰ کاراکتر ابتدا کلمات انتهایی بخش مزیت، سپس کلمات انتهایی بخش اول (حداقل دو کلمه نخست) حذف می‌شوند و برند هرگز. اعمال: `ContentParser::normalize_seo_title` برای محصول (پیش‌نمایش) و `ContentTargetRepository::write_post_seo` برای نوع محصول (اعمال، پیش‌نویس بازبینی و تولید انبوه، حتی عنوان شیت)، پس `rank_math_title` و `_yoast_wpseo_title` همیشه همان عنوان نهایی را می‌گیرند. محدودیت: برند بلندتر از حدود ۳۰ کاراکتر نمی‌تواند در ۶۰ جا شود و عنوان از سقف عبور می‌کند.
+   - **تست:** `tests/SeoTitleGuardTest.php` (نمونه مرجع، الصاق برند، ایموجی هر دسته، طول ≤۶۰ روی ۴۰۰ عنوان تصادفی، ذخیره در Rank Math/Yoast، متن پرامپت).
+15. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)، از جمله تأیید پاسخ واقعی `/user/v1/credit` و نرخ واقعی مدل در AvalAI و رفتار کشوی منو روی دستگاه‌های واقعی؛ مدیریت خطای شبکه یکپارچه در `apiFetch`؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights؛ صفحه‌بندی واقعی لیست محصولات سایت (فعلاً سقف ۵۰۰ و نشانگر `has_more`).

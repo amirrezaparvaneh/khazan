@@ -68,6 +68,13 @@ final class SeoMetaService {
     }
 
     /**
+     * عنوان سئوی محصول را به قالب «کلیدواژه + مدل | مزیت + ایموجی | برند» و حداکثر ۶۰ کاراکتر می‌رساند
+     */
+    public static function guard_title($title, $brand = null, $hint = '') {
+        return SeoTitleGuard::fit($title, $brand === null ? Settings::brand_name() : $brand, $hint);
+    }
+
+    /**
      * متای پست: Yoast کلیدواژه اصلی و مترادف‌ها را جدا نگه می‌دارد، RankMath همه را در یک فهرست ویرگول‌دار می‌خواهد
      */
     public static function post_meta_map($seo) {

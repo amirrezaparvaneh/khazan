@@ -18,6 +18,7 @@ final class Settings {
     const OPT_AVALAI_API_KEY             = 'wila_avalai_api_key';
     const OPT_AI_PROVIDER                = 'wila_ai_provider';
     const OPT_HOMEPAGE_KEYWORDS          = 'wila_homepage_keywords';
+    const OPT_BRAND_NAME                 = 'wila_brand_name';
     const OPT_PRODUCT_POST_TYPE          = 'wila_product_post_type';
     const OPT_PRODUCT_CATEGORY_TAXONOMY  = 'wila_product_category_taxonomy';
     const OPT_DB_VERSION                 = 'wila_db_version';
@@ -84,6 +85,23 @@ final class Settings {
     const KEYPHRASE_MODEL_MARKER = 'مدل';
     const FILTER_KEYPHRASE_WORDS = 'wila_keyphrase_words';
 
+    // عنوان سئوی محصول: «کلیدواژه + مدل | مزیت + ایموجی | نام برند» با ۵۰ تا ۶۰ کاراکتر
+    const SEO_TITLE_MIN_CHARS = 50;
+    const SEO_TITLE_MAX_CHARS = 60;
+    const SEO_TITLE_SEPARATOR = ' | ';
+    const FILTER_BRAND_NAME   = 'wila_brand_name';
+    // ایموجی مجاز به‌ازای نوع کالا؛ ترتیب مهم است (اولین تطابق برنده است)
+    const SEO_TITLE_EMOJIS = array(
+        array('👝', array('کیف پول', 'کمربند', 'جاکارتی')),
+        array('🎒', array('کوله')),
+        array('👜', array('کیف')),
+        array('👢', array('نیم‌بوت', 'نیمبوت', 'بوت', 'چکمه')),
+        array('👠', array('پاشنه', 'مجلسی', 'صندل', 'کفش زنانه')),
+        array('👟', array('کتانی', 'اسپرت', 'روزمره', 'کفش ورزشی')),
+        array('👞', array('کفش مردانه', 'رسمی', 'کفش')),
+    );
+    const SEO_TITLE_DEFAULT_EMOJI = '👞';
+
     /** Generic / promotional words that never belong in a keyphrase. */
     const KEYPHRASE_FILLERS = array('طبیعی', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
 
@@ -147,6 +165,15 @@ final class Settings {
 
     public static function avalai_api_key() {
         return trim(get_option(self::OPT_AVALAI_API_KEY, ''));
+    }
+
+    /**
+     * نام برند/فروشگاه برای انتهای عنوان سئو: تنظیم افزونه، سپس فیلتر wila_brand_name، سپس نام سایت وردپرس
+     */
+    public static function brand_name() {
+        $brand = trim((string) get_option(self::OPT_BRAND_NAME, ''));
+        if ($brand === '') $brand = trim((string) apply_filters(self::FILTER_BRAND_NAME, get_bloginfo('name')));
+        return trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($brand)));
     }
 
     public static function homepage_keywords() {

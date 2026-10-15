@@ -264,6 +264,9 @@ final class ContentTargetRepository {
      * ذخیره متای سئو محصول در یوست و رنک‌مث (فقط مقادیر غیرخالی)
      */
     public function write_post_seo($id, $seo) {
+        if (get_post_type($id) === Settings::product_post_type() && !empty($seo['title'])) {
+            $seo['title'] = SeoMetaService::guard_title($seo['title'], null, get_the_title($id) . ' ' . $this->primary_category_name($id));
+        }
         $this->seo->write_post_seo($id, $seo);
     }
 
