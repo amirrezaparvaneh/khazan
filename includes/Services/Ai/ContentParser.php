@@ -98,6 +98,10 @@ final class ContentParser {
         $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, self::kind($params));
         $focus = isset($params['focus_keyword']) ? (string) $params['focus_keyword'] : '';
         $content = \Khazan\Services\Content\ContentGuard::enforce_link_anchors($content, self::locked_anchor_map(isset($params['internal_links']) ? $params['internal_links'] : array()));
+        if (self::kind($params) === Settings::KIND_PRODUCT) {
+            // هر URL فقط یک‌بار و حداکثر ۲ لینک محصول و ۱ لینک خارجی؛ لینک‌های برنامه‌ریزی‌شده‌ای که جا افتاده‌اند پایین‌تر اضافه می‌شوند
+            $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
+        }
         $content = \Khazan\Services\Content\ContentGuard::ensure_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
         $content = \Khazan\Services\Content\ContentGuard::ensure_external_link($content, $focus);
         // مترادف‌هایی که در Yoast ذخیره می‌شوند (ستون شیت در تولید انبوه) ملاک هدینگ‌ها هستند.
@@ -317,6 +321,7 @@ final class ContentParser {
 
         $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, $kind);
         $content = \Khazan\Services\Content\ContentGuard::enforce_link_anchors($content);
+        if ($kind === Settings::KIND_PRODUCT) $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content);
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $seo['focuskw'], $seo['synonyms']);
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);

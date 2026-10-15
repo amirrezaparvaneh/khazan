@@ -41,6 +41,10 @@ final class ContentGuard {
         return LinkGuard::ensure_internal_links($html, $links);
     }
 
+    public static function enforce_unique_links($html, $links = array(), $max_products = 2, $max_external = 1) {
+        return LinkGuard::enforce_unique_links($html, $links, $max_products, $max_external);
+    }
+
     public static function cap_anchor_length($html, $max = 4) {
         return LinkGuard::cap_anchor_length($html, $max);
     }

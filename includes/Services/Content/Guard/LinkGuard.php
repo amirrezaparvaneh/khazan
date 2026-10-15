@@ -133,6 +133,64 @@ final class LinkGuard {
     }
 
     /**
+     * هر URL فقط یک‌بار در کل متن لینک می‌ماند و تعداد لینک‌ها سقف دارد:
+     *  ۱. لینک تکراری (دومین بار به بعد) آن‌رپ می‌شود؛ تگ <a> حذف و متن داخلش حفظ می‌شود.
+     *  ۲. لینک داخلی غیر از دسته‌بندی ("لینک محصول") حداکثر $max_products؛ لینک‌های برنامه‌ریزی‌شده در $links (type=product) اولویت دارند
+     *     و سهم لینک‌های دیگر فقط جای خالی مانده است. بقیه آن‌رپ می‌شوند.
+     *  ۳. لینک خارجی حداکثر $max_external؛ بقیه آن‌رپ می‌شوند.
+     * لینک دسته‌بندی (type=category) فقط یک‌بار و بدون سقف محصول می‌ماند.
+     */
+    public static function enforce_unique_links($html, $links = array(), $max_products = 2, $max_external = 1) {
+        $category_urls = array();
+        $planned_products = array();
+        foreach ((array) $links as $link) {
+            if (empty($link['url'])) continue;
+            $key = self::url_key($link['url']);
+            if (isset($link['type']) && $link['type'] === 'category') $category_urls[$key] = true;
+            elseif (isset($link['type']) && $link['type'] === 'product') $planned_products[$key] = true;
+        }
+        $other_allowance = max(0, (int) $max_products - count($planned_products));
+        $home_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+
+        $seen = array();
+        $products = 0; $others = 0; $external = 0;
+        return preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use (&$seen, &$products, &$others, &$external, $category_urls, $planned_products, $other_allowance, $home_host, $max_products, $max_external) {
+            $key = self::url_key($m[2]);
+            if ($key === '' || isset($seen[$key])) return $m[3];
+
+            $host = strtolower((string) wp_parse_url(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'), PHP_URL_HOST));
+            if ($host !== '' && $host !== $home_host) {
+                if ($external >= $max_external) return $m[3];
+                $external++;
+            } elseif (!isset($category_urls[$key])) {
+                if (isset($planned_products[$key])) {
+                    if ($products >= $max_products) return $m[3];
+                } else {
+                    if ($others >= $other_allowance || $products >= $max_products) return $m[3];
+                    $others++;
+                }
+                $products++;
+            }
+            $seen[$key] = true;
+            return $m[0];
+        }, (string) $html);
+    }
+
+    /**
+     * کلید مقایسه URL: بدون موجودیت‌های HTML، فاصله، اسلش انتهایی و بخش #fragment؛ طرح و میزبان با حروف کوچک
+     */
+    private static function url_key($url) {
+        $url = trim(html_entity_decode((string) $url, ENT_QUOTES, 'UTF-8'));
+        $url = preg_replace('/#.*$/', '', $url);
+        if ($url === '') return '';
+        $parts = wp_parse_url($url);
+        if (!empty($parts['host'])) {
+            $url = strtolower($parts['scheme'] ?? 'https') . '://' . strtolower($parts['host']) . ($parts['path'] ?? '') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        }
+        return untrailingslashit($url);
+    }
+
+    /**
      * انکرتکست تمام لینک‌های داخلی به محصولات را با کلیدواژه کانونی دقیق محصول مقصد یکسان می‌کند.
      * $map (آدرس => انکرتکست اجباری) برای لینک‌هایی است که از قبل مشخص بوده‌اند؛ بقیه از روی آدرس شناسایی می‌شوند.
      */
