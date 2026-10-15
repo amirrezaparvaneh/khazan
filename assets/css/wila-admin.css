@@ -1724,63 +1724,39 @@ img.khazan-watermark {
   #wila-app-root .khazan-radio-inputs .radio input:checked + .name::after { animation: none; transition: none; }
 }
 
-/* ---------- No accidental text highlight on UI chrome (inputs / previews / logs stay selectable) ---------- */
-#wila-app-root h1,
-#wila-app-root h2,
-#wila-app-root h3,
-#wila-app-root h4,
-#wila-app-root h5,
-#wila-app-root th,
-#wila-app-root label,
-#wila-app-root button,
-#wila-app-root .khazan-section-title,
-#wila-app-root .khazan-section-header,
-#wila-app-root .khazan-card-title,
-#wila-app-root .khazan-sidebar,
-#wila-app-root .khazan-nav-item,
-#wila-app-root .khazan-tab-btn,
-#wila-app-root .wila-tab-btn,
-#wila-app-root .khazan-subtab,
-#wila-app-root .khazan-table-header,
-#wila-app-root .khazan-label,
-#wila-app-root .khazan-radio-inputs,
-#wila-app-root .khazan-radio-inputs .name,
-#wila-app-root .khazan-btn,
-#wila-app-root .khazan-3d-btn,
-#wila-app-root .khazan-pill-btn,
-#wila-app-root .khazan-badge,
-#wila-app-root .khazan-status-pill,
-#wila-app-root .khazan-stat-card,
-#wila-app-root .khazan-stat-title,
-#wila-app-root .khazan-kpi-title,
-#wila-app-root .khazan-metric-title,
-#wila-app-root .khazan-metric-sub,
-#wila-app-root .khazan-ring-label,
-#wila-app-root .khazan-balance-label,
-#wila-app-root .khazan-folder-container,
-#wila-app-root .custom-file-upload {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
+/* ---------- Global text-selection lock (everything except inputs and copyable content) ---------- */
+/* ۱. قفل سراسری هایلایت و انتخاب روی تمام عناصر؛ :where() ویژگی (specificity) قفل را پایین نگه می‌دارد تا استثناها همیشه برنده شوند */
+#wila-app-root,
+#wila-app-root :where(*:not(input):not(textarea):not(.khazan-selectable):not(.khazan-content-preview)) {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
 }
 
-/* ورودی‌ها، پیش‌نمایش‌ها و لاگ‌ها همیشه قابل انتخاب و کپی‌اند */
+/* ۲. جلوگیری از کشیده شدن ناخواسته تصاویر، آیکون‌ها و لینک‌ها هنگام ماوس درگ */
+#wila-app-root img,
+#wila-app-root a,
+#wila-app-root svg {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* ۳. استثنای قطعی برای فیلدهای ورودی و متون قابل کپی (لاگ صف، پیش‌نمایش محتوا، بدنه مودال) */
 #wila-app-root input[type="text"],
 #wila-app-root input[type="search"],
 #wila-app-root input[type="number"],
-#wila-app-root input[type="password"],
 #wila-app-root input[type="url"],
+#wila-app-root input[type="password"],
 #wila-app-root input[type="email"],
 #wila-app-root input[type="tel"],
 #wila-app-root textarea,
-#wila-app-root select,
 #wila-app-root [contenteditable="true"],
 #wila-app-root .khazan-selectable,
+#wila-app-root .khazan-selectable *,
 #wila-app-root .khazan-content-preview,
-#wila-app-root .wila-modal-body,
-#wila-app-root .wila-modal-body :where(h1, h2, h3, h4, h5, th, td, p, div, span, li, pre, code, strong, a) {
+#wila-app-root .khazan-content-preview * {
   -webkit-user-select: text !important;
   -moz-user-select: text !important;
   -ms-user-select: text !important;

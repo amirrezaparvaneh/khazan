@@ -150,7 +150,7 @@
           <div class="wila-modal-backdrop" id="wila-modal-backdrop">
             <div class="wila-modal">
               <div class="wila-modal-header"><h3>${modal.title}</h3><button class="wila-btn wila-btn-outline wila-btn-sm" id="wila-close-modal-btn">✕</button></div>
-              <div class="wila-modal-body">${modal.contentHtml}</div>
+              <div class="wila-modal-body khazan-content-preview">${modal.contentHtml}</div>
             </div>
           </div>
         ` : ''}
