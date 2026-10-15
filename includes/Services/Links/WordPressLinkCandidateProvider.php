@@ -1,6 +1,6 @@
 <?php
 /**
- * WordPress-backed candidate source: published products via SiteEntityRepository, inbound counts via LinkRepository.
+ * WordPress-backed candidate source: the global product catalogue (SiteEntityRepository) shortlisted by inbound counts (LinkRepository).
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -68,7 +68,26 @@ final class WordPressLinkCandidateProvider implements LinkCandidateProvider {
         return $this->category_cache[$category_id];
     }
 
-    public function candidates_for(array $product) {
+    public function candidates_for(array $product, array $assigned = array()) {
+        $all = $this->entities->published_product_ids($product['id']);
+        $counts = $this->links->inbound_counts($all, \Khazan\Core\Settings::product_post_type());
+        $ids = GlobalLinkPool::shortlist($all, $counts, $assigned, $product['id'], $this->related_ids($product));
+        $out = array();
+        foreach ($ids as $id) {
+            $entry = $this->product($id);
+            if ($entry) {
+                $out[] = $entry;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Same-category products (ancestor categories too when the category is small): preferred inside the global pool.
+     *
+     * @return int[]
+     */
+    private function related_ids(array $product) {
         $ids = $this->entities->published_product_ids_in_categories($product['category_ids'], $product['id']);
         if (count($ids) < self::MIN_POOL) {
             $ancestors = array();
@@ -82,14 +101,7 @@ final class WordPressLinkCandidateProvider implements LinkCandidateProvider {
             }
             $ids = array_values(array_unique(array_merge($ids, $this->entities->published_product_ids_in_categories($ancestors, $product['id']))));
         }
-        $out = array();
-        foreach ($ids as $id) {
-            $entry = $this->product($id);
-            if ($entry) {
-                $out[] = $entry;
-            }
-        }
-        return $out;
+        return $ids;
     }
 
     public function inbound_counts(array $product_ids) {

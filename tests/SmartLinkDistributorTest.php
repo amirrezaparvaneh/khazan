@@ -12,6 +12,7 @@ Khazan\Core\Autoloader::register('Khazan\\', WILA_PLUGIN_DIR . 'includes/');
 
 use Khazan\Services\Links\InMemoryAssignmentLedger;
 use Khazan\Services\Links\LinkCandidateProvider;
+use Khazan\Services\Links\GlobalLinkPool;
 use Khazan\Services\Links\SmartLinkDistributor;
 
 /** In-memory catalog implementing the provider contract. */
@@ -28,12 +29,15 @@ class FakeCatalog implements LinkCandidateProvider {
     }
     public function product($product_id) { return isset($this->products[$product_id]) ? $this->products[$product_id] : null; }
     public function category($category_id) { return isset($this->categories[$category_id]) ? $this->categories[$category_id] : null; }
-    public function candidates_for(array $product) {
-        $out = array();
+    /** Global pool, like the WordPress provider: every other product, shortlisted by effective inbound count. */
+    public function candidates_for(array $product, array $assigned = array()) {
+        $all = array_keys($this->products);
+        $related = array();
         foreach ($this->products as $p) {
-            if ($p['id'] !== $product['id'] && array_intersect($p['category_ids'], $product['category_ids'])) $out[] = $p;
+            if ($p['id'] !== $product['id'] && array_intersect($p['category_ids'], $product['category_ids'])) $related[] = $p['id'];
         }
-        return $out;
+        $ids = GlobalLinkPool::shortlist($all, $this->inbound_counts($all), $assigned, $product['id'], $related);
+        return array_map(function ($id) { return $this->products[$id]; }, $ids);
     }
     public function inbound_counts(array $product_ids) {
         $out = array();
@@ -108,20 +112,21 @@ $d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 check($d->plan(1)['category']['id'] === 2, 'explicit primary (Boots) is used');
 check($d->plan(2)['category']['id'] === 3, 'primary Sale is respected even though other categories exist');
 check($d->plan(3)['category']['id'] === 2, 'without primary the deepest category (Boots) is used');
-check($d->plan(4)['category'] === null && $d->plan(4)['related'] === array(), 'product without categories gets no category link and no related links');
+$pn = $d->plan(4); check($pn['category'] === null && count($pn['related']) <= 2 && !in_array(4, array_column($pn['related'], 'id'), true), 'product without categories gets no category link (it still receives related links from the global pool, never itself)');
 check($d->plan(999)['internal_links'] === array(), 'unknown product yields an empty plan');
 
-echo "4. No random links: unrelated categories are never linked\n";
+echo "4. Global pool: unrelated products are valid targets, related ones win ties\n";
 $c = new FakeCatalog();
 $c->addCategory(1, 'Boots'); $c->addCategory(2, 'Bags');
 for ($i = 1; $i <= 5; $i++) $c->addProduct($i, "Boot $i", array(1), 1);
 for ($i = 6; $i <= 10; $i++) $c->addProduct($i, "Bag $i", array(2), 2);
-$c2 = new class extends FakeCatalog { public function candidates_for(array $product) { return array_values(array_filter($this->products, function ($p) use ($product) { return $p['id'] !== $product['id']; })); } };
-$c2->categories = $c->categories; $c2->products = $c->products;   // provider that over-delivers candidates
-$d = new SmartLinkDistributor($c2, new InMemoryAssignmentLedger());
-$ok = true;
-for ($i = 1; $i <= 10; $i++) { foreach ($d->plan($i, 'r', range(1, 10), 2)['related'] as $r) $ok = $ok && $c2->products[$r['id']]['primary_category_id'] === $c2->products[$i]['primary_category_id']; }
-check($ok, 'even if the provider returns the whole catalog, only same-category products are chosen');
+$d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+$p = $d->plan(1, '', array(), 2);
+check(count($p['related']) === 2 && !array_diff(array_column($p['related'], 'id'), range(2, 5)), 'with equal inbound counts the two links go to related (same-category) products');
+$c->db_inbound = array(2 => 4, 3 => 4, 4 => 4, 5 => 4);
+$p = $d->plan(1, '', array(), 2);
+check(!array_diff(array_column($p['related'], 'id'), range(6, 10)), 'when every same-category product is already well linked, the unlinked products of OTHER categories are chosen (no product is left behind)');
+$c->db_inbound = array();
 
 echo "5. Existing inbound counts steer links to the least-linked products\n";
 $c = new FakeCatalog(); $c->addCategory(1, 'Boots');
@@ -222,6 +227,50 @@ foreach (array(array('کفش مردانه', 'کفش مردانه ونس'), array
     foreach ($p['related'] as $r) $all = $all && !KX::overlaps($r['anchor'], $pair[1]);
 }
 check($all, 'several category / keyphrase pairs: no outgoing anchor equals or contains the whole page keyphrase');
+
+echo "10. Mesh architecture: no product stays without inbound links\n";
+$c = new FakeCatalog();
+$c->addCategory(1, 'Boots'); $c->addCategory(2, 'Bags'); $c->addCategory(3, 'Belts'); $c->addCategory(4, 'Lonely');
+$id = 0;
+foreach (array(1 => 12, 2 => 9, 3 => 6, 4 => 1) as $cat => $n) for ($k = 0; $k < $n; $k++) { $id++; $c->addProduct($id, "p$id", array($cat), $cat); }
+$total = $id;
+$mesh = true; $lonelyFed = true; $worst = 0;
+for ($seed = 0; $seed < 30; $seed++) {
+    $order = range(1, $total); shuffle($order);
+    list($counts) = run_queue($c, $order, 2);
+    $mesh = $mesh && min($counts) >= 1;
+    $worst = max($worst, spread($counts));
+    $lonelyFed = $lonelyFed && $counts[$total] >= 1;
+}
+check($mesh, "30 random queues over $total products in 4 categories: every product receives at least 1 inbound link (0-link products: none)");
+check($lonelyFed, 'a product alone in its category (no peers) is linked from other categories');
+check($worst <= 1, "global inbound spread stays <= 1 (worst $worst)");
+
+$distinct = array();
+$dist = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+foreach (range(1, $total) as $pid) foreach ($dist->plan($pid, 'rr', range(1, $total), 2)['related'] as $r) $distinct[$r['id']] = true;
+check(count($distinct) === $total, "round-robin: in one in-order run all $total products are used as targets (not just a few fixed ones)");
+
+$c->db_inbound = array_fill_keys(range(1, $total), 5); $c->db_inbound[17] = 0; $c->db_inbound[3] = 0;
+$d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+$ids = array_column($d->plan(25, '', array(), 2)['related'], 'id');
+sort($ids);
+check($ids === array(3, 17), 'products with 0 inbound links are always chosen first, wherever they are in the catalogue (' . implode(',', $ids) . ')');
+$c->db_inbound = array();
+
+echo "11. GlobalLinkPool::shortlist\n";
+$all = range(1, 200);
+$sl = GlobalLinkPool::shortlist($all, array_fill_keys($all, 3), array(), 50);
+check(count($sl) === GlobalLinkPool::SIZE && !in_array(50, $sl, true), 'size-limited and never contains the product itself');
+check($sl[0] === 51 && $sl[1] === 52, 'equal counts: cyclic order starts right after the current product id (51, 52 ...), not at id 1');
+$counts = array_fill_keys($all, 4); $counts[199] = 0; $counts[2] = 1;
+$sl = GlobalLinkPool::shortlist($all, $counts, array(), 50);
+check($sl[0] === 199 && $sl[1] === 2, 'lowest effective inbound first, wherever the product sits (199 with 0, then 2 with 1)');
+$sl = GlobalLinkPool::shortlist($all, $counts, array(199 => 5), 50);
+check($sl[0] === 2 && !in_array(199, $sl, true), 'links already assigned in this run count immediately (199 drops back out of the shortlist)');
+$sl = GlobalLinkPool::shortlist($all, array_fill_keys($all, 2), array(), 50, array(150, 10));
+check($sl[0] === 150 && $sl[1] === 10, 'related products win among equal counts (in cyclic order)');
+check(GlobalLinkPool::shortlist(array(7), array(), array(), 7) === array() && GlobalLinkPool::shortlist(array(), array(), array(), 1) === array(), 'single-product shop / empty catalogue: no candidates');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

@@ -24,12 +24,14 @@ interface LinkCandidateProvider {
     public function category($category_id);
 
     /**
-     * Published products that may receive a link from $product (same categories, then ancestors),
-     * each in the same shape as product(); never contains $product itself.
+     * Candidate pool for $product: the GLOBAL product catalogue shortlisted by effective inbound count
+     * (database + $assigned, the links already planned in the current run), related products first.
+     * Each entry has the shape of product(); never contains $product itself.
      *
+     * @param array<int,int> $assigned product id => links assigned in the current run
      * @return array<int,array>
      */
-    public function candidates_for(array $product);
+    public function candidates_for(array $product, array $assigned = array());
 
     /**
      * Current inbound internal-link counts.

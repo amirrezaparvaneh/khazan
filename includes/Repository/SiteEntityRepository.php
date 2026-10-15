@@ -139,6 +139,25 @@ final class SiteEntityRepository {
         return array_map('intval', (array) $ids);
     }
 
+    /**
+     * Every published product id (ids only; the global link pool needs them all, hydrating happens later for a shortlist).
+     *
+     * @return int[]
+     */
+    public function published_product_ids($exclude_id = 0, $limit = 5000) {
+        $ids = get_posts(array(
+            'post_type'      => Settings::product_post_type(),
+            'post_status'    => 'publish',
+            'posts_per_page' => (int) $limit,
+            'post__not_in'   => $exclude_id ? array((int) $exclude_id) : array(),
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+        ));
+        return array_map('intval', (array) $ids);
+    }
+
     // ---- lightweight content statistics (aggregate queries, no per-row loops) ----
 
     /**

@@ -3,7 +3,8 @@
  * Internal-link planner for product content.
  *
  * - Category link: always the product's own primary category.
- * - Product links: only related candidates (same / ancestor categories, title similarity as a tie-break).
+ * - Product links: a GLOBAL pool (every published product, see GlobalLinkPool); relatedness (categories, title
+ *   similarity) only ranks candidates whose inbound counts are equal, so no product stays without inbound links.
  * - Fair load balancing: candidates with the fewest inbound links (database + links already assigned in
  *   the current run) always win; ties prefer products whose own row is still pending in the queue
  *   (they have fewer future chances to be linked), then similarity, then id. Every assignment is
@@ -164,7 +165,7 @@ final class SmartLinkDistributor {
             return array();
         }
         $candidates = array();
-        foreach ($this->provider->candidates_for($product) as $candidate) {
+        foreach ($this->provider->candidates_for($product, isset($state['assigned']) ? $state['assigned'] : array()) as $candidate) {
             if ((int) $candidate['id'] === (int) $product['id'] || (string) $candidate['anchor'] === '') {
                 continue;
             }
@@ -172,11 +173,8 @@ final class SmartLinkDistributor {
             if ($this->cannibalizes($candidate['anchor'], $product, true)) {
                 continue;
             }
-            $score = $this->similarity($product, $candidate);
-            if ($score <= 0) {
-                continue;
-            }
-            $candidate['score'] = $score;
+            // global pool: unrelated products are valid targets too (similarity only ranks candidates with equal inbound counts)
+            $candidate['score'] = $this->similarity($product, $candidate);
             $candidates[(int) $candidate['id']] = $candidate;
         }
         if (!$candidates) {
