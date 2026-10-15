@@ -69,7 +69,7 @@ final class SmartLinkDistributor {
 
         $links = array();
         if ($category) {
-            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['anchor']), 'url' => $category['url'], 'required' => true, 'type' => 'category');
+            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['anchor']), 'url' => $category['url'], 'required' => true, 'type' => 'category', 'category_name' => $category['name']);
         }
         foreach ($related as $entry) {
             $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($entry['anchor']), 'url' => $entry['url'], 'locked' => true, 'required' => true, 'type' => 'product');
@@ -78,22 +78,13 @@ final class SmartLinkDistributor {
     }
 
     /**
-     * Anchor of the category link: the general category name, unless it would compete with the product's own
-     * focus keyphrase or synonyms (equal, containing or contained) - then a descriptive variant such as
-     * «خرید انواع {name}» that neither equals nor contains them (max 4 words).
+     * Anchor of the category link. The raw category name (e.g. «بوت زنانه») is never used: all its words usually sit
+     * inside the page's own focus keyphrase, which Yoast / Rank Math report as a competing link. A collection-style
+     * phrase («انواع مدل‌های این دسته‌بندی») is used instead; it shares no word with product keyphrases.
      */
     public function category_anchor($name, array $product) {
-        $name = trim((string) $name);
-        if (!$this->cannibalizes($name, $product, true)) {
-            return $name;
-        }
-        foreach (array('خرید انواع ', 'دسته‌بندی ', 'انواع ', 'مشاهده ') as $prefix) {
-            $variant = $prefix . $name;
-            if (\Khazan\Services\Seo\KeyphraseExtractor::count_words($variant) <= \Khazan\Core\Settings::KEYPHRASE_MAX_WORDS && !$this->cannibalizes($variant, $product, false)) {
-                return $variant;
-            }
-        }
-        return $name;
+        $set = \Khazan\Core\Settings::CATEGORY_ANCHORS;
+        return $set[((int) (isset($product['id']) ? $product['id'] : 0)) % count($set)];
     }
 
     /**

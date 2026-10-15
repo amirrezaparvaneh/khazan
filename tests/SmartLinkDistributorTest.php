@@ -197,15 +197,11 @@ $mk = function ($catName, $focus, array $synonyms = array()) {
     return new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 };
 $catAnchor = function ($plan) { foreach ($plan['internal_links'] as $l) if ($l['type'] === 'category') return $l['anchor']; return null; };
-$d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو');
-check($catAnchor($d->plan(1, '', array(), 2)) === 'بوت زنانه', 'a general category name that does not collide is used as it is («بوت زنانه»)');
-$d = $mk('کفش مردانه', 'کفش مردانه ونس');
-$a = $catAnchor($d->plan(1, '', array(), 2));
-check($a === 'خرید انواع کفش مردانه', 'a category name contained in the focus keyphrase becomes «خرید انواع …»: ' . $a);
-check(!KX::overlaps($a, 'کفش مردانه ونس') || KX::count_words($a) > KX::count_words('کفش مردانه ونس'), 'and the variant neither equals nor contains the focus keyphrase');
-$d = $mk('نیم‌بوت زنانه', 'نیم‌بوت زنانه');
-$a = $catAnchor($d->plan(1, '', array(), 2));
-check(KX::count_words($a) <= 4 && $a !== '', 'category name identical to the focus never yields an empty or >4-word anchor (' . $a . ')');
+$generic = Khazan\Core\Settings::CATEGORY_ANCHORS;
+foreach (array(array('بوت زنانه', 'نیم‌بوت زنانه آلفردو'), array('بوت چرم زنانه', 'بوت زنانه آلفردو'), array('کفش مردانه', 'کفش مردانه ونس فلوتر'), array('نیم‌بوت زنانه', 'نیم‌بوت زنانه')) as $pair) {
+    $a = $catAnchor($mk($pair[0], $pair[1])->plan(1, '', array(), 2));
+    check(in_array($a, $generic, true) && $a !== $pair[0] && !KX::overlaps($a, $pair[1]) && KX::count_words($a) <= 4, "category «{$pair[0]}» for focus «{$pair[1]}»: never the raw name, a collection phrase («{$a}»), zero overlap");
+}
 $d = $mk('بوت زنانه', 'نیم‌بوت چرم زنانه آلفردو', array('بوت مدل برشکا', 'چرم طبیعی'));
 $ids = array_column($d->plan(1, '', array(), 4)['related'], 'id');
 check(!in_array(2, $ids, true) && !in_array(5, $ids, true), 'candidates whose anchor equals / contains a synonym of this product are skipped');
@@ -216,7 +212,7 @@ $all = true;
 foreach (array(array('کفش مردانه', 'کفش مردانه ونس'), array('بوت زنانه', 'بوت زنانه آلفردو'), array('کیف', 'کیف دوشی آیسا'), array('کفش اسپرت مردانه', 'کفش اسپرت مردانه اولد')) as $pair) {
     $p = $mk($pair[0], $pair[1])->plan(1, '', array(), 2);
     $an = $catAnchor($p);
-    $all = $all && KX::count_words($an) <= 4 && !(KX::overlaps($an, $pair[1]) && KX::count_words($an) >= KX::count_words($pair[1]) && $an !== $pair[0]);
+    $all = $all && KX::count_words($an) <= 4 && !KX::overlaps($an, $pair[1]) && $an !== $pair[0];
     foreach ($p['related'] as $r) $all = $all && !KX::overlaps($r['anchor'], $pair[1]);
 }
 check($all, 'several category / keyphrase pairs: no outgoing anchor equals or contains the page keyphrase');

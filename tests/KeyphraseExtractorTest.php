@@ -68,13 +68,14 @@ check(K::is_valid('الف ب ج د') && !K::is_valid('الف ب ج د ه') && !K
 
 echo "5. Short titles are kept; fillers, materials and cities are dropped\n";
 check(K::from_title('کفش مردانه ونس') === 'کفش مردانه ونس', 'a 3-word title is returned unchanged');
-check(K::from_title('کفش چرم طبیعی مردانه') === 'کفش چرم طبیعی مردانه', 'a 4-word title is not touched (already within the limit)');
+check(K::from_title('کفش مردانه ونس فلوتر') === 'کفش مردانه ونس فلوتر', 'a clean 4-word title is not touched (already within the limit)');
+check(K::from_title('کفش چرم طبیعی مردانه') === 'کفش مردانه', 'a 4-word title still loses «چرم» and «طبیعی» (stop words)');
 $d = K::from_title('کیف چرم طبیعی اصل تبریز دست‌دوز لوکس شیک');
 check(wc($d) >= 2 && wc($d) <= 4 && strpos($d, 'تبریز') === false && strpos($d, 'طبیعی') === false && strpos($d, 'اصل') === false, 'generic words (طبیعی، اصل، تبریز، لوکس…) never survive: «' . $d . '»');
 check(strpos(K::from_title('کفش اسپرت مردانه چرم اصل تبریز مدل ونس اولد اسکول'), 'مدل') === false, 'the «مدل» marker itself is never part of the phrase');
 check(K::from_title('کفش اسپرت مردانه تبریز چرم اصل ونس اولد اسکول') === 'کفش مردانه اولد اسکول', 'without «مدل»: product type + gender + the last distinctive words');
-check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف زنانه آیسا مجلسی', 'gender qualifier is preserved next to the product type');
-check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی', 'کیف دوشی زنانه') === 'کیف دوشی آیسا مجلسی', 'when the category words are given they form the base (کیف دوشی) and the model name is kept');
+check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی') === 'کیف زنانه آیسا', 'gender qualifier is preserved next to the product type; «مجلسی» is a stop word');
+check(K::from_title('کیف دوشی چرم طبیعی زنانه مدل آیسا مجلسی', 'کیف دوشی زنانه') === 'کیف دوشی زنانه آیسا', 'when the category words are given they form the base (کیف دوشی زنانه) and the model name is kept');
 
 echo "6. Robustness\n";
 check(K::from_title('') === '' && K::from_title('   ') === '' && K::limit(null) === '', 'empty input -> empty string');
@@ -109,6 +110,21 @@ check(strpos(K::from_title($title), 'فلوتر') === false, 'a word added to th
 $GLOBALS['kp_filter'] = function ($lists) { return 'garbage'; };
 check(K::from_title($title) === 'کفش مردانه ونس فلوتر', 'a malformed filter result falls back to the defaults');
 $GLOBALS['kp_filter'] = null;
+
+echo "9. Stop words are removed from stored keyphrases and from short titles too\n";
+check(K::from_title('بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', '«بوت زنانه چرم طبیعی تبریز مدل آلفردو» -> «بوت زنانه آلفردو»');
+check(K::optimal('بوت چرم زنانه آلفردو', 'بوت زنانه چرم طبیعی تبریز مدل آلفردو') === 'بوت زنانه آلفردو', 'a stored «بوت چرم زنانه آلفردو» is cleaned to «بوت زنانه آلفردو»');
+check(K::optimal('کفش روزمره مردانه ونس', 'x') === 'کفش مردانه ونس', 'روزمره is removed from a stored phrase');
+check(K::optimal('کیف مجلسی زنانه آیسا', 'x') === 'کیف زنانه آیسا' && K::optimal('کیف طرح زنانه آیسا', 'x') === 'کیف زنانه آیسا', 'مجلسی and طرح are removed');
+check(K::optimal('چرم طبیعی', 'x') === 'چرم طبیعی', 'a phrase that would end up with < 2 words is kept as stored');
+check(K::cap('بوت چرم زنانه آلفردو') === 'بوت زنانه آلفردو' && K::cap(K::cap('بوت چرم زنانه آلفردو')) === K::cap('بوت چرم زنانه آلفردو'), 'cap() is idempotent and strips stop words');
+$bad = false; foreach (array('چرم', 'چرمی', 'طبیعی', 'تبریز', 'مدل', 'روزمره', 'مجلسی', 'طرح', 'اصل', 'دست‌دوز') as $w) {
+    $o = K::from_title("کفش $w مردانه $w ونس فلوتر $w مدل ماهان"); $o2 = K::optimal("کفش $w مردانه ونس", 'x');
+    if (in_array($w, K::words($o), true) || in_array($w, K::words($o2), true)) { $bad = true; echo "     leaked: $w => $o / $o2\n"; }
+}
+check(!$bad, 'none of چرم، چرمی، طبیعی، تبریز، مدل، روزمره، مجلسی، طرح، اصل، دست‌دوز survives');
+$sh = K::from_title('کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر');
+check($sh === 'کفش مردانه ونس فلوتر' && K::count_words($sh) <= 4, 'the formula example: «کفش روزمره مردانه چرم طبیعی تبریز مدل ونس فلوتر» -> «کفش مردانه ونس فلوتر»');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

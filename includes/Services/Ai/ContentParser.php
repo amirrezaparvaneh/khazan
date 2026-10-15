@@ -103,12 +103,19 @@ final class ContentParser {
             $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
         }
         $content = \Khazan\Services\Content\ContentGuard::ensure_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
+        if (self::kind($params) === Settings::KIND_PRODUCT) {
+            // پیوند رقیب: انکر داخلی که کلمات کلیدواژه کانونی/مترادف‌های همین صفحه را تکرار می‌کند با عبارت امن جایگزین می‌شود
+            $own_synonyms = \Khazan\Services\Seo\SeoMetaService::split_keywords(!empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms);
+            $content = \Khazan\Services\Content\ContentGuard::neutralize_competing_links($content, $focus, isset($params['internal_links']) ? $params['internal_links'] : array(), $own_synonyms);
+        }
         $content = \Khazan\Services\Content\ContentGuard::ensure_external_link($content, $focus);
         // مترادف‌هایی که در Yoast ذخیره می‌شوند (ستون شیت در تولید انبوه) ملاک هدینگ‌ها هستند.
         $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
         $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms);
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
+        // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
+        $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
 
         $external_links = self::extract_external_links($content);
@@ -324,6 +331,7 @@ final class ContentParser {
         if ($kind === Settings::KIND_PRODUCT) $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content);
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $seo['focuskw'], $seo['synonyms']);
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
+        $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
         return array(
             'content'          => $content,

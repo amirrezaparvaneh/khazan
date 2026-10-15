@@ -45,6 +45,14 @@ final class ContentGuard {
         return LinkGuard::enforce_unique_links($html, $links, $max_products, $max_external);
     }
 
+    public static function neutralize_competing_links($html, $focus, $links = array(), $synonyms = array()) {
+        return LinkGuard::neutralize_competing_links($html, $focus, $links, $synonyms);
+    }
+
+    public static function enforce_paragraphs($html, $max = 110) {
+        return Guard\ParagraphGuard::enforce($html, $max);
+    }
+
     public static function cap_anchor_length($html, $max = 4) {
         return LinkGuard::cap_anchor_length($html, $max);
     }

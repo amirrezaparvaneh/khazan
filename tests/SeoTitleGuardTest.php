@@ -27,12 +27,12 @@ function emojis($s) { preg_match_all(G::EMOJI_PATTERN, $s, $m); return count($m[
 $brand = 'آکا چرم';
 
 echo "1. Reference example\n";
-$ref = 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
+$ref = 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
 check(G::fit($ref, $brand) === $ref, 'a correct title is left unchanged');
 check(len($ref) >= 50 && len($ref) <= 60, 'the reference itself is 50-60 characters (' . len($ref) . ')');
 
 echo "2. Brand is appended when missing\n";
-$t = G::fit('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢', $brand);
+$t = G::fit('نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢', $brand);
 check($t === $ref, 'AI title without brand gets « | آکا چرم »: ' . $t);
 $t = G::fit('کیف دوشی چرم مردانه آرتین | دست‌دوز تبریز 👜 | آکا چرم', $brand);
 check(substr_count($t, 'آکا چرم') === 1, 'the brand is never duplicated');
@@ -40,10 +40,10 @@ check(G::fit('کیف دوشی چرم مردانه آرتین', $brand) !== '' &&
 
 echo "3. Emoji by category\n";
 $cases = array(
-    array('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی 👟', '👢'),
+    array('نیم‌بوت زنانه آلفردو | چرم طبیعی 👟', '👢'),
 );
 $map = array(
-    'نیم‌بوت چرم زنانه آلفردو' => '👢', 'بوت چرم مردانه ماهان' => '👢', 'کفش پاشنه‌دار زنانه لارا' => '👠', 'کفش مجلسی زنانه ستاره' => '👠',
+    'نیم‌بوت زنانه آلفردو' => '👢', 'بوت چرم مردانه ماهان' => '👢', 'کفش پاشنه‌دار زنانه لارا' => '👠', 'کفش مجلسی زنانه ستاره' => '👠',
     'کفش مردانه رسمی چرم پارسا' => '👞', 'کتانی مردانه چرم اسپرت' => '👟', 'کیف دوشی چرم زنانه آیسا' => '👜', 'کیف مجلسی زنانه چرم نگین' => '👜',
     'کوله پشتی چرم مردانه آرمان' => '🎒', 'کیف پول چرم مردانه سینا' => '👝', 'کمربند چرم مردانه کلاسیک' => '👝',
 );
@@ -54,15 +54,15 @@ foreach ($map as $first => $want) {
     if (strpos($out, $want) === false) echo "     $first => $out (wanted $want)\n";
 }
 check($okAll, 'every category gets its own single emoji');
-$out = G::fit('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👟 👜 | آکا چرم', $brand);
+$out = G::fit('نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👟 👜 | آکا چرم', $brand);
 check(emojis($out) === 1, 'several AI emojis collapse to exactly one');
 check(strpos(G::fit('محصول تست | مزیت', $brand), '|') !== false && emojis(G::fit('محصول تست | مزیت', $brand)) === 1, 'unknown category still gets the default emoji');
 
 echo "4. Length <= 60 without losing keywords or brand\n";
-$long = 'نیم‌بوت چرم زنانه آلفردو مشکی ساقدار | چرم طبیعی تبریز با دوخت دستی و زیره طبی ضد لغزش 👢 | آکا چرم';
+$long = 'نیم‌بوت زنانه آلفردو مشکی ساقدار | چرم طبیعی تبریز با دوخت دستی و زیره طبی ضد لغزش 👢 | آکا چرم';
 $out = G::fit($long, $brand);
 check(len($out) <= 60, 'long AI title is cut to <= 60 chars (' . len($out) . '): ' . $out);
-check(strpos($out, 'نیم‌بوت چرم زنانه') === 0, 'the keyword part stays at the start');
+check(strpos($out, 'نیم‌بوت زنانه') === 0, 'the keyword part stays at the start');
 check(mb_substr($out, -7) === 'آکا چرم' && emojis($out) === 1, 'brand and the single emoji survive');
 $ok = true; mt_srand(7);
 $w = array('کفش', 'کیف', 'چرم', 'طبیعی', 'تبریز', 'مردانه', 'زنانه', 'آلفردو', 'دست‌دوز', 'ضد', 'لغزش', 'سبک', 'راحت', 'مجلسی', 'کتانی');
@@ -76,7 +76,7 @@ for ($i = 0; $i < 400; $i++) {
 check($ok, '400 random titles: always <= 60 chars, one emoji, brand last');
 
 echo "5. Storage in Rank Math and Yoast\n";
-$final = S::guard_title('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢', '', $brand);
+$final = S::guard_title('نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢', '', $brand);
 $post = S::post_meta_map(array('title' => $final, 'desc' => 'd', 'focuskw' => 'نیم‌بوت زنانه آلفردو', 'synonyms' => ''));
 check($post['rank_math_title'] === $ref && $post['_yoast_wpseo_title'] === $ref, 'rank_math_title and _yoast_wpseo_title hold the same final title');
 $term = S::term_meta_map(array('title' => $final, 'desc' => '', 'focuskw' => '', 'synonyms' => ''));
@@ -89,23 +89,23 @@ check(strpos($rules, '👢') !== false && strpos($rules, '👠') !== false && st
 check(strpos(ContentRules::seo_title_rules('article'), 'نام سایت را اضافه نکن') !== false, 'article rules are unchanged');
 
 echo "7. Rebuild guard: wrong AI output is forced into the 3-part formula\n";
-$focus = 'نیم‌بوت چرم زنانه آلفردو';
-$want = 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
+$focus = 'نیم‌بوت زنانه آلفردو';
+$want = 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
 $bad = 'بوت زنانه چرم 👢 | آکاچرم | فروشگاه محصولات چرم طبیعی تبریز';
 check(S::guard_title($bad, $focus, $brand, 'نیم‌بوت زنانه آلفردو') === $want, 'the reported wrong title is rebuilt exactly: ' . S::guard_title($bad, $focus, $brand));
 check(len(S::guard_title($bad, $focus, $brand)) <= 60, 'rebuilt title is <= 60 chars (' . len(S::guard_title($bad, $focus, $brand)) . ')');
 check(S::guard_title($want, $focus, $brand) === $want, 'a correct title passes through unchanged');
 $cases = array(
-    'emoji in part 1'          => '👢 نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز | آکا چرم',
-    'swapped parts'            => 'چرم طبیعی تبریز 👢 | نیم‌بوت چرم زنانه آلفردو | آکا چرم',
-    'tagline appended'         => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم | فروشگاه محصولات چرم طبیعی تبریز',
+    'emoji in part 1'          => '👢 نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز | آکا چرم',
+    'swapped parts'            => 'چرم طبیعی تبریز 👢 | نیم‌بوت زنانه آلفردو | آکا چرم',
+    'tagline appended'         => 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم | فروشگاه محصولات چرم طبیعی تبریز',
     'model missing in part 1'  => 'نیم‌بوت چرم زنانه | چرم طبیعی تبریز 👢 | آکا چرم',
-    'brand with a slogan'      => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم، فروشگاه چرم',
-    'no pipes at all'          => 'نیم‌بوت چرم زنانه آلفردو مشکی ساقدار با کیفیت',
-    'emoji not at end of part 2' => 'نیم‌بوت چرم زنانه آلفردو | 👢 چرم طبیعی تبریز | آکا چرم',
-    'two emojis'               => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢👜 | آکا چرم',
-    'brand missing'            => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢',
-    'Yoast variables'          => 'نیم‌بوت چرم زنانه آلفردو %sep% %sitedesc% | چرم طبیعی تبریز 👢 | آکا چرم %sep% %sitename%',
+    'brand with a slogan'      => 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم، فروشگاه چرم',
+    'no pipes at all'          => 'نیم‌بوت زنانه آلفردو مشکی ساقدار با کیفیت',
+    'emoji not at end of part 2' => 'نیم‌بوت زنانه آلفردو | 👢 چرم طبیعی تبریز | آکا چرم',
+    'two emojis'               => 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢👜 | آکا چرم',
+    'brand missing'            => 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢',
+    'Yoast variables'          => 'نیم‌بوت زنانه آلفردو %sep% %sitedesc% | چرم طبیعی تبریز 👢 | آکا چرم %sep% %sitename%',
 );
 $allOk = true;
 foreach ($cases as $name => $in) {
@@ -118,12 +118,13 @@ foreach ($cases as $name => $in) {
 }
 check($allOk, 'all ' . count($cases) . ' malformed variants end as [focus_keyword] | [feature] 👢 | [brand]');
 $withTag = G::fit('x y | فروشگاه محصولات چرم طبیعی تبریز | آکاچرم', $brand, '', $focus, 'فروشگاه محصولات چرم طبیعی تبریز');
-check($withTag === 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم' && strpos($withTag, 'فروشگاه') === false, 'tagline equal to bloginfo(description) is dropped; default feature used');
+check($withTag === 'نیم‌بوت زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم' && strpos($withTag, 'فروشگاه') === false, 'tagline equal to bloginfo(description) is dropped; default feature used');
 $ok = true; mt_srand(11); $fw = array('کفش', 'کیف', 'چرم', 'زنانه', 'مردانه', 'آلفردو', 'لارا', 'پارسا');
 for ($i = 0; $i < 300; $i++) {
     $f = array(); for ($j = 0, $n = mt_rand(2, 4); $j < $n; $j++) $f[] = $fw[mt_rand(0, 7)]; $f = implode(' ', $f);
     $junk = array('', $f, $f . ' | تست', 'یک دو | سه | چهار | پنج', 'بوت 👢 | ' . $brand . ' | شعار سایت طولانی برای تست', $f . ' 👟 | ' . $brand);
     $o = S::guard_title($junk[mt_rand(0, 5)], $f, $brand, $f);
+    $f = Khazan\Services\Seo\KeyphraseExtractor::cap($f);
     if (strpos($o, $f . ' | ') !== 0 || mb_substr($o, -7) !== $brand || emojis($o) !== 1 || len($o) > 60 || count(explode(' | ', $o)) !== 3) { $ok = false; echo "     bad: $o  (focus $f)\n"; break; }
 }
 check($ok, '300 random focus/junk pairs: always focus first, brand last, one emoji, <= 60 chars');

@@ -177,6 +177,43 @@ final class LinkGuard {
     }
 
     /**
+     * پیوند رقیب (Competing Links): هر <a> داخلی که بیش از ۵۰٪ کلماتش در کلیدواژه کانونی/مترادف‌های همین صفحه باشد، یا نام یک دسته‌بندی را
+     * همراه جنسیتِ مشترک با کلیدواژه بیاورد، متنش با عبارت امن «مشاهده سایر مدل‌های این دسته» جایگزین می‌شود (href دست‌نخورده).
+     * لینک خارجی و لینک‌های محصول برنامه‌ریزی‌شده (انکر قفل‌شده با نام اختصاصی مدل مقصد) معاف‌اند.
+     */
+    public static function neutralize_competing_links($html, $focus, $links = array(), $synonyms = array()) {
+        $key = array('Khazan\\Services\\Seo\\KeyphraseExtractor', 'key');
+        $words = function ($text) use ($key) { return array_values(array_unique(array_map($key, KeyphraseExtractor::words($text)))); };
+        $own = $words($focus);
+        foreach ((array) $synonyms as $synonym) $own = array_merge($own, $words($synonym));
+        if (!$own) return $html;
+        $gender = array_map($key, Settings::KEYPHRASE_GENDER);
+        $own_gender = array_intersect($own, $gender);
+
+        $exempt = array(); $category_names = array();
+        foreach ((array) $links as $link) {
+            if (!empty($link['url']) && isset($link['type']) && $link['type'] === 'product') $exempt[self::url_key($link['url'])] = true;
+            if (!empty($link['category_name'])) $category_names[] = $words($link['category_name']);
+        }
+        $home_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $ratio = Settings::COMPETING_ANCHOR_RATIO;
+
+        return preg_replace_callback('~(<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\2[^>]*>)(.*?)(</a>)~is', function ($m) use ($words, $own, $own_gender, $exempt, $category_names, $home_host, $ratio) {
+            $host = strtolower((string) wp_parse_url(html_entity_decode($m[3], ENT_QUOTES, 'UTF-8'), PHP_URL_HOST));
+            if (($host !== '' && $host !== $home_host) || isset($exempt[self::url_key($m[3])])) return $m[0];
+            $anchor = $words(html_entity_decode(wp_strip_all_tags($m[4]), ENT_QUOTES, 'UTF-8'));
+            if (!$anchor) return $m[0];
+            $competing = count(array_intersect($anchor, $own)) / count($anchor) > $ratio;
+            if (!$competing && $own_gender && array_intersect($anchor, $own_gender)) {
+                foreach ($category_names as $name_words) {
+                    if ($name_words && !array_diff($name_words, $anchor)) { $competing = true; break; }
+                }
+            }
+            return $competing ? $m[1] . esc_html(Settings::SAFE_LINK_PHRASE) . $m[5] : $m[0];
+        }, (string) $html);
+    }
+
+    /**
      * کلید مقایسه URL: بدون موجودیت‌های HTML، فاصله، اسلش انتهایی و بخش #fragment؛ طرح و میزبان با حروف کوچک
      */
     private static function url_key($url) {

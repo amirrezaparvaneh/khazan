@@ -48,7 +48,7 @@ final class KeyphraseExtractor {
      * Over-long phrases are reduced to their most meaningful words (see from_title), not just cut at the 4th word.
      */
     public static function cap($phrase) {
-        $phrase = self::limit($phrase, PHP_INT_MAX);
+        $phrase = self::strip_stop_words(self::limit($phrase, PHP_INT_MAX));
         if (self::count_words($phrase) <= Settings::KEYPHRASE_MAX_WORDS) {
             return $phrase;
         }
@@ -81,9 +81,28 @@ final class KeyphraseExtractor {
     public static function optimal($stored, $title, $category = '') {
         $stored = trim(preg_replace('/\s+/u', ' ', (string) $stored));
         if ($stored !== '' && self::is_valid($stored)) {
-            return $stored;
+            return self::strip_stop_words($stored);
         }
         return self::from_title($title, $category);
+    }
+
+    /**
+     * Removes stop words (fillers, materials such as «چرم»، cities, digits, the «مدل» marker) from a short phrase
+     * so that [type] + [gender] + [model] remains. The phrase is kept as it is when fewer than 2 words would survive.
+     */
+    public static function strip_stop_words($phrase) {
+        $tokens = self::words($phrase);
+        if (count($tokens) < 2) return implode(' ', $tokens);
+        $lists = Settings::keyphrase_words();
+        $stop = array();
+        foreach (array('fillers', 'materials', 'cities') as $name) {
+            foreach ($lists[$name] as $word) $stop[self::key($word)] = true;
+        }
+        $kept = array_values(array_filter($tokens, function ($t) use ($stop) {
+            $k = KeyphraseExtractor::key($t);
+            return !isset($stop[$k]) && !preg_match('/^[\d۰-۹٠-٩]+$/u', $k);
+        }));
+        return count($kept) >= Settings::KEYPHRASE_MIN_WORDS ? implode(' ', $kept) : implode(' ', $tokens);
     }
 
     /**
@@ -96,7 +115,7 @@ final class KeyphraseExtractor {
         if (!$tokens) return '';
         $max = Settings::KEYPHRASE_MAX_WORDS;
         $min = Settings::KEYPHRASE_MIN_WORDS;
-        if (count($tokens) <= $max) return implode(' ', $tokens);
+        if (count($tokens) <= $max) return self::strip_stop_words(implode(' ', $tokens));
 
         $lists = Settings::keyphrase_words();
         $key = array(__CLASS__, 'key');
@@ -121,7 +140,7 @@ final class KeyphraseExtractor {
             $base = array();
             if ($kept) $base[] = $kept[0];
             // جنسیت (مردانه/زنانه) مقدم بر سایر صفت‌های مخاطب است
-            foreach (array($gender, $audience) as $group) {
+            foreach (array($gender) as $group) {
                 foreach ($kept as $i => $t) {
                     $k = call_user_func($key, $t);
                     if ($i > 0 && isset($group[$k]) && !in_array($t, $base, true)) $base[] = $t;
