@@ -66,10 +66,10 @@ final class SmartLinkDistributor {
 
         $links = array();
         if ($category) {
-            $links[] = array('anchor' => $category['name'], 'url' => $category['url'], 'required' => true, 'type' => 'category');
+            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($category['name']), 'url' => $category['url'], 'required' => true, 'type' => 'category');
         }
         foreach ($related as $entry) {
-            $links[] = array('anchor' => $entry['anchor'], 'url' => $entry['url'], 'locked' => true, 'required' => true, 'type' => 'product');
+            $links[] = array('anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($entry['anchor']), 'url' => $entry['url'], 'locked' => true, 'required' => true, 'type' => 'product');
         }
         return array('category' => $category, 'related' => $related, 'internal_links' => $links);
     }
@@ -153,7 +153,7 @@ final class SmartLinkDistributor {
 
         $picked = array();
         foreach (array_slice($candidates, 0, $limit) as $candidate) {
-            $picked[] = array('id' => (int) $candidate['id'], 'title' => $candidate['title'], 'anchor' => $candidate['anchor'], 'url' => $candidate['url']);
+            $picked[] = array('id' => (int) $candidate['id'], 'title' => $candidate['title'], 'anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($candidate['anchor']), 'url' => $candidate['url']);
         }
         return $picked;
     }

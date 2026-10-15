@@ -29,7 +29,7 @@
   const KHAZAN_NAV = [
     { key: 'home', tab: 'home', icon: 'home', label: 'خانه', title: 'خانه' },
     { key: 'generator', tab: 'generator', icon: 'edit', label: 'تولید محتوای تکی', title: 'تولید محتوای تکی' },
-    { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه شیت CSV', title: 'تولید انبوه شیت CSV' },
+    { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه محتوا', title: 'تولید انبوه محتوا' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
     { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
     { key: 'archive', tab: 'archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
@@ -152,7 +152,7 @@
         const histCount = this.state.historyLoading ? '…' : toPersianDigits(this.state.contentHistory.length);
         const cards = [
           { go: 'generator', icon: 'edit', title: 'تولید محتوای تکی', desc: 'تولید مقاله، توضیحات محصول و دسته‌بندی با رعایت قوانین سئو و لینک‌سازی هوشمند.', btn: 'باز کردن ماژول' },
-          { go: 'bulk', icon: 'sheet', title: 'تولید انبوه شیت CSV', desc: 'آپلود فایل CSV، تطبیق خودکار با محصولات سایت و تولید صف‌بندی‌شده محتوا.', btn: 'باز کردن ماژول' },
+          { go: 'bulk', icon: 'sheet', title: 'تولید انبوه محتوا', desc: 'انتخاب محصولات سایت یا بارگذاری فایل شیت، تطبیق خودکار و تولید صف‌بندی‌شده محتوا.', btn: 'باز کردن ماژول' },
           { go: 'orphans', icon: 'compass', title: 'صفحات یتیم و لینک‌سازی', desc: 'شناسایی صفحاتی که هیچ لینک ورودی ندارند و ساخت لینک داخلی برای آن‌ها.', btn: 'باز کردن ماژول' },
           { go: 'seofix', icon: 'wrench', title: 'رفع خطای هوشمند سئو', desc: 'بررسی خطاهای خوانایی و سئو و اصلاح انتخابی متن با هوش مصنوعی.', btn: 'باز کردن ماژول' },
           { go: 'settings', icon: 'gear', title: 'تنظیمات API', desc: 'ثبت کلید AvalAI، تست اتصال و مدیریت تنظیمات هوش مصنوعی.', btn: 'تنظیمات' },
@@ -365,10 +365,10 @@
             ${this.btn3d(pos === 'top' ? 'wila-site-add' : 'wila-site-add-bottom', 'btn-warning wila-site-add', `افزودن ${toPersianDigits(siteSelected)} محصول به صف تولید انبوه`, b.running || !siteSelected ? 'disabled' : '')}
           </div>`;
         contentHtml = `<div class="wila-card">
-          <h3 style="margin-top:0">تولید محتوای انبوه</h3>
+          <h3 style="margin-top:0">تولید انبوه محتوا</h3>
           <div class="khazan-subtabs" id="wila-bulk-source">
+            <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'site' ? 'active' : ''}" data-source="site" ${locked}>🛍️ محصولات سایت</button>
             <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'csv' ? 'active' : ''}" data-source="csv" ${locked}>📄 بارگذاری فایل CSV</button>
-            <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'site' ? 'active' : ''}" data-source="site" ${locked}>🛍️ انتخاب از محصولات سایت</button>
           </div>
           ${siteMode && b.site.collapsed ? `<div class="khazan-site-summary" id="wila-site-summary"><span>✅ تعداد ${toPersianDigits(srcIdx.length)} محصول به صف اضافه شد</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-reopen" ${b.running ? 'disabled' : ''}>تغییر یا بازگشت به انتخاب محصولات</button></div>` : ''}
           ${siteMode && !b.site.collapsed && srcIdx.length ? `<div class="khazan-site-summary khazan-site-queue-note" id="wila-site-queue-note"><span>🗂️ ${toPersianDigits(srcIdx.length)} محصول در صف تولید است</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-return">بازگشت به صف</button></div>` : ''}
@@ -725,6 +725,13 @@ ${siteExpanded ? `
       return contentHtml;
     },
 
+    // ورود به تب تولید انبوه: منبع پیش‌فرض «محصولات سایت» است (مگر ردیف CSV بارگذاری شده یا صف در حال اجرا باشد)
+    enterBulkTab: function () {
+      const b = this.state.bulk;
+      if (!b.running && !b.rows.some(r => r.source !== 'site')) b.source = 'site';
+      if (b.source === 'site' && !b.site.loaded && !b.site.loading) this.loadSiteProducts();
+    },
+
     bindTabEvents: function () {
       this.root.querySelectorAll('.wila-tab-btn').forEach(btn => btn.addEventListener('click', e => {
         this.state.activeTab = e.currentTarget.getAttribute('data-tab');
@@ -732,6 +739,7 @@ ${siteExpanded ? `
         this.state.navOpen = false;
         this.state.activeNav = e.currentTarget.getAttribute('data-nav') || this.state.activeTab;
         this.state.pendingScroll = e.currentTarget.getAttribute('data-scroll') || '';
+        if (this.state.activeTab === 'bulk') this.enterBulkTab();
         if (this.state.activeTab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (this.state.activeTab === 'home' && !this.state.siteStats && !this.state.siteStatsLoading) this.fetchSiteStats();
         if (this.state.activeTab === 'items') this.fetchItems();
@@ -747,6 +755,7 @@ ${siteExpanded ? `
         this.state.activeTab = target.tab;
         this.state.activeNav = target.key;
         this.state.pendingScroll = target.scroll || '';
+        if (target.tab === 'bulk') this.enterBulkTab();
         if (target.tab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (target.tab === 'orphans') this.fetchOrphans();
         if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');

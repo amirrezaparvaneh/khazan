@@ -104,6 +104,7 @@ final class ContentParser {
         $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
         $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms);
+        $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
 
         $external_links = self::extract_external_links($content);
@@ -316,6 +317,7 @@ final class ContentParser {
         $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, $kind);
         $content = \Khazan\Services\Content\ContentGuard::enforce_link_anchors($content);
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $seo['focuskw'], $seo['synonyms']);
+        $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
         return array(
             'content'          => $content,

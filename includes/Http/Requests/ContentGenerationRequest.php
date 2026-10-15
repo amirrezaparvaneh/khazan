@@ -85,7 +85,7 @@ final class ContentGenerationRequest {
             if (!empty($orphan['url']) && !empty($orphan['title'])) {
                 // محصول با کلیدواژه کانونی: انکر قفل‌شده؛ بدون آن، نام کامل محصول بدون دستکاری
                 $focus_anchor = $orphan['type'] === Settings::product_post_type() ? (new \Khazan\Repository\ContentTargetRepository())->product_link_anchor($orphan['id']) : '';
-                $anchor = $focus_anchor !== '' ? $focus_anchor : $orphan['title'];
+                $anchor = $focus_anchor !== '' ? $focus_anchor : \Khazan\Services\Seo\KeyphraseExtractor::from_title($orphan['title']);
                 $links[] = array('anchor' => $anchor, 'url' => esc_url_raw($orphan['url']), 'orphan' => true, 'locked' => $focus_anchor !== '');
             }
         }

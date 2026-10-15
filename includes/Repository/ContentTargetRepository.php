@@ -11,6 +11,7 @@ namespace Khazan\Repository;
 use Khazan\Services\Links\SmartLinkDistributor;
 use Khazan\Services\Links\TransientAssignmentLedger;
 use Khazan\Services\Links\WordPressLinkCandidateProvider;
+use Khazan\Services\Seo\KeyphraseExtractor;
 use Khazan\Services\Seo\SeoMetaService;
 use Khazan\Core\Settings;
 
@@ -350,18 +351,34 @@ final class ContentTargetRepository {
     }
 
     /**
-     * انکرتکست لینک به یک محصول: دقیقاً کلیدواژه کانونی مقصد، بدون کوتاه‌سازی یا تغییر.
-     * ترتیب منبع: RankMath، Yoast، سپس ستون کلیدواژه کانونی شیت CSV که هنگام آپلود ثبت شده است.
-     * اگر هیچ‌کدام نبود رشته خالی برمی‌گردد و لینک قفل‌شده ساخته نمی‌شود.
+     * انکرتکست لینک به یک محصول، حداکثر ۴ کلمه.
+     * ترتیب منبع: RankMath، Yoast، سپس ستون کلیدواژه کانونی شیت CSV؛ اگر عبارت ذخیره‌شده ≤۴ کلمه باشد همان استفاده می‌شود،
+     * وگرنه ۲ تا ۴ کلمه از عنوان محصول (دسته‌بندی اصلی + مدل/ویژگی) استخراج می‌شود.
      */
     public function product_link_anchor($id) {
+        $stored = '';
         $rank = SeoMetaService::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
-        if ($rank) return $rank[0];
-        foreach (array('_yoast_wpseo_focuskw', \Khazan\Core\Settings::META_CSV_FOCUS) as $meta_key) {
-            $value = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, $meta_key, true)));
-            if ($value !== '') return $value;
+        if ($rank) {
+            $stored = $rank[0];
+        } else {
+            foreach (array('_yoast_wpseo_focuskw', Settings::META_CSV_FOCUS) as $meta_key) {
+                $value = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, $meta_key, true)));
+                if ($value !== '') { $stored = $value; break; }
+            }
         }
-        return '';
+        return KeyphraseExtractor::optimal($stored, (string) get_the_title($id), $this->primary_category_name($id));
+    }
+
+    /**
+     * نام دستهٔ اصلی محصول (Yoast / Rank Math) یا اولین دستهٔ اختصاص‌یافته؛ خالی اگر دسته‌ای نباشد
+     */
+    public function primary_category_name($id) {
+        $repo = new SiteEntityRepository();
+        $categories = $repo->product_categories($id);
+        if (!$categories) return '';
+        $primary = $repo->primary_category_id($id, array_keys($categories));
+        $entry = $primary && isset($categories[$primary]) ? $categories[$primary] : reset($categories);
+        return isset($entry['name']) ? (string) $entry['name'] : '';
     }
 
     /**

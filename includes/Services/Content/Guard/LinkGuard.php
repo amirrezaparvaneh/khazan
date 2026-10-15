@@ -8,6 +8,7 @@
 namespace Khazan\Services\Content\Guard;
 
 use Khazan\Core\Settings;
+use Khazan\Services\Seo\KeyphraseExtractor;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -115,7 +116,7 @@ final class LinkGuard {
         foreach ((array) $links as $link) {
             if (empty($link['required']) || empty($link['url']) || empty($link['anchor'])) continue;
             if (isset($present[untrailingslashit($link['url'])])) continue;
-            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html($link['anchor']) . '</a>';
+            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html(KeyphraseExtractor::cap($link['anchor'])) . '</a>';
             if (isset($link['type']) && $link['type'] === 'category') {
                 if ($category === null) $category = $anchor;
             } else {
@@ -145,8 +146,22 @@ final class LinkGuard {
                 $product_id = (new \Khazan\Repository\ContentTargetRepository())->product_id_from_url($url);
                 if ($product_id) $anchor = (new \Khazan\Repository\ContentTargetRepository())->product_link_anchor($product_id);
             }
+            $anchor = KeyphraseExtractor::cap($anchor);
             if ($anchor === '' || trim(wp_strip_all_tags($m[4])) === $anchor) return $m[0];
             return $m[1] . esc_html($anchor) . $m[5];
+        }, $html);
+    }
+
+    /**
+     * هیچ لینکی نباید انکری بیش از $max کلمه داشته باشد: کلمات اضافه بعد از </a> به‌صورت متن ساده می‌مانند.
+     * انکرهای دارای تگ تو در تو دست‌نخورده می‌مانند.
+     */
+    public static function cap_anchor_length($html, $max = Settings::KEYPHRASE_MAX_WORDS) {
+        return preg_replace_callback('~(<a\b[^>]*>)([^<]*)(</a>)~is', function ($m) use ($max) {
+            $text = html_entity_decode($m[2], ENT_QUOTES, 'UTF-8');
+            if (KeyphraseExtractor::count_words($text) <= $max) return $m[0];
+            $words = KeyphraseExtractor::words($text);
+            return $m[1] . esc_html(implode(' ', array_slice($words, 0, $max))) . $m[3] . ' ' . esc_html(implode(' ', array_slice($words, $max)));
         }, $html);
     }
 }

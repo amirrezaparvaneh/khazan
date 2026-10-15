@@ -41,6 +41,10 @@ final class ContentGuard {
         return LinkGuard::ensure_internal_links($html, $links);
     }
 
+    public static function cap_anchor_length($html, $max = 4) {
+        return LinkGuard::cap_anchor_length($html, $max);
+    }
+
     public static function pick_reference_url($term) {
         return LinkGuard::pick_reference_url($term);
     }

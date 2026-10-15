@@ -78,6 +78,27 @@ final class Settings {
     const AI_EST_INPUT_TOKENS_PER_ROW  = 3000;
     const AI_EST_OUTPUT_TOKENS_PER_ROW = 3000;
 
+    // ---- focus keyphrase / anchor text standard: 2-4 meaningful words, never a full product title ----
+    const KEYPHRASE_MAX_WORDS = 4;
+    const KEYPHRASE_MIN_WORDS = 2;
+    const KEYPHRASE_MODEL_MARKER = 'مدل';
+    const FILTER_KEYPHRASE_WORDS = 'wila_keyphrase_words';
+
+    /** Generic / promotional words that never belong in a keyphrase. */
+    const KEYPHRASE_FILLERS = array('طبیعی', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
+
+    /** Materials: dropped unless the phrase would become too short. */
+    const KEYPHRASE_MATERIALS = array('چرم', 'چرمی', 'جیر', 'پارچه', 'پارچه‌ای', 'مصنوعی');
+
+    /** Audience / style qualifiers that are kept next to the product type. */
+    const KEYPHRASE_AUDIENCE = array('مردانه', 'زنانه', 'دخترانه', 'پسرانه', 'بچگانه', 'بچه‌گانه', 'نوجوان', 'اسپرت', 'رسمی', 'مجلسی');
+
+    /** Gender words: kept first among the audience qualifiers. */
+    const KEYPHRASE_GENDER = array('مردانه', 'زنانه', 'دخترانه', 'پسرانه', 'بچگانه', 'بچه‌گانه');
+
+    /** City / origin names. */
+    const KEYPHRASE_CITIES = array('تبریز', 'تهران', 'اصفهان', 'شیراز', 'مشهد', 'کرج', 'قم', 'اهواز', 'رشت', 'ارومیه', 'یزد', 'کرمان', 'همدان', 'اراک', 'زنجان', 'ایران', 'ایرانی', 'تبریزی');
+
     // ---- network timeouts (seconds) ----
     const TIMEOUT_DEFAULT = 20;
     const TIMEOUT_LONG    = 35;
@@ -104,6 +125,24 @@ final class Settings {
             'input_per_1k'  => isset($row['input_per_1k']) ? (float) $row['input_per_1k'] : self::AI_DEFAULT_PRICING['input_per_1k'],
             'output_per_1k' => isset($row['output_per_1k']) ? (float) $row['output_per_1k'] : self::AI_DEFAULT_PRICING['output_per_1k'],
         );
+    }
+
+    /**
+     * Keyphrase word lists (fillers, materials, audience, gender, cities), extendable with the `wila_keyphrase_words` filter.
+     *
+     * @return array{fillers:string[],materials:string[],audience:string[],gender:string[],cities:string[]}
+     */
+    public static function keyphrase_words() {
+        $lists = array('fillers' => self::KEYPHRASE_FILLERS, 'materials' => self::KEYPHRASE_MATERIALS, 'audience' => self::KEYPHRASE_AUDIENCE, 'gender' => self::KEYPHRASE_GENDER, 'cities' => self::KEYPHRASE_CITIES);
+        if (function_exists('apply_filters')) {
+            $filtered = apply_filters(self::FILTER_KEYPHRASE_WORDS, $lists);
+            if (is_array($filtered)) {
+                foreach ($lists as $name => $default) {
+                    if (isset($filtered[$name]) && is_array($filtered[$name])) $lists[$name] = array_values(array_map('strval', $filtered[$name]));
+                }
+            }
+        }
+        return $lists;
     }
 
     public static function avalai_api_key() {
