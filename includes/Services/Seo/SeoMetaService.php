@@ -70,8 +70,8 @@ final class SeoMetaService {
     /**
      * عنوان سئوی محصول را به قالب «کلیدواژه + مدل | مزیت + ایموجی | برند» و حداکثر ۶۰ کاراکتر می‌رساند
      */
-    public static function guard_title($title, $brand = null, $hint = '') {
-        return SeoTitleGuard::fit($title, $brand === null ? Settings::brand_name() : $brand, $hint);
+    public static function guard_title($title, $focus = '', $brand = null, $hint = '') {
+        return SeoTitleGuard::fit($title, $brand === null ? Settings::brand_name() : $brand, $hint, KeyphraseExtractor::cap($focus), Settings::site_tagline());
     }
 
     /**
@@ -81,12 +81,12 @@ final class SeoMetaService {
         $focus = KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
         $synonyms = self::split_keywords($seo['synonyms'], $focus);
         $map = array(
-            '_yoast_wpseo_title'           => $seo['title'],
+            '_yoast_wpseo_title'           => SeoTitleGuard::strip_variables($seo['title']),
             '_yoast_wpseo_metadesc'        => $seo['desc'],
             '_yoast_wpseo_focuskw'         => $focus,
             '_yoast_wpseo_keywordsynonyms' => self::yoast_synonyms_json($synonyms),
             '_yoast_wpseo_focuskeywords'   => self::yoast_related_json($synonyms),
-            'rank_math_title'              => $seo['title'],
+            'rank_math_title'              => SeoTitleGuard::strip_variables($seo['title']),
             'rank_math_description'        => $seo['desc'],
             'rank_math_focus_keyword'      => implode(',', array_filter(array_merge(array($focus), $synonyms), 'strlen')),
         );
@@ -102,7 +102,7 @@ final class SeoMetaService {
         $focus = KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
         $synonyms = self::split_keywords($seo['synonyms'], $focus);
         $map = array(
-            'wpseo_title'           => $seo['title'],
+            'wpseo_title'           => SeoTitleGuard::strip_variables($seo['title']),
             'wpseo_desc'            => $seo['desc'],
             'wpseo_focuskw'         => $focus,
             'wpseo_keywordsynonyms' => self::yoast_synonyms_json($synonyms),

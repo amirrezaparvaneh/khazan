@@ -101,6 +101,11 @@ final class Settings {
         array('👞', array('کفش مردانه', 'رسمی', 'کفش')),
     );
     const SEO_TITLE_DEFAULT_EMOJI = '👞';
+    // مزیت پیش‌فرض بخش دوم وقتی خروجی AI مزیت قابل‌استفاده ندارد؛ با فیلتر wila_seo_title_feature قابل تغییر است
+    const SEO_TITLE_DEFAULT_FEATURE = 'چرم طبیعی تبریز';
+    const FILTER_SEO_TITLE_FEATURE  = 'wila_seo_title_feature';
+    // کلمات عمومی فروشگاهی که در بخش مزیت (شعار سایت) حذف می‌شوند
+    const SEO_TITLE_FEATURE_STOPWORDS = array('فروشگاه', 'فروشگاهی', 'محصولات', 'محصول', 'خرید', 'آنلاین', 'اینترنتی', 'مرکز', 'عرضه', 'بهترین', 'تولیدی', 'و', 'از', 'در', 'با', 'برای');
 
     /** Generic / promotional words that never belong in a keyphrase. */
     const KEYPHRASE_FILLERS = array('طبیعی', 'اصل', 'اصلی', 'اورجینال', 'مدل', 'کیفیت', 'باکیفیت', 'عالی', 'ارزان', 'جدید', 'ویژه', 'فوق', 'درجه', 'یک', 'لوکس', 'لاکچری', 'شیک', 'زیبا', 'پرفروش', 'پرطرفدار', 'تخفیفی', 'دست‌دوز', 'دستدوز', 'دست‌ساز', 'مناسب', 'روزمره', 'راحت', 'سبک', 'رنگ', 'رنگی', 'رنگبندی', 'سایز', 'جفت', 'عدد', 'بسته', 'و', 'با', 'برای', 'از', 'در', 'به', 'ست');
@@ -173,7 +178,21 @@ final class Settings {
     public static function brand_name() {
         $brand = trim((string) get_option(self::OPT_BRAND_NAME, ''));
         if ($brand === '') $brand = trim((string) apply_filters(self::FILTER_BRAND_NAME, get_bloginfo('name')));
-        return trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($brand)));
+        $brand = trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags($brand)));
+        // فقط نام کوتاه برند: هر چه بعد از جداکننده‌ای مثل « | » یا « - » آمده شعار است
+        $parts = preg_split('/\s+[|\x{2013}\x{2014}\-:·]\s+/u', $brand);
+        return trim($parts[0]);
+    }
+
+    /**
+     * شعار سایت (توضیح کوتاه وردپرس)؛ فقط برای شناسایی و حذف از عنوان سئو
+     */
+    public static function site_tagline() {
+        return trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags((string) get_bloginfo('description'))));
+    }
+
+    public static function seo_title_feature() {
+        return trim((string) apply_filters(self::FILTER_SEO_TITLE_FEATURE, self::SEO_TITLE_DEFAULT_FEATURE));
     }
 
     public static function homepage_keywords() {

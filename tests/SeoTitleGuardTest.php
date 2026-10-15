@@ -8,7 +8,8 @@
 define('ABSPATH', __DIR__ . '/');
 define('WILA_PLUGIN_DIR', dirname(__DIR__) . '/');
 function apply_filters($tag, $value) { return $value; }
-function get_option($k, $d = '') { return $k === 'wila_brand_name' ? 'آکا چرم' : $d; }
+$GLOBALS['opt_brand'] = 'آکا چرم';
+function get_option($k, $d = '') { return $k === 'wila_brand_name' ? $GLOBALS['opt_brand'] : $d; }
 function get_bloginfo($k) { return 'Site'; }
 function wp_strip_all_tags($s) { return strip_tags($s); }
 function wp_json_encode($v, $f = 0) { return json_encode($v, $f); }
@@ -75,7 +76,7 @@ for ($i = 0; $i < 400; $i++) {
 check($ok, '400 random titles: always <= 60 chars, one emoji, brand last');
 
 echo "5. Storage in Rank Math and Yoast\n";
-$final = S::guard_title('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢', $brand);
+$final = S::guard_title('نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢', '', $brand);
 $post = S::post_meta_map(array('title' => $final, 'desc' => 'd', 'focuskw' => 'نیم‌بوت زنانه آلفردو', 'synonyms' => ''));
 check($post['rank_math_title'] === $ref && $post['_yoast_wpseo_title'] === $ref, 'rank_math_title and _yoast_wpseo_title hold the same final title');
 $term = S::term_meta_map(array('title' => $final, 'desc' => '', 'focuskw' => '', 'synonyms' => ''));
@@ -83,9 +84,65 @@ check($term['wpseo_title'] === $ref, 'Yoast term title holds the final title');
 
 echo "6. Prompt\n";
 $rules = ContentRules::seo_title_rules('product');
-check(strpos($rules, '[نوع کالا + جنس + جنسیت + نام مدل] | [مزیت') !== false && strpos($rules, '۶۰ کاراکتر') !== false, 'product rules dictate the 3-part formula and the 60-char cap');
+check(strpos($rules, '[دقیقاً همان focus_keyword] | [مزیت') !== false && strpos($rules, '۶۰ کاراکتر') !== false, 'product rules dictate the 3-part formula and the 60-char cap');
 check(strpos($rules, '👢') !== false && strpos($rules, '👠') !== false && strpos($rules, '👞') !== false && strpos($rules, '👟') !== false && strpos($rules, '👜') !== false && strpos($rules, '🎒') !== false && strpos($rules, '👝') !== false, 'all allowed emojis are listed');
 check(strpos(ContentRules::seo_title_rules('article'), 'نام سایت را اضافه نکن') !== false, 'article rules are unchanged');
+
+echo "7. Rebuild guard: wrong AI output is forced into the 3-part formula\n";
+$focus = 'نیم‌بوت چرم زنانه آلفردو';
+$want = 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم';
+$bad = 'بوت زنانه چرم 👢 | آکاچرم | فروشگاه محصولات چرم طبیعی تبریز';
+check(S::guard_title($bad, $focus, $brand, 'نیم‌بوت زنانه آلفردو') === $want, 'the reported wrong title is rebuilt exactly: ' . S::guard_title($bad, $focus, $brand));
+check(len(S::guard_title($bad, $focus, $brand)) <= 60, 'rebuilt title is <= 60 chars (' . len(S::guard_title($bad, $focus, $brand)) . ')');
+check(S::guard_title($want, $focus, $brand) === $want, 'a correct title passes through unchanged');
+$cases = array(
+    'emoji in part 1'          => '👢 نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز | آکا چرم',
+    'swapped parts'            => 'چرم طبیعی تبریز 👢 | نیم‌بوت چرم زنانه آلفردو | آکا چرم',
+    'tagline appended'         => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم | فروشگاه محصولات چرم طبیعی تبریز',
+    'model missing in part 1'  => 'نیم‌بوت چرم زنانه | چرم طبیعی تبریز 👢 | آکا چرم',
+    'brand with a slogan'      => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم، فروشگاه چرم',
+    'no pipes at all'          => 'نیم‌بوت چرم زنانه آلفردو مشکی ساقدار با کیفیت',
+    'emoji not at end of part 2' => 'نیم‌بوت چرم زنانه آلفردو | 👢 چرم طبیعی تبریز | آکا چرم',
+    'two emojis'               => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢👜 | آکا چرم',
+    'brand missing'            => 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢',
+    'Yoast variables'          => 'نیم‌بوت چرم زنانه آلفردو %sep% %sitedesc% | چرم طبیعی تبریز 👢 | آکا چرم %sep% %sitename%',
+);
+$allOk = true;
+foreach ($cases as $name => $in) {
+    $out = S::guard_title($in, $focus, $brand, 'نیم‌بوت زنانه');
+    $parts = explode(' | ', $out);
+    $ok = count($parts) === 3 && $parts[0] === $focus && $parts[2] === $brand && emojis($out) === 1
+        && preg_match('/👢$/u', $parts[1]) && !preg_match(G::EMOJI_PATTERN, $parts[0]) && len($out) <= 60 && strpos($out, '%') === false && strpos($out, 'فروشگاه') === false;
+    $allOk = $allOk && $ok;
+    if (!$ok) echo "     [$name] => $out\n";
+}
+check($allOk, 'all ' . count($cases) . ' malformed variants end as [focus_keyword] | [feature] 👢 | [brand]');
+$withTag = G::fit('x y | فروشگاه محصولات چرم طبیعی تبریز | آکاچرم', $brand, '', $focus, 'فروشگاه محصولات چرم طبیعی تبریز');
+check($withTag === 'نیم‌بوت چرم زنانه آلفردو | چرم طبیعی تبریز 👢 | آکا چرم' && strpos($withTag, 'فروشگاه') === false, 'tagline equal to bloginfo(description) is dropped; default feature used');
+$ok = true; mt_srand(11); $fw = array('کفش', 'کیف', 'چرم', 'زنانه', 'مردانه', 'آلفردو', 'لارا', 'پارسا');
+for ($i = 0; $i < 300; $i++) {
+    $f = array(); for ($j = 0, $n = mt_rand(2, 4); $j < $n; $j++) $f[] = $fw[mt_rand(0, 7)]; $f = implode(' ', $f);
+    $junk = array('', $f, $f . ' | تست', 'یک دو | سه | چهار | پنج', 'بوت 👢 | ' . $brand . ' | شعار سایت طولانی برای تست', $f . ' 👟 | ' . $brand);
+    $o = S::guard_title($junk[mt_rand(0, 5)], $f, $brand, $f);
+    if (strpos($o, $f . ' | ') !== 0 || mb_substr($o, -7) !== $brand || emojis($o) !== 1 || len($o) > 60 || count(explode(' | ', $o)) !== 3) { $ok = false; echo "     bad: $o  (focus $f)\n"; break; }
+}
+check($ok, '300 random focus/junk pairs: always focus first, brand last, one emoji, <= 60 chars');
+
+echo "8. Yoast / Rank Math storage is a clean direct string\n";
+$post = S::post_meta_map(array('title' => '%%title%% %sep% ' . $want . ' %sitedesc%', 'desc' => 'd', 'focuskw' => $focus, 'synonyms' => ''));
+check($post['_yoast_wpseo_title'] === $want && $post['rank_math_title'] === $want, 'template variables (%sep%, %sitedesc%, %%title%%) never reach _yoast_wpseo_title / rank_math_title');
+
+echo "9. Brand name is the short name only\n";
+$GLOBALS['opt_brand'] = 'آکا چرم | فروشگاه محصولات چرم طبیعی تبریز';
+check(Khazan\Core\Settings::brand_name() === 'آکا چرم', 'a site name carrying a tagline after « | » is cut to the short brand');
+$GLOBALS['opt_brand'] = 'آکا چرم - فروشگاه چرم';
+check(Khazan\Core\Settings::brand_name() === 'آکا چرم', 'and after « - »');
+$GLOBALS['opt_brand'] = 'آکا چرم';
+
+echo "10. Prompt demands the exact formula\n";
+$r = ContentRules::seo_title_rules('product', $focus);
+check(strpos($r, 'بین ۲ تا ۴ کلمه') !== false && strpos($r, 'دسته‌بندی/نوع کالا و هم نام مدل') !== false && strpos($r, $focus) !== false, 'focus_keyword: 2-4 words, category + model, and the product focus is injected');
+check(strpos($r, 'هیچ ایموجی') !== false && strpos($r, 'شعار سایت') !== false && strpos($r, 'فقط در انتهای همین بخش') !== false, 'no emoji in part 1, no slogan in part 3, one emoji at the end of part 2');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

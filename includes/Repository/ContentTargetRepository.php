@@ -265,7 +265,10 @@ final class ContentTargetRepository {
      */
     public function write_post_seo($id, $seo) {
         if (get_post_type($id) === Settings::product_post_type() && !empty($seo['title'])) {
-            $seo['title'] = SeoMetaService::guard_title($seo['title'], null, get_the_title($id) . ' ' . $this->primary_category_name($id));
+            $category = $this->primary_category_name($id);
+            $focus = KeyphraseExtractor::optimal(isset($seo['focuskw']) ? $seo['focuskw'] : '', (string) get_the_title($id), $category);
+            $seo['focuskw'] = $focus;
+            $seo['title'] = SeoMetaService::guard_title($seo['title'], $focus, null, get_the_title($id) . ' ' . $category);
         }
         $this->seo->write_post_seo($id, $seo);
     }

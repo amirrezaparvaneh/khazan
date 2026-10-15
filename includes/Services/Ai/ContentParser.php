@@ -173,10 +173,10 @@ final class ContentParser {
     /**
      * تضمین حضور دقیقاً یک ایموجی در عنوان سئو (در صورت نبود، ایموجی پیش‌فرض نوع محتوا در انتها)
      */
-    public static function normalize_seo_title($title, $kind, $hint = '') {
+    public static function normalize_seo_title($title, $kind, $hint = '', $focus = '') {
         $title = trim(sanitize_text_field((string) $title));
         if ($title === '') return '';
-        if ($kind === Settings::KIND_PRODUCT) return \Khazan\Services\Seo\SeoMetaService::guard_title($title, null, $hint);
+        if ($kind === Settings::KIND_PRODUCT) return \Khazan\Services\Seo\SeoMetaService::guard_title($title, $focus, null, $hint);
         $emoji = '/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2B55}]\x{FE0F}?/u';
         preg_match_all($emoji, $title, $found);
         if (count($found[0]) > 1) {
@@ -281,7 +281,7 @@ final class ContentParser {
 
         $result = self::parse_full_content_payload($raw, $params);
         if (is_wp_error($result)) return $result;
-        $result['seo_title'] = self::normalize_seo_title($result['seo_title'], $kind);
+        $result['seo_title'] = self::normalize_seo_title($result['seo_title'], $kind, isset($params['h1_title']) ? $params['h1_title'] : '', isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
         // Never silently substitute a Persian URL for the requested English slug.
         if (!$is_article || !preg_match('/^[a-z]+(?:-[a-z0-9]+)*$/D', $result['slug'])) {
             $result['slug'] = '';
@@ -296,7 +296,7 @@ final class ContentParser {
         $kind   = Settings::KIND_PRODUCT;
         $result = self::parse_full_content_payload($raw, $params);
         if (is_wp_error($result)) return $result;
-        $result['seo_title'] = $need_title ? self::normalize_seo_title($result['seo_title'], $kind, isset($params['h1_title']) ? $params['h1_title'] : '') : '';
+        $result['seo_title'] = $need_title ? self::normalize_seo_title($result['seo_title'], $kind, isset($params['h1_title']) ? $params['h1_title'] : '', isset($params['focus_keyword']) ? $params['focus_keyword'] : '') : '';
         $result['slug'] = '';
         return $result;
     }

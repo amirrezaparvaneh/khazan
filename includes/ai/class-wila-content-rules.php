@@ -15,8 +15,8 @@ class WILA_Content_Rules {
         return \Khazan\Services\Content\ContentRules::writing_rules($kind);
     }
 
-    public static function seo_title_rules($kind) {
-        return \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
+    public static function seo_title_rules($kind, $focus = "") {
+        return \Khazan\Services\Content\ContentRules::seo_title_rules($kind, $focus);
     }
 
     public static function product_blueprint() {

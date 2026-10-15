@@ -32,28 +32,44 @@ final class SeoTitleGuard {
     }
 
     /**
-     * عنوان را به قالب سه‌بخشی می‌رساند: برند در انتها، دقیقاً یک ایموجی در پایان بخش دوم، حداکثر ۶۰ کاراکتر.
-     * برای رعایت سقف، ابتدا کلمات انتهای بخش مزیت و سپس کلمات انتهایی بخش اول (نه دو کلمه نخست) حذف می‌شوند؛ برند هرگز حذف نمی‌شود.
+     * متغیرهای قالب یوست/رنک‌مث (%sep%، %sitedesc%، %%title%% …) را از رشته حذف می‌کند تا به عنوان نچسبند
      */
-    public static function fit($title, $brand, $hint = '') {
-        $title = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $title)));
+    public static function strip_variables($text) {
+        $text = preg_replace('/%%?[a-z_0-9]+%%?/i', '', (string) $text);
+        return trim(preg_replace('/\s+/u', ' ', $text));
+    }
+
+    /**
+     * عنوان را الزاماً به قالب «[کلیدواژه کانونی دقیق] | [مزیت + یک ایموجی] | [نام کوتاه برند]» می‌رساند.
+     * اگر خروجی AI سه‌بخشی نبود، بخش اول دقیقاً کلیدواژه کانونی نبود، ایموجی جای اشتباه بود یا بخش آخر دقیقاً برند نبود
+     * (مثلاً شعار سایت چسبیده بود) عنوان از نو ساخته می‌شود: sprintf('%s | %s %s | %s', focus, feature, emoji, brand).
+     * سقف ۶۰ کاراکتر: ابتدا کلمات انتهای بخش مزیت حذف می‌شوند، سپس (فقط در آخرین راه) کلمات انتهای بخش اول؛ برند هرگز.
+     */
+    public static function fit($title, $brand, $hint = '', $focus = '', $tagline = '') {
+        $title = self::strip_variables(strip_tags((string) $title));
         $brand = trim(preg_replace('/\s+/u', ' ', (string) $brand));
-        if ($title === '') return '';
+        $focus = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $focus)));
+        if ($title === '' && $focus === '') return '';
 
-        preg_match_all(self::EMOJI_PATTERN, $title, $found);
-        $emoji = !empty($found[0]) ? $found[0][0] : '';
-        $title = trim(preg_replace('/\s+/u', ' ', preg_replace(self::EMOJI_PATTERN, '', $title)));
+        $raw_parts = array_values(array_filter(array_map('trim', preg_split('/\s*[|｜]\s*/u', $title)), 'strlen'));
+        $compliant = self::is_compliant($raw_parts, $brand, $focus);
 
+        $plain = preg_replace(self::EMOJI_PATTERN, '', $title);
         $parts = array();
-        foreach (preg_split('/\s*[|｜]\s*/u', $title) as $part) {
-            $part = trim($part);
-            if ($part === '' || ($brand !== '' && self::norm($part) === self::norm($brand))) continue;
-            $parts[] = $part;
+        foreach (preg_split('/\s*[|｜]\s*/u', $plain) as $part) {
+            $part = trim(preg_replace('/\s+/u', ' ', $part));
+            if ($part !== '') $parts[] = $part;
         }
-        if (!$parts) return $brand;
-        $first = array_shift($parts);
-        $benefit = implode(' ', $parts);
-        if ($emoji === '') $emoji = self::emoji_for($hint . ' ' . $first);
+        if (!$parts && $focus === '') return $brand;
+        $first = $focus !== '' ? $focus : (isset($parts[0]) ? $parts[0] : '');
+        $emoji = self::emoji_for($hint . ' ' . $first);
+
+        if ($compliant && $focus !== '') {
+            $benefit = $parts[1];
+        } else {
+            $benefit = self::feature_from(array_slice($parts, 1), $first, $brand, $tagline);
+            if ($focus === '' && count($parts) < 2) $benefit = '';
+        }
 
         $max = Settings::SEO_TITLE_MAX_CHARS;
         $first_words = preg_split('/\s+/u', $first);
@@ -65,6 +81,43 @@ final class SeoTitleGuard {
             if (count($first_words) > 2) { array_pop($first_words); continue; }
             return $built;
         }
+    }
+
+    /**
+     * مزیت بخش دوم از میان بخش‌های AI: برند و شعار سایت کنار گذاشته می‌شوند، کلمات عمومی فروشگاهی حذف و حداکثر ۴ کلمه می‌ماند؛
+     * اگر چیزی نماند مزیت پیش‌فرض (Settings::seo_title_feature) می‌آید.
+     */
+    private static function feature_from(array $candidates, $first, $brand, $tagline) {
+        $stop = array_flip(array_map(array(__CLASS__, 'norm'), Settings::SEO_TITLE_FEATURE_STOPWORDS));
+        $skip = array(self::flat($brand), self::flat($first), self::flat($tagline));
+        foreach ($candidates as $candidate) {
+            $flat = self::flat($candidate);
+            if ($flat === '' || in_array($flat, $skip, true)) continue;
+            if (self::flat_contains($candidate, $first)) continue;
+            $words = array_values(array_filter(preg_split('/\s+/u', $candidate), function ($w) use ($stop) { return !isset($stop[self::norm($w)]); }));
+            if ($words) return implode(' ', array_slice($words, 0, 4));
+        }
+        return Settings::seo_title_feature();
+    }
+
+    private static function is_compliant(array $parts, $brand, $focus) {
+        if (count($parts) !== 3) return false;
+        if (preg_match(self::EMOJI_PATTERN, $parts[0]) || preg_match(self::EMOJI_PATTERN, $parts[2])) return false;
+        if ($focus !== '' && self::flat($parts[0]) !== self::flat($focus)) return false;
+        if ($brand !== '' && $parts[2] !== $brand) return false;
+        preg_match_all(self::EMOJI_PATTERN, $parts[1], $in_benefit);
+        preg_match_all(self::EMOJI_PATTERN, implode('|', $parts), $all);
+        if (count($in_benefit[0]) !== 1 || count($all[0]) !== 1) return false;
+        return (bool) preg_match(substr(self::EMOJI_PATTERN, 0, -2) . '$/u', $parts[1]) && trim(preg_replace(self::EMOJI_PATTERN, '', $parts[1])) !== '';
+    }
+
+    private static function flat($text) {
+        return str_replace(' ', '', self::norm(trim(preg_replace('/\s+/u', ' ', (string) $text))));
+    }
+
+    private static function flat_contains($haystack, $needle) {
+        $n = self::flat($needle);
+        return $n !== '' && mb_strpos(self::flat($haystack), $n) !== false;
     }
 
     public static function build($first, $benefit, $emoji, $brand) {

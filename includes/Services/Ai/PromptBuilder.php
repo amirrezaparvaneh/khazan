@@ -41,7 +41,7 @@ final class PromptBuilder {
 
     public function outline($params) {
         $kind = $this->kind($params);
-        $prompt = $this->content_system($params) . "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
+        $prompt = $this->content_system($params) . "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
         if ($kind === Settings::KIND_ARTICLE) {
             $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
             $prompt .= '\nدر همین JSON فیلدهای seo_title، meta_description، keyword_synonyms (رشته با ویرگول)، slug (انگلیسی)، entities (آرایه موجودیت‌ها) و evidence_needed (آرایه شواهد لازم برای بازبینی انسانی) را هم اضافه کن. برای هر هدینگ word_budget حداکثر ۲۲۰ تعیین کن.';
@@ -58,7 +58,7 @@ final class PromptBuilder {
 
         $prompt = $this->content_system($params) . "\nطرح تاییدشده:\n" . wp_json_encode($outline, JSON_UNESCAPED_UNICODE) . "\n" .
             "توضیحات و الزامات اختصاصی کاربر را نیز دقیق اجرا کن: " . (!empty($params['description']) ? $params['description'] : 'مورد خاصی ثبت نشده است.') . "\n" .
-            \Khazan\Services\Content\ContentRules::seo_title_rules($kind) .
+            \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '') .
             "برای سئوی این محتوا این داده‌ها را نیز تولید کن: عنوان سئو، توضیحات متا و ۳ تا ۶ مترادف/عبارت کلیدی مرتبط که با ویرگول جدا شوند. این موارد باید دقیقاً بر اساس موضوع و کلیدواژه کانونی باشند.\n";
         if ($is_article) {
             $prompt .= "در متن، با توجه به طول محتوا ۱ لینک خارجی برای مقاله زیر ۱۰۰۰ کلمه و حداکثر ۲ لینک برای محتوای طولانی‌تر قرار بده. فقط منابع معتبر اولیه/رسمی، دانشگاهی یا سازمان‌های استاندارد مرتبط را انتخاب کن. URL را واقعی و دقیق استفاده کن؛ منبع یا URL نامطمئن/ساختگی ایجاد نکن، در صورت اطمینان نداشتن لینک خارجی نگذار.\n" .
@@ -122,7 +122,7 @@ final class PromptBuilder {
             ($links ? "لینک داخلی اجباری با <a href=\"URL\">:\n" . implode("\n", $links) . "\n" : '') . $this->locked_links_block($params['internal_links']) .
             "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
-        if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind);
+        if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
         if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا با یک ایموجی]\n===WILA_SEO_TITLE_END===";
         if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===";
         if ($need_syn) $prompt .= "\n===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
