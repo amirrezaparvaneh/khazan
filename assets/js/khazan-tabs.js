@@ -105,8 +105,62 @@
               <p>${c.desc}</p>
               <div class="khazan-card-actions"><button type="button" class="khazan-pill-btn khazan-go" data-go="${c.go}">${c.btn}</button></div>
             </div>
-          </div>`).join('')}</div>`;
+          </div>`).join('')}</div>${this.viewDashboard()}`;
       return contentHtml;
+    },
+
+    // «وضعیت و سلامت محتوایی سایت»: KPI، حلقه‌های پوشش محتوا و نوار تفکیک دسته‌بندی‌ها (SVG/CSS خالص)
+    viewDashboard: function () {
+      const st = this.state.siteStats;
+      const fa = toPersianDigits;
+      const header = `<div class="khazan-health-head"><h3>وضعیت و سلامت محتوایی سایت</h3><button type="button" class="khazan-pill-btn khazan-stats-refresh" ${this.state.siteStatsLoading ? 'disabled' : ''}>${this.state.siteStatsLoading ? 'در حال به‌روزرسانی...' : '↻ به‌روزرسانی آمار'}</button></div>`;
+      if (!st) {
+        if (this.state.siteStatsError) return `<section class="khazan-health" id="khazan-health">${header}<div class="khazan-health-error">⚠️ ${escapeHtml(this.state.siteStatsError)}</div></section>`;
+        return `<section class="khazan-health" id="khazan-health">${header}<div class="khazan-kpi-grid">${'<div class="khazan-kpi"><div class="wila-skeleton" style="height:12px;width:50%"></div><div class="wila-skeleton" style="height:28px;width:40%;margin-top:12px"></div></div>'.repeat(5)}</div><div class="khazan-health-grid">${'<div class="khazan-health-panel"><div class="wila-skeleton" style="height:120px"></div></div>'.repeat(3)}</div></section>`;
+      }
+      const CIRC = 2 * Math.PI * 52;
+      const ring = (pct, label, sub, tone) => `<div class="khazan-ring-wrap khazan-ring-${tone}">
+          <svg class="khazan-ring" viewBox="0 0 120 120" role="img" aria-label="${escapeHtml(label)}: ${fa(pct)}٪">
+            <circle class="khazan-ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle class="khazan-ring-fg" cx="60" cy="60" r="52" style="--ring-total:${CIRC.toFixed(2)};--ring-target:${(CIRC * (1 - pct / 100)).toFixed(2)}"></circle>
+          </svg>
+          <div class="khazan-ring-label"><strong>${fa(pct)}٪</strong><small>${escapeHtml(sub)}</small></div>
+        </div>`;
+      const bar = (title, has, empty, hasLabel, emptyLabel) => {
+        const total = has + empty, hp = total ? (has / total) * 100 : 0;
+        return `<div class="khazan-split">
+          <div class="khazan-split-head"><strong>${title}</strong><span>${fa(total)} مورد</span></div>
+          <div class="khazan-split-bar" role="img" aria-label="${escapeHtml(title)}: ${fa(has)} ${hasLabel}، ${fa(empty)} ${emptyLabel}"><span class="khazan-split-has" style="width:${hp.toFixed(2)}%"></span><span class="khazan-split-empty" style="width:${(total ? 100 - hp : 0).toFixed(2)}%"></span></div>
+          <div class="khazan-split-legend"><span><i class="khazan-dot khazan-dot-has"></i>${hasLabel}: ${fa(has)}</span><span><i class="khazan-dot khazan-dot-empty"></i>${emptyLabel}: ${fa(empty)}</span></div>
+        </div>`;
+      };
+      const p = st.products, a = st.articles, c = st.categories;
+      const kpis = [
+        ['📰', 'مقالات', a.total], ['🛍️', 'محصولات', p.total], ['🗂️', 'دسته‌بندی‌ها', c.total],
+        ['🔗', 'لینک‌های داخلی فعال', st.khazan.internal_links], ['🍁', 'محتواهای تولیدشده با خزان', st.khazan.generated_contents]
+      ];
+      return `<section class="khazan-health" id="khazan-health">${header}
+        <div class="khazan-kpi-grid">${kpis.map(([ico, title, value]) => `<div class="khazan-kpi"><span class="khazan-kpi-icon" aria-hidden="true">${ico}</span><span class="khazan-kpi-title">${title}</span><span class="khazan-kpi-value">${fa(value)}</span></div>`).join('')}</div>
+        <div class="khazan-health-grid">
+          <div class="khazan-health-panel">
+            <h4>پوشش محتوای محصولات</h4>
+            ${ring(p.coverage_percent, 'پوشش محتوای محصولات', 'دارای توضیحات', 'products')}
+            <p class="khazan-health-note"><strong>${fa(p.has_content)}</strong> محصول دارای توضیحات از <strong>${fa(p.total)}</strong>؛ <strong>${fa(p.empty_content)}</strong> محصول نیازمند محتوا</p>
+            <button type="button" class="khazan-pill-btn khazan-quick-empty" ${p.empty_content > 0 && !this.state.bulk.running ? '' : 'disabled'}>⚡ تولید محتوا برای ${fa(p.empty_content)} محصول بدون توضیحات</button>
+          </div>
+          <div class="khazan-health-panel">
+            <h4>شاخص پوشش محتوایی کل سایت</h4>
+            ${ring(st.coverage.score, 'شاخص پوشش محتوایی', 'کل سایت', 'site')}
+            <p class="khazan-health-note"><strong>${fa(st.coverage.covered)}</strong> صفحه دارای محتوا از <strong>${fa(st.coverage.total)}</strong> صفحه (محصولات، مقالات و دسته‌بندی‌ها)</p>
+          </div>
+          <div class="khazan-health-panel khazan-health-wide">
+            <h4>تفکیک وضعیت محتوا</h4>
+            ${bar('دسته‌بندی‌ها (توضیحات سئو)', c.with_description, c.empty, 'دارای توضیحات', 'بدون توضیحات')}
+            ${bar('محصولات', p.has_content, p.empty_content, 'دارای توضیحات', 'خالی')}
+            ${bar('مقالات و نوشته‌ها', a.has_content, a.empty_content, 'دارای متن', 'بدون محتوا')}
+          </div>
+        </div>
+      </section>`;
     },
 
     viewOverview: function () {
@@ -228,6 +282,12 @@
         const locked = b.running ? 'disabled' : '';
         const siteSelected = b.site.items.filter(p => b.site.selected[p.id]).length;
         const siteExpanded = b.source === 'site' && !b.site.collapsed;
+        // کنترل‌های صف (شروع/مکث/توقف) بالا و پایین جدول؛ هر دو از یک state رندر می‌شوند و همیشه هم‌گام‌اند
+        const queueControls = (pos) => `<div class="khazan-queue-controls khazan-queue-controls-${pos}">
+            ${this.btn3d(pos === 'top' ? 'wila-bulk-start' : 'wila-bulk-start-bottom', 'btn-primary wila-bulk-start', b.running ? 'در حال پردازش...' : 'شروع تولید محتوا', b.running ? 'disabled' : '')}
+            ${this.btn3d(pos === 'top' ? 'wila-bulk-pause' : 'wila-bulk-pause-bottom', 'btn-warning wila-bulk-pause', b.paused ? 'ادامه' : 'مکث موقت', !b.running || b.stopRequested ? 'disabled' : '')}
+            ${this.btn3d(pos === 'top' ? 'wila-bulk-stop' : 'wila-bulk-stop-bottom', 'btn-danger wila-bulk-stop', b.stopRequested && b.running ? 'در حال توقف...' : 'توقف کامل', !b.running || b.stopRequested ? 'disabled' : '')}
+          </div>`;
         // نوار عملیات بالا و پایین جدول پیش‌نمایش؛ هر دو همیشه هم‌گام‌اند (از یک state رندر می‌شوند)
         const siteBar = (pos) => `<div class="khazan-site-bar khazan-site-bar-${pos}">
             <label class="khazan-site-bar-all"><input type="checkbox" class="khazan-checkbox wila-site-select-all" ${siteSelected === b.site.items.length ? 'checked' : ''} ${b.running ? 'disabled' : ''}> انتخاب همه</label>
@@ -326,6 +386,8 @@ ${siteExpanded ? `
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'found' ? 'active' : ''}" data-view="found">🟢 محصولات موجود در سایت (متصل‌شده) <em>${toPersianDigits(matchedCount)}</em></button>
               <button type="button" class="khazan-subtab wila-bulk-view ${b.view === 'missing' ? 'active' : ''}" data-view="missing">⚠️ محصولات جدید / یافت‌نشده <em>${toPersianDigits(b.rows.length - matchedCount)}</em></button>
             </div>
+            ${queueControls('top')}
+            <div id="wila-bulk-progress" class="khazan-queue-progress">${this.bulkProgressHtml()}</div>
             <div class="wila-table-scroll"><table class="wila-table"><thead><tr>
               <th><input type="checkbox" class="khazan-checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>وضعیت</th>${b.view === 'found' ? '<th>محصول سایت</th>' : ''}<th>وضعیت پردازش</th><th>عملیات</th>
             </tr></thead><tbody>${visible.length ? visible.map(i => {
@@ -339,11 +401,7 @@ ${siteExpanded ? `
               else badge = b.createMissing ? '<span class="khazan-badge khazan-badge-warn" title="پس از شروع، محصول پیش‌نویس ساخته می‌شود">➕ ساخت پیش‌نویس</span>' : '<span class="khazan-badge khazan-badge-miss">❌ پیدا نشد</span>';
               return `<tr><td><input type="checkbox" class="khazan-checkbox wila-bulk-row" data-index="${i}" ${b.selected[i] ? 'checked' : ''} ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}></td><td>${toPersianDigits(i + 1)}</td><td style="font-weight:600">${escapeHtml(r.name || r.slug || '')}</td><td>${badge}</td>${b.view === 'found' ? `<td>${m && m.matched ? `<a href="${escapeHtml(m.url)}" target="_blank" rel="noopener">${escapeHtml(m.title)}</a>` : '—'}</td>` : ''}<td data-bulk-status="${i}">${this.bulkStatusHtml(r)}</td><td><button class="wila-btn wila-btn-outline wila-btn-sm wila-bulk-single" data-index="${i}" ${this.bulkIsTargetable(i) && !b.running ? '' : 'disabled'}>${m && (m.generated || r.run === 'done') ? '⚙️ تولید مجدد' : '▶ تولید این ردیف'}</button></td></tr>`;
             }).join('') : `<tr><td colspan="7" style="text-align:center;padding:20px;color:#78716c">${b.view === 'found' ? 'محصول متصل‌شده‌ای برای نمایش وجود ندارد.' : 'همه ردیف‌ها به محصولات سایت متصل شده‌اند.'}</td></tr>`}</tbody></table></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-              ${this.btn3d('wila-bulk-start', 'btn-primary', b.running ? 'در حال پردازش...' : 'شروع تولید انبوه', b.running ? 'disabled' : '')}
-              ${b.running ? this.btn3d('wila-bulk-pause', 'btn-warning', b.paused ? 'ادامه' : 'مکث') + this.btn3d('wila-bulk-stop', 'btn-danger', 'توقف') : ''}
-            </div>
-            <div id="wila-bulk-progress" style="margin-top:14px">${this.bulkProgressHtml()}</div>
+            ${queueControls('bottom')}
             <div id="wila-bulk-log" style="margin-top:10px;max-height:220px;overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:.8rem;line-height:1.9">${this.bulkLogHtml()}</div>
           ` : ''}
         </div>`;
@@ -602,6 +660,7 @@ ${siteExpanded ? `
         this.state.activeNav = e.currentTarget.getAttribute('data-nav') || this.state.activeTab;
         this.state.pendingScroll = e.currentTarget.getAttribute('data-scroll') || '';
         if (this.state.activeTab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
+        if (this.state.activeTab === 'home' && !this.state.siteStats && !this.state.siteStatsLoading) this.fetchSiteStats();
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
@@ -620,6 +679,8 @@ ${siteExpanded ? `
         this.render();
       }));
 
+      this.root.querySelectorAll('.khazan-stats-refresh').forEach(btn => btn.addEventListener('click', () => this.fetchSiteStats(true)));
+      this.root.querySelectorAll('.khazan-quick-empty').forEach(btn => btn.addEventListener('click', () => this.goBulkEmptyProducts()));
       const leafToggle = this.root.querySelector('#khazan-leaf-toggle');
       if (leafToggle && window.KhazanLeaves) leafToggle.addEventListener('click', () => {
         const on = window.KhazanLeaves.toggle();

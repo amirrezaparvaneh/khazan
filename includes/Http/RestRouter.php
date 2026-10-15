@@ -38,6 +38,7 @@ final class RestRouter {
         register_rest_route($this->namespace, '/queue', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($queue, 'get_scan_queue'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/scan-item', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'scan_single_item'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/summary', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($report, 'get_dashboard_summary'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/report/site-stats', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($report, 'get_site_stats'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/items', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($report, 'get_items_report'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/item-details', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($report, 'get_item_details'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/orphans', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($report, 'get_orphan_items'), 'permission_callback' => array($this, 'check_permission')));

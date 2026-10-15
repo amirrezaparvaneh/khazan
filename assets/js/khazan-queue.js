@@ -110,10 +110,24 @@
       return '—';
     },
 
+    // زمان باقی‌مانده تقریبی بر پایه میانگین زمان محصولات تمام‌شده
+    bulkEtaText: function () {
+      const b = this.state.bulk;
+      if (!b.running || !b.done || !b.startedAt || b.done >= b.total) return '';
+      const seconds = Math.max(1, Math.round(((Date.now() - b.startedAt) / b.done) * (b.total - b.done) / 1000));
+      const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), sec = seconds % 60;
+      const parts = [];
+      if (h) parts.push(`${toPersianDigits(h)} ساعت`);
+      if (m) parts.push(`${toPersianDigits(m)} دقیقه`);
+      if (!h && (sec || !m)) parts.push(`${toPersianDigits(sec)} ثانیه`);
+      return `زمان باقی‌مانده تقریبی: ${parts.join(' و ')}`;
+    },
+
     bulkProgressHtml: function () {
       const b = this.state.bulk;
       const pct = b.total ? Math.round((b.done / b.total) * 100) : 0;
-      return b.total ? `<div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:6px"><span>${b.running ? (b.paused ? 'متوقف موقت' : 'در حال پردازش...') : 'پایان / توقف'}</span><span>${toPersianDigits(b.done)} از ${toPersianDigits(b.total)} (${toPersianDigits(pct)}٪)</span></div><div class="wila-progress-bar-bg"><div class="wila-progress-bar-fill" style="width:${pct}%"></div></div>` : '';
+      const eta = this.bulkEtaText();
+      return b.total ? `<div class="khazan-progress-head"><span>${b.running ? (b.paused ? 'متوقف موقت' : 'در حال پردازش...') : 'پایان / توقف'}${eta ? ` <small class="khazan-progress-eta">· ${eta}</small>` : ''}</span><span class="khazan-progress-count">تکمیل شده: ${toPersianDigits(b.done)} از ${toPersianDigits(b.total)} (${toPersianDigits(pct)}٪)</span></div><div class="wila-progress-bar-bg"><div class="wila-progress-bar-fill" style="width:${pct}%"></div></div>` : '';
     },
 
     bulkLogHtml: function () {
@@ -143,7 +157,7 @@
       // شناسه اجرا و فهرست محصولات صف؛ سرور با آن‌ها لینک‌های ورودی را بین محصولات هم‌دسته به‌طور مساوی پخش می‌کند
       const runId = 'run-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
       const queueProductIds = queue.map(i => b.rows[i].match && b.rows[i].match.matched ? b.rows[i].match.product_id : 0).filter(Boolean);
-      Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0 });
+      Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0, startedAt: Date.now() });
       this.bulkLog('info', `شروع پردازش ${toPersianDigits(queue.length)} محصول.`);
       this.render();
       const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -189,6 +203,17 @@
       this.render();
       app.toast(b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش انبوه به پایان رسید.');
     },
+    // اقدام سریع داشبورد: رفتن به تولید انبوه با منبع «محصولات سایت» و فیلتر محصولات بدون توضیحات
+    goBulkEmptyProducts: function () {
+      const b = this.state.bulk;
+      if (b.running) return;
+      this.state.activeTab = 'bulk';
+      this.state.activeNav = 'bulk';
+      b.source = 'site';
+      Object.assign(b.site, { filter: 'empty', category: 0, search: '', collapsed: false });
+      this.loadSiteProducts();
+    },
+
     setBulkSource: function (source) {
       const b = this.state.bulk;
       if (b.running || (source !== 'csv' && source !== 'site') || b.source === source) return;
@@ -309,15 +334,16 @@
           this.render();
         });
       }
-      const bulkStart = this.root.querySelector('#wila-bulk-start'); if (bulkStart) bulkStart.addEventListener('click', () => this.startBulk());
-      const bulkPause = this.root.querySelector('#wila-bulk-pause'); if (bulkPause) bulkPause.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); });
-      const bulkStop = this.root.querySelector('#wila-bulk-stop'); if (bulkStop) bulkStop.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.bulkRefreshUi(); });
+      // نوار بالا و پایین هر کدام دکمه‌های خودشان را دارند؛ هر المان دقیقاً یک شنونده می‌گیرد (DOM در هر رندر نو می‌شود)
+      this.root.querySelectorAll('.wila-bulk-start').forEach(btn => btn.addEventListener('click', () => this.startBulk()));
+      this.root.querySelectorAll('.wila-bulk-pause').forEach(btn => btn.addEventListener('click', () => { bulk.paused = !bulk.paused; this.bulkLog('info', bulk.paused ? 'مکث پس از محصول جاری.' : 'ادامه پردازش.'); this.render(); }));
+      this.root.querySelectorAll('.wila-bulk-stop').forEach(btn => btn.addEventListener('click', () => { bulk.stopRequested = true; this.bulkLog('info', 'درخواست توقف ثبت شد؛ پس از محصول جاری متوقف می‌شود.'); this.render(); }));
     },
   };
 
   window.KhazanQueue = {
     initialState: function () {
-      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
+      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, startedAt: 0, log: [] };
     },
     methods: methods
   };

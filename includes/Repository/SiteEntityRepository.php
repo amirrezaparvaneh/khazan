@@ -15,6 +15,13 @@ if (!defined('ABSPATH')) {
 
 final class SiteEntityRepository {
 
+    /** @var \wpdb */
+    private $wpdb;
+
+    public function __construct($wpdb = null) {
+        $this->wpdb = $wpdb !== null ? $wpdb : (isset($GLOBALS['wpdb']) ? $GLOBALS['wpdb'] : null);
+    }
+
     public function all() {
         $candidates = array();
         $post_types = get_post_types(array('public' => true), 'names');
@@ -130,6 +137,73 @@ final class SiteEntityRepository {
             'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => $term_ids)),
         ));
         return array_map('intval', (array) $ids);
+    }
+
+    // ---- lightweight content statistics (aggregate queries, no per-row loops) ----
+
+    /**
+     * Content coverage counters for products, articles and categories.
+     * A page "has content" when its text is not blank (tags-only content such as <p></p> counts as content).
+     *
+     * @return array{products:array,articles:array,categories:array}
+     */
+    public function content_stats() {
+        $product_type = Settings::product_post_type();
+        $article_types = array('post');
+        $blog_type = apply_filters(Settings::FILTER_BLOG_POST_TYPE, 'blog');
+        if ($blog_type && post_type_exists($blog_type)) {
+            $article_types[] = $blog_type;
+        }
+        $article_types = array_values(array_diff(array_unique($article_types), array($product_type)));
+
+        $product_terms = $this->term_description_counts(Settings::category_taxonomy());
+        $article_terms = $this->term_description_counts('category');
+        if (Settings::category_taxonomy() === 'category') {
+            $article_terms = array('total' => 0, 'with_description' => 0, 'empty' => 0);
+        }
+
+        return array(
+            'products'   => $this->post_content_counts(array($product_type)),
+            'articles'   => $this->post_content_counts($article_types),
+            'categories' => array(
+                'total'            => $product_terms['total'] + $article_terms['total'],
+                'with_description' => $product_terms['with_description'] + $article_terms['with_description'],
+                'empty'            => $product_terms['empty'] + $article_terms['empty'],
+                'product'          => $product_terms,
+                'article'          => $article_terms,
+            ),
+        );
+    }
+
+    /**
+     * @param string[] $post_types
+     * @return array{total:int,has_content:int,empty_content:int}
+     */
+    private function post_content_counts(array $post_types) {
+        if (!$post_types) {
+            return array('total' => 0, 'has_content' => 0, 'empty_content' => 0);
+        }
+        $in = implode(',', array_fill(0, count($post_types), '%s'));
+        $row = $this->wpdb->get_row($this->wpdb->prepare(
+            "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN TRIM(post_content) = '' THEN 1 ELSE 0 END), 0) AS empty_content FROM {$this->wpdb->posts} WHERE post_status = 'publish' AND post_type IN ({$in})",
+            $post_types
+        ), ARRAY_A);
+        $total = isset($row['total']) ? (int) $row['total'] : 0;
+        $empty = isset($row['empty_content']) ? (int) $row['empty_content'] : 0;
+        return array('total' => $total, 'has_content' => $total - $empty, 'empty_content' => $empty);
+    }
+
+    /**
+     * @return array{total:int,with_description:int,empty:int}
+     */
+    private function term_description_counts($taxonomy) {
+        $row = $this->wpdb->get_row($this->wpdb->prepare(
+            "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN TRIM(description) = '' THEN 1 ELSE 0 END), 0) AS empty_count FROM {$this->wpdb->term_taxonomy} WHERE taxonomy = %s",
+            $taxonomy
+        ), ARRAY_A);
+        $total = isset($row['total']) ? (int) $row['total'] : 0;
+        $empty = isset($row['empty_count']) ? (int) $row['empty_count'] : 0;
+        return array('total' => $total, 'with_description' => $total - $empty, 'empty' => $empty);
     }
 
     private function category_entry($term) {

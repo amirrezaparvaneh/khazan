@@ -99,6 +99,20 @@
       } catch (e) { app.toast('خطا: ' + e.message); }
     },
 
+    // آمار تحلیلی داشبورد (کش ۵ دقیقه‌ای سمت سرور؛ force=true کش را دور می‌زند)
+    fetchSiteStats: async function (force) {
+      const st = this.state;
+      st.siteStatsLoading = true; st.siteStatsError = '';
+      if (force) this.render();
+      try {
+        const r = await this.apiFetch('/report/site-stats' + (force ? '?refresh=1' : ''));
+        if (!r.success) throw new Error(r.message || 'آمار سایت دریافت نشد.');
+        st.siteStats = r;
+      } catch (e) { st.siteStatsError = e.message || 'آمار سایت دریافت نشد.'; }
+      st.siteStatsLoading = false;
+      this.render();
+    },
+
     // فهرست محصولات سایت برای صف تولید انبوه (بدون CSV)
     loadSiteProducts: async function () {
       const b = this.state.bulk, site = b.site;

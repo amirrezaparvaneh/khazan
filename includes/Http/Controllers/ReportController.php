@@ -115,4 +115,12 @@ final class ReportController extends BaseController {
         });
         return rest_ensure_response($orphans['list']);
     }
+
+    /**
+     * Dashboard "site health" statistics (cached for 5 minutes; ?refresh=1 recomputes).
+     */
+    public function get_site_stats($request) {
+        $refresh = (bool) absint($request->get_param('refresh'));
+        return rest_ensure_response(array_merge(array('success' => true), (new \Khazan\Services\Report\SiteStatsService())->stats($refresh)));
+    }
 }

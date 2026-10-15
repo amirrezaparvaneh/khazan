@@ -45,6 +45,8 @@ final class Settings {
     const TRANSIENT_REPAIR_LOCK_PREFIX = 'wila_repair_';
     const TRANSIENT_LINK_LEDGER_PREFIX = 'wila_link_ledger_';
     const LINK_LEDGER_TTL              = 21600; // 6 hours
+    const TRANSIENT_SITE_STATS         = 'wila_site_stats';
+    const SITE_STATS_TTL               = 300;   // 5 minutes
 
     // ---- database table suffixes (prefix comes from $wpdb) ----
     const TABLE_LINKS           = 'wila_internal_links';

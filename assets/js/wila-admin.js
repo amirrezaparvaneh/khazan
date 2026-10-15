@@ -55,6 +55,9 @@
       generatedExternalLinks: [],
       contentHistory: [],
       historyLoading: true,
+      siteStats: null,
+      siteStatsLoading: false,
+      siteStatsError: '',
       isGeneratingContent: false,
       modal: { isOpen: false, title: '', contentHtml: '' },
     },
@@ -76,6 +79,7 @@
       this.fetchSummary();
       this.fetchSettings();
       this.fetchContentHistory();
+      this.fetchSiteStats();
       this.render();
     },
 

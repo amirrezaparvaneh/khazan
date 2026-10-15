@@ -206,6 +206,14 @@ final class DatabaseRepository {
     }
 
     /**
+     * تعداد کل محتواهای تولیدشده (ردیف‌های آرشیو)
+     */
+    public function count_content_history() {
+        $table = $this->content_history_table();
+        return (int) $this->wpdb->get_var("SELECT COUNT(*) FROM {$table}");
+    }
+
+    /**
      * پاکسازی تمام داده‌های جدول ایندکس
      */
     public function truncate_links() {
