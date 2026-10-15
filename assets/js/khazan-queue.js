@@ -140,6 +140,9 @@
       if (!queue.length) return app.toast('هیچ ردیف متصل‌شده‌ای برای پردازش انتخاب نشده است.', 'error');
       queue.forEach(i => { b.rows[i].run = ''; b.rows[i].error = ''; });
       if (!isSingle && b.mode === 'replace' && !confirm(`توضیحات فعلی ${toPersianDigits(queue.length)} محصول جایگزین می‌شود (نسخه قبلی در پایگاه‌داده نگه داشته می‌شود). ادامه می‌دهید؟`)) return;
+      // شناسه اجرا و فهرست محصولات صف؛ سرور با آن‌ها لینک‌های ورودی را بین محصولات هم‌دسته به‌طور مساوی پخش می‌کند
+      const runId = 'run-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+      const queueProductIds = queue.map(i => b.rows[i].match && b.rows[i].match.matched ? b.rows[i].match.product_id : 0).filter(Boolean);
       Object.assign(b, { running: true, paused: false, stopRequested: false, total: queue.length, done: 0 });
       this.bulkLog('info', `شروع پردازش ${toPersianDigits(queue.length)} محصول.`);
       this.render();
@@ -155,7 +158,7 @@
         row.run = 'running'; this.bulkLog('info', `در حال تولید: ${this.bulkRowTitle(row)}`); this.bulkRefreshUi();
         for (let attempt = 0; attempt <= 2; attempt++) {
           try {
-            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match && row.match.matched ? row.match.product_id : 0, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks, create_missing: b.createMissing } }) });
+            const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match && row.match.matched ? row.match.product_id : 0, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks, create_missing: b.createMissing, run_id: runId, queue_ids: queueProductIds } }) });
             if (!r.success) {
               const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err;
             }
@@ -186,6 +189,38 @@
       this.render();
       app.toast(b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش انبوه به پایان رسید.');
     },
+    setBulkSource: function (source) {
+      const b = this.state.bulk;
+      if (b.running || (source !== 'csv' && source !== 'site') || b.source === source) return;
+      b.source = source;
+      if (source === 'site' && !b.site.loaded) this.loadSiteProducts();
+      this.render();
+    },
+
+    // محصولات بارگذاری‌شده از سایت را (بدون تکرار) به جدول صف اضافه می‌کند
+    addSiteProductsToQueue: function () {
+      const b = this.state.bulk;
+      if (b.running) return;
+      const known = new Set(b.rows.filter(r => r.match && r.match.matched).map(r => Number(r.match.product_id)));
+      let added = 0;
+      b.site.items.forEach(p => {
+        if (known.has(Number(p.id))) return;
+        const seo = p.seo || {};
+        const idx = b.rows.length;
+        b.rows.push({
+          name: p.title, slug: p.slug || '', approved: true, run: '', source: 'site',
+          focus_keyword: seo.focuskw || '', related_keywords: seo.synonyms || '', seo_title: '', meta_description: '', description: '',
+          match: { matched: true, via: 'site', product_id: p.id, title: p.title, url: p.url, status: p.status, generated: p.generated || null, history: null }
+        });
+        if (!p.generated) b.selected[idx] = true;
+        added++;
+      });
+      b.status = 'pending';
+      b.view = 'found';
+      this.toast(added ? `${toPersianDigits(added)} محصول به صف اضافه شد.` : 'همه این محصولات قبلاً در صف هستند.', added ? 'success' : 'error');
+      this.render();
+    },
+
     bindQueueEvents: function () {
       const bulk = this.state.bulk;
       const bulkFile = this.root.querySelector('#wila-bulk-file');
@@ -201,6 +236,12 @@
           this.loadBulkFile(f);
         });
       }
+      this.root.querySelectorAll('.wila-bulk-source').forEach(btn => btn.addEventListener('click', e => this.setBulkSource(e.currentTarget.getAttribute('data-source'))));
+      const siteFilter = this.root.querySelector('#wila-site-filter'); if (siteFilter) siteFilter.addEventListener('change', e => { bulk.site.filter = e.target.value; });
+      const siteCategory = this.root.querySelector('#wila-site-category'); if (siteCategory) siteCategory.addEventListener('change', e => { bulk.site.category = Number(e.target.value) || 0; });
+      const siteSearch = this.root.querySelector('#wila-site-search'); if (siteSearch) siteSearch.addEventListener('input', e => { bulk.site.search = e.target.value; });
+      const siteLoad = this.root.querySelector('#wila-site-load'); if (siteLoad) siteLoad.addEventListener('click', () => this.loadSiteProducts());
+      const siteAdd = this.root.querySelector('#wila-site-add'); if (siteAdd) siteAdd.addEventListener('click', () => this.addSiteProductsToQueue());
       const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
       this.root.querySelectorAll('.wila-bulk-view').forEach(btn => btn.addEventListener('click', e => { bulk.view = e.currentTarget.getAttribute('data-view'); this.render(); }));
       const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
@@ -235,7 +276,7 @@
 
   window.KhazanQueue = {
     initialState: function () {
-      return { fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
+      return { source: 'csv', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [] }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, log: [] };
     },
     methods: methods
   };

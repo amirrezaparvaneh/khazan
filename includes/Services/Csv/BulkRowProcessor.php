@@ -10,6 +10,7 @@ namespace Khazan\Services\Csv;
 
 use Khazan\Repository\ContentTargetRepository;
 use Khazan\Repository\DatabaseRepository;
+use Khazan\Services\Links\SmartLinkDistributor;
 use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
@@ -26,10 +27,14 @@ final class BulkRowProcessor {
     /** @var DatabaseRepository */
     private $database;
 
+    /** @var SmartLinkDistributor|null */
+    private $distributor;
+
     /** @var object|null Client exposing generate_bulk_product_content($params, $row). */
     private $ai;
 
-    public function __construct(ContentTargetRepository $targets = null, DatabaseRepository $database = null, $ai = null) {
+    public function __construct(ContentTargetRepository $targets = null, DatabaseRepository $database = null, $ai = null, SmartLinkDistributor $distributor = null) {
+        $this->distributor = $distributor;
         $this->targets  = $targets ?: new ContentTargetRepository();
         $this->database = $database ?: new DatabaseRepository();
         $this->ai       = $ai;
@@ -50,12 +55,13 @@ final class BulkRowProcessor {
         list($product_id, $created, $mode) = $resolved;
 
         (new \Khazan\Repository\ContentTargetRepository())->remember_csv_focus($product_id, $row['focus_keyword']);
-        $context = $this->targets->get_context(Settings::KIND_PRODUCT, $product_id);
+        // related products are planned (fairly) by the distributor, so the context skips its own lookup
+        $context = $this->targets->get_context(Settings::KIND_PRODUCT, $product_id, false);
         if (is_wp_error($context)) return $context;
         if (function_exists('set_time_limit')) @set_time_limit(240);
 
         $inject_seo = !empty($options['inject_seo']);
-        list($internal_links, $context) = $this->build_links(!empty($options['auto_links']), $product_id, $context);
+        list($internal_links, $context) = $this->build_links(!empty($options['auto_links']), $product_id, $context, $options);
         $params = $this->build_params($product_id, $row, $context, $internal_links);
 
         $result = $this->ai()->generate_bulk_product_content($params, $row);
@@ -104,21 +110,42 @@ final class BulkRowProcessor {
 
     // ---- 2. context, links and prompt parameters (consumed by PromptBuilder) ----
 
-    private function build_links($auto_links, $product_id, array $context) {
+    /**
+     * Internal links of one row: the product's own category + fairly distributed related products
+     * (SmartLinkDistributor: pool = the whole site, not just the sheet; least inbound links first).
+     */
+    private function build_links($auto_links, $product_id, array $context, array $options) {
         $internal_links = array();
         if ($auto_links) {
-            foreach (array_slice($context['parent_categories'], 0, 1) as $category) {
-                $internal_links[] = array('anchor' => $category['name'], 'url' => $category['url'], 'required' => true, 'type' => 'category');
-            }
-            $context['related_products'] = $this->targets->related_products($product_id, 2);
-            foreach ($context['related_products'] as $related) {
-                $internal_links[] = array('anchor' => $related['anchor'], 'url' => $related['url'], 'locked' => true, 'required' => true, 'type' => 'product');
-            }
+            $plan = $this->distributor()->plan($product_id, $this->run_id($options), $this->queue_ids($options), SmartLinkDistributor::DEFAULT_LIMIT);
+            $internal_links = $plan['internal_links'];
+            $context['parent_categories'] = $plan['category'] ? array(array('name' => $plan['category']['name'], 'url' => $plan['category']['url'])) : array();
+            $context['related_products'] = array_map(function ($entry) {
+                return array('title' => $entry['title'], 'anchor' => $entry['anchor'], 'url' => $entry['url']);
+            }, $plan['related']);
         } else {
             $context['parent_categories'] = array();
             $context['related_products'] = array();
         }
         return array($internal_links, $context);
+    }
+
+    private function distributor() {
+        if ($this->distributor === null) {
+            $this->distributor = $this->targets->link_distributor();
+        }
+        return $this->distributor;
+    }
+
+    private function run_id($options) {
+        return isset($options['run_id']) ? sanitize_key((string) $options['run_id']) : '';
+    }
+
+    private function queue_ids($options) {
+        if (empty($options['queue_ids']) || !is_array($options['queue_ids'])) {
+            return array();
+        }
+        return array_values(array_filter(array_map('absint', array_slice($options['queue_ids'], 0, 5000))));
     }
 
     private function build_params($product_id, array $row, array $context, array $internal_links) {

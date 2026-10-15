@@ -59,6 +59,7 @@ final class RestRouter {
         register_rest_route($this->namespace, '/content/seo-fix', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($content, 'fix_seo_errors'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($content, 'apply_content_to_target'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/bulk/match', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'bulk_match_products'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/bulk/site-products', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($queue, 'get_site_products'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/bulk/process', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'bulk_process_product'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($content, 'get_content_history'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/content/history/(?P<id>\d+)', array(

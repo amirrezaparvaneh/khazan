@@ -8,6 +8,7 @@ namespace Khazan\Http\Controllers;
 use Khazan\Http\Requests\BulkMatchRequest;
 use Khazan\Http\Requests\BulkProcessRequest;
 use Khazan\Http\Requests\ScanItemRequest;
+use Khazan\Http\Requests\SiteProductsRequest;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -43,5 +44,17 @@ final class QueueController extends BaseController {
         $input = new BulkProcessRequest($request->get_json_params());
         $result = (new \Khazan\Services\Csv\BulkRowProcessor())->process($input->product_id(), $input->row(), $input->options());
         return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
+    }
+
+    /**
+     * Site products for the bulk queue without a CSV file (with the category filter list).
+     */
+    public function get_site_products($request) {
+        $targets = new \Khazan\Repository\ContentTargetRepository();
+        if (!post_type_exists(\Khazan\Core\Settings::product_post_type())) {
+            return new \WP_Error('product_type_unavailable', 'نوع محتوای محصول در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
+        }
+        $result = $targets->list_site_products((new SiteProductsRequest($request))->to_args());
+        return rest_ensure_response(array('success' => true, 'items' => $result['items'], 'has_more' => $result['has_more'], 'categories' => $targets->product_filter_categories()));
     }
 }

@@ -8,6 +8,9 @@
 
 namespace Khazan\Repository;
 
+use Khazan\Services\Links\SmartLinkDistributor;
+use Khazan\Services\Links\TransientAssignmentLedger;
+use Khazan\Services\Links\WordPressLinkCandidateProvider;
 use Khazan\Services\Seo\SeoMetaService;
 use Khazan\Core\Settings;
 
@@ -74,19 +77,19 @@ final class ContentTargetRepository {
     /**
      * داده‌های واقعی مقصد که به هوش مصنوعی داده می‌شود تا چیزی ساخته نشود
      */
-    public function get_context($kind, $id) {
+    public function get_context($kind, $id, $include_related = true) {
         $id = absint($id);
         if (!$id || !Settings::is_target_kind($kind) || !Settings::kind_available($kind)) {
             return new \WP_Error('invalid_target', 'صفحه مقصد انتخاب‌شده معتبر نیست.', array('status' => 400));
         }
-        return $kind === Settings::KIND_PRODUCT ? $this->product_context($id) : $this->category_context($id);
+        return $kind === Settings::KIND_PRODUCT ? $this->product_context($id, $include_related) : $this->category_context($id);
     }
 
     private function plain($html, $words) {
         return wp_strip_all_tags(wp_trim_words(strip_shortcodes((string) $html), $words, '…'));
     }
 
-    private function product_context($id) {
+    private function product_context($id, $include_related = true) {
         $post = get_post($id);
         if (!$post || $post->post_type !== Settings::product_post_type()) {
             return new \WP_Error('invalid_target', 'محصول یافت نشد.', array('status' => 404));
@@ -99,7 +102,7 @@ final class ContentTargetRepository {
             'short_description' => $this->plain($post->post_excerpt, 80),
             'current_content'   => $this->plain($post->post_content, 120),
             'parent_categories' => $this->product_parent_categories($id),
-            'related_products'  => $this->related_products($id),
+            'related_products'  => $include_related ? $this->related_products($id) : array(),
         );
         if (function_exists('wc_get_product')) {
             $product = wc_get_product($id);
@@ -119,9 +122,6 @@ final class ContentTargetRepository {
         return $context;
     }
 
-    /**
-     * دسته‌بندی‌های والد محصول؛ فقط عمیق‌ترین دسته‌ها (آن‌هایی که والد دسته دیگری از همین محصول نیستند)
-     */
     private function product_parent_categories($id) {
         $terms = get_the_terms($id, Settings::category_taxonomy());
         if (!is_array($terms)) return array();
@@ -130,43 +130,37 @@ final class ContentTargetRepository {
         foreach ($terms as $term) {
             if (in_array((int) $term->term_id, $parent_ids, true) && count($terms) > 1) continue;
             $link = get_term_link($term);
-            if (!is_wp_error($link)) $categories[] = array('name' => $term->name, 'url' => $link);
+            if (!is_wp_error($link)) $categories[(int) $term->term_id] = array('name' => $term->name, 'url' => $link);
         }
-        return array_slice($categories, 0, 3);
-    }
-
-    public function related_products($id, $limit = 5) {
-        $ids = array();
-        if (function_exists('wc_get_related_products')) {
-            $ids = wc_get_related_products($id, $limit * 3);
-        } else {
-            $term_ids = wp_get_post_terms($id, Settings::category_taxonomy(), array('fields' => 'ids'));
-            if (!is_wp_error($term_ids) && $term_ids) {
-                $ids = get_posts(array(
-                    'post_type'      => Settings::product_post_type(),
-                    'post_status'    => 'publish',
-                    'posts_per_page' => $limit * 3,
-                    'post__not_in'   => array($id),
-                    'fields'         => 'ids',
-                    'no_found_rows'  => true,
-                    'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => $term_ids)),
-                ));
+        // دسته‌بندی اصلی (Yoast / Rank Math) همیشه اولین مورد است تا لینک دسته به دسته خودِ محصول اشاره کند.
+        $primary = (new SiteEntityRepository())->primary_category_id($id, array_map('intval', wp_list_pluck($terms, 'term_id')));
+        if ($primary) {
+            foreach ($terms as $term) {
+                if ((int) $term->term_id === $primary) {
+                    $link = get_term_link($term);
+                    if (!is_wp_error($link)) {
+                        unset($categories[$primary]);
+                        $categories = array($primary => array('name' => $term->name, 'url' => $link)) + $categories;
+                    }
+                }
             }
         }
-        $related = array();
-        foreach ($ids as $related_id) {
-            if (get_post_status($related_id) !== 'publish') continue;
-            // انکرتکست لینک محصول فقط کلیدواژه کانونی مقصد است؛ محصول بدون کلیدواژه کنار گذاشته می‌شود.
-            $anchor = $this->product_link_anchor($related_id);
-            if ($anchor === '') continue;
-            $related[] = array(
-                'title'  => get_the_title($related_id),
-                'anchor' => $anchor,
-                'url'    => get_permalink($related_id),
-            );
-            if (count($related) >= $limit) break;
-        }
-        return $related;
+        return array_slice(array_values($categories), 0, 3);
+    }
+
+    /**
+     * Related products for a standalone content generation: same-category products only, least-linked first
+     * (Khazan\Services\Links\SmartLinkDistributor; counts come from the link index).
+     */
+    public function related_products($id, $limit = 5) {
+        return $this->link_distributor()->related((int) $id, (int) $limit);
+    }
+
+    /**
+     * Distributor wired to WordPress data and a transient ledger (shared across the requests of one bulk run).
+     */
+    public function link_distributor() {
+        return new SmartLinkDistributor(new WordPressLinkCandidateProvider(null, null, $this), new TransientAssignmentLedger());
     }
 
     private function category_context($id) {
@@ -389,6 +383,79 @@ final class ContentTargetRepository {
         if ($host !== '' && $host !== $site_host) return 0;
         $id = url_to_postid($url);
         return $id && get_post_type($id) === \Khazan\Core\Settings::product_post_type() ? (int) $id : 0;
+    }
+
+    /**
+     * Products of the site for the bulk queue (no CSV): category, content state and SEO meta.
+     *
+     * @param array $args filter (all|no_description|ungenerated), category (term id), search, limit
+     * @return array{items:array,has_more:bool}
+     */
+    public function list_site_products(array $args) {
+        $filter   = isset($args['filter']) ? $args['filter'] : 'all';
+        $limit    = isset($args['limit']) ? max(1, (int) $args['limit']) : 300;
+        $query = array(
+            'post_type'      => Settings::product_post_type(),
+            'post_status'    => array('publish', 'draft', 'pending', 'private'),
+            'posts_per_page' => 200,
+            'orderby'        => 'title',
+            'order'          => 'ASC',
+            'no_found_rows'  => true,
+        );
+        if (!empty($args['search'])) $query['s'] = $args['search'];
+        if (!empty($args['category'])) {
+            $query['tax_query'] = array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => array((int) $args['category'])));
+        }
+        if ($filter === 'ungenerated') {
+            $query['meta_query'] = array(array('key' => Settings::META_CSV_GENERATED, 'compare' => 'NOT EXISTS'));
+        }
+
+        $items = array();
+        $has_more = false;
+        for ($page = 1; $page <= 25; $page++) {
+            $posts = get_posts($query + array('paged' => $page));
+            foreach ($posts as $post) {
+                $has_description = trim(wp_strip_all_tags((string) $post->post_content)) !== '';
+                if ($filter === 'no_description' && $has_description) continue;
+                if (count($items) >= $limit) { $has_more = true; break 2; }
+                $items[] = $this->site_product_row($post, $has_description);
+            }
+            if (count($posts) < 200) break;
+        }
+        return array('items' => $items, 'has_more' => $has_more);
+    }
+
+    private function site_product_row($post, $has_description) {
+        $categories = array();
+        foreach ((new SiteEntityRepository())->product_categories($post->ID) as $category) {
+            $categories[] = array('id' => $category['id'], 'name' => $category['name']);
+        }
+        return array(
+            'id'              => (int) $post->ID,
+            'title'           => get_the_title($post),
+            'slug'            => $post->post_name,
+            'url'             => get_permalink($post),
+            'status'          => $post->post_status,
+            'categories'      => $categories,
+            'has_description' => $has_description,
+            'generated'       => \Khazan\Services\Csv\ProductMatcher::generated_info($post->ID),
+            'seo'             => $this->seo->read_post_seo($post->ID),
+        );
+    }
+
+    /**
+     * Categories for the site-product filter: id, hierarchical label and product count.
+     *
+     * @return array<int,array{id:int,name:string,count:int}>
+     */
+    public function product_filter_categories() {
+        $terms = get_terms(array('taxonomy' => Settings::category_taxonomy(), 'hide_empty' => false, 'orderby' => 'name'));
+        $out = array();
+        if (is_wp_error($terms) || !is_array($terms)) return $out;
+        foreach ($terms as $term) {
+            $out[] = array('id' => (int) $term->term_id, 'name' => $this->term_path_label($term), 'count' => (int) $term->count);
+        }
+        return $out;
     }
 
     /**

@@ -99,6 +99,44 @@
       } catch (e) { app.toast('خطا: ' + e.message); }
     },
 
+    // فهرست محصولات سایت برای صف تولید انبوه (بدون CSV)
+    loadSiteProducts: async function () {
+      const b = this.state.bulk, site = b.site;
+      site.loading = true; site.error = '';
+      this.render();
+      try {
+        const q = `filter=${encodeURIComponent(site.filter)}&category=${encodeURIComponent(site.category || 0)}&search=${encodeURIComponent(site.search || '')}`;
+        const r = await this.apiFetch(`/bulk/site-products?${q}`);
+        if (!r.success) throw new Error(r.message || 'فهرست محصولات دریافت نشد.');
+        site.items = r.items || []; site.categories = r.categories || []; site.hasMore = !!r.has_more; site.loaded = true;
+      } catch (e) { site.items = []; site.error = e.message; site.loaded = true; }
+      site.loading = false;
+      this.render();
+    },
+
+    // محتوای آرشیوشده را برای ویرایش/انتشار به بخش «تولید محتوای تکی» برمی‌گرداند
+    restoreHistoryItem: async function (id) {
+      const app = this;
+      try {
+        const response = await this.apiFetch(`/content/history/${id}`);
+        if (!response.success || !response.item) throw new Error(response.message || 'محتوا یافت نشد.');
+        const item = response.item, st = this.state;
+        let links = [];
+        try { links = JSON.parse(item.external_links || '[]') || []; } catch (e) {}
+        st.generatorForm.contentKind = item.content_kind || 'article';
+        st.generatorForm.targetId = Number(item.target_id) || 0;
+        st.generatorForm.h1Title = item.title || '';
+        st.generatorForm.focusKeyword = item.focus_keyword || '';
+        st.contentOutline = null;
+        st.generatedContent = item.content || ''; st.featuredImagePrompt = item.featured_image_prompt || ''; st.generatedSlug = item.slug || '';
+        st.generatedSeoTitle = item.seo_title || ''; st.generatedMetaDescription = item.meta_description || ''; st.generatedKeywordSynonyms = item.keyword_synonyms || '';
+        st.generatedInternalLinkCount = Number(item.internal_link_count || 0); st.generatedExternalLinkCount = Number(item.external_link_count || 0); st.generatedExternalLinks = Array.isArray(links) ? links : [];
+        st.activeTab = 'generator'; st.activeNav = 'generator';
+        app.toast('محتوا برای ویرایش و انتشار در «تولید محتوای تکی» بازیابی شد.');
+        this.render();
+      } catch (e) { app.toast('خطا: ' + e.message); }
+    },
+
     startBatchScan: async function () {
       const app = this;
       if (this.state.isScanning) return;

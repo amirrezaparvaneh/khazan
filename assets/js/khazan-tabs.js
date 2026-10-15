@@ -32,7 +32,7 @@
     { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه شیت CSV', title: 'تولید انبوه شیت CSV' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
     { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
-    { key: 'archive', tab: 'generator', scroll: 'wila-archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
+    { key: 'archive', tab: 'archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
     { key: 'settings', tab: 'settings', icon: 'gear', label: 'تنظیمات هوش مصنوعی', title: 'تنظیمات هوش مصنوعی' }
   ];
   const KHAZAN_NAV_EXTRA = [
@@ -42,7 +42,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', seofix: 'viewSeoFix', bulk: 'viewBulk', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -160,13 +160,19 @@
           <label style="display:block;margin:10px 0 4px;font-weight:600">فاز قیف</label><select data-generator-field="funnelStage" class="wila-select" style="width:100%">${['TOFU (آگاهی)','MOFU (بررسی)','BOFU (خرید/تبدیل)','تشخیص خودکار'].map(x=>`<option ${f.funnelStage===x?'selected':''}>${x}</option>`).join('')}</select>
           <label style="display:block;margin:10px 0 4px;font-weight:600">نقشه لینک داخلی</label><textarea data-generator-field="internalLinks" class="wila-input" rows="4" style="width:100%" placeholder="انکرتکست: https://example.com/page\nیا با ویرگول جدا کنید">${esc(f.internalLinks)}</textarea>
           <label class="khazan-toggle" style="margin-top:10px"><span class="khazan-switch"><input type="checkbox" id="wila-use-orphan-links" ${f.useOrphanLinks ? 'checked' : ''}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>اگر نقشه لینک خالی است، صفحات یتیم مرتبط را خودکار و استراتژیک لینک‌سازی کن</strong></span></label><p style="margin:5px 0;color:#64748b;font-size:.8rem">افزونه فقط صفحه‌های یتیم مرتبط را انتخاب می‌کند و انکرتکست را بر اساس مقصد می‌سازد.</p>
-          <button id="wila-generate-outline" class="wila-btn wila-btn-primary" style="margin-top:16px" ${isGeneratingContent?'disabled':''}>${isGeneratingContent?'در حال تولید...':'۱. تولید طرح ساختاری'}</button>
-          ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul><button id="wila-generate-full" class="wila-btn wila-btn-primary" ${isGeneratingContent?'disabled':''}>۲. تایید طرح و نگارش کامل</button></div>`:''}
+          <div style="margin-top:16px">${this.btn3d('wila-generate-outline', 'btn-primary', isGeneratingContent ? 'در حال تولید...' : '۱. تولید طرح ساختاری', isGeneratingContent ? 'disabled' : '')}</div>
+          ${this.state.contentOutline ? `<div style="margin-top:20px"><h4>طرح تاییدشده</h4><p><strong>نیت جستجو:</strong> ${esc(this.state.contentOutline.search_intent)}</p><ul>${(this.state.contentOutline.headings||[]).map(h=>`<li><strong>${esc(h.level)}:</strong> ${esc(h.text)} — ${esc(h.purpose)}</li>`).join('')}</ul>${this.btn3d('wila-generate-full', 'btn-primary', '۲. تایید طرح و نگارش کامل', isGeneratingContent ? 'disabled' : '')}</div>`:''}
           ${this.state.contentOutline ? `<details><summary>پیشنهاد سئو طرح</summary><p>عنوان: ${esc(this.state.contentOutline.seo_title)}</p><p>متا: ${esc(this.state.contentOutline.meta_description)}</p><p>مترادف‌ها: ${esc(this.state.contentOutline.keyword_synonyms)}</p>${isArticle ? `<p>نامک: ${esc(this.state.contentOutline.slug)}</p>` : ''}<p>انتیتی‌ها: ${esc((Array.isArray(this.state.contentOutline.entities) ? this.state.contentOutline.entities : []).join('، '))}</p><p>شواهد لازم: ${esc((Array.isArray(this.state.contentOutline.evidence_needed) ? this.state.contentOutline.evidence_needed : []).join('، '))}</p></details>` : ''}
           ${this.state.generatedContent ? `<div id="wila-quality-report">${this.contentQualityReport(this.state.generatedContent, f.focusKeyword)}</div><p>${isArticle ? 'اطلاعات سئو همراه پیش‌نویس ذخیره می‌شوند و هنگام انتشار در ویرایشگر باقی می‌مانند. نامک Yoast همان نامک وردپرس است.' : `با «انتشار»، محتوا و اطلاعات سئو مستقیم در صفحه ${kindLabel} جایگذاری می‌شود و به ویرایشگر همان صفحه منتقل می‌شوید.`} نمایش مترادف‌ها به نسخه Premium یوست وابسته است.</p>` : ''}
-          <div id="wila-archive" style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:20px"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. در «مشاهده» همه اطلاعات قابل کپی است.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
         </div>`;
       return contentHtml;
+    },
+
+    viewArchive: function () {
+      const esc = escapeHtml;
+      return `<div class="wila-card">
+          <div id="wila-archive"><h3 style="margin-top:0">آرشیو محتوای تولیدشده</h3><p style="color:#64748b;font-size:.85rem">۱۰۰ محتوای آخر با تاریخ شمسی نگهداری می‌شود. «مشاهده و کپی» همه اطلاعات را نشان می‌دهد و «بازیابی» محتوا را برای ویرایش یا انتشار به بخش تولید محتوا برمی‌گرداند.</p><div class="wila-table-scroll"><table class="wila-table"><thead><tr><th>عنوان</th><th>نوع</th><th>کلیدواژه</th><th>عنوان سئو</th><th>لینک‌ها</th><th>تاریخ</th><th>عملیات</th></tr></thead><tbody>${this.state.historyLoading ? [1, 2, 3].map(() => '<tr>' + '<td><div class="wila-skeleton" style="height:14px"></div></td>'.repeat(7) + '</tr>').join('') : this.state.contentHistory.length ? this.state.contentHistory.map(item => `<tr><td style="font-weight:600">${esc(item.title)}</td><td><span class="wila-badge wila-badge-neutral">${this.kindLabel(item.content_kind)}</span></td><td>${esc(item.focus_keyword)}</td><td style="max-width:260px">${esc(item.seo_title || '')}</td><td style="white-space:nowrap">${toPersianDigits(item.internal_link_count)} داخلی / ${toPersianDigits(item.external_link_count)} خارجی</td><td style="white-space:nowrap">${formatJalali(item.created_at)}</td><td style="white-space:nowrap"><button class="wila-btn wila-btn-outline wila-btn-sm wila-history-view" data-id="${item.id}">مشاهده و کپی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-restore" data-id="${item.id}">بازیابی</button> <button class="wila-btn wila-btn-outline wila-btn-sm wila-history-delete" data-id="${item.id}" style="color:#dc2626">حذف</button></td></tr>`).join('') : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748b">هنوز محتوایی تولید نشده است.</td></tr>'}</tbody></table></div></div>
+        </div>`;
     },
 
     viewSeoFix: function () {
@@ -221,9 +227,14 @@
         const allVisibleSelected = selectable.length > 0 && selectable.every(i => b.selected[i]);
         const locked = b.running ? 'disabled' : '';
         contentHtml = `<div class="wila-card">
-          <h3 style="margin-top:0">تولید محتوای انبوه از شیت (CSV Bulk Generator)</h3>
-          <p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>
+          <h3 style="margin-top:0">تولید محتوای انبوه</h3>
+          <div class="khazan-subtabs" id="wila-bulk-source">
+            <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'csv' ? 'active' : ''}" data-source="csv" ${locked}>📄 بارگذاری فایل CSV</button>
+            <button type="button" class="khazan-subtab wila-bulk-source ${b.source === 'site' ? 'active' : ''}" data-source="site" ${locked}>🛍️ انتخاب از محصولات سایت</button>
+          </div>
+          ${b.source === 'csv' ? `<p style="color:#64748b;font-size:.85rem">فایل CSV با کدگذاری UTF-8 را بارگذاری کنید. ستون‌ها: تایید سئو، نام محصول، نامک یا لینک محصول (اختیاری)، توضیحات، عنوان سئو، توضیحات متا، کلیدواژه کانونی، عبارات مترادف و فرعی، یادداشت، ویژگی‌های زیره، رویه، آستر و کفی و ویژگی‌های کلی. ردیف هدر در ۵ ردیف نخست به‌طور خودکار پیدا می‌شود. هر ردیف ابتدا با نام محصول و سپس با نامک به محصولات سایت متصل می‌شود.</p>` : '<p style="color:#64748b;font-size:.85rem">محصولات سایت را بر اساس دسته‌بندی یا وضعیت محتوا فیلتر کنید و بدون فایل CSV به صف تولید اضافه کنید. تعداد لینک ورودی محصولات هم‌دسته به‌طور مساوی بین آن‌ها پخش می‌شود.</p>'}
           <div class="khazan-toolbar">
+            ${b.source === 'csv' ? `
             <div class="khazan-field khazan-field-file"><label>فایل CSV</label>
               <label class="khazan-dropzone ${b.fileName ? 'has-file' : ''} ${locked ? 'is-locked' : ''}" id="wila-bulk-dropzone" for="wila-bulk-file">
                 <input type="file" id="wila-bulk-file" accept=".csv,text/csv" class="khazan-file-hidden" ${locked}>
@@ -237,6 +248,25 @@
                   <span class="khazan-dz-cta">انتخاب فایل از سیستم</span>
                 `}
               </label></div>
+            ` : `
+            <div class="khazan-field"><label>وضعیت محتوا</label>
+              <select id="wila-site-filter" class="wila-select" ${locked}>
+                <option value="all" ${b.site.filter === 'all' ? 'selected' : ''}>همه محصولات سایت</option>
+                <option value="no_description" ${b.site.filter === 'no_description' ? 'selected' : ''}>فقط محصولات بدون توضیحات</option>
+                <option value="ungenerated" ${b.site.filter === 'ungenerated' ? 'selected' : ''}>فقط محصولاتی که محتوایشان تولید نشده</option>
+              </select></div>
+            <div class="khazan-field"><label>دسته‌بندی</label>
+              <select id="wila-site-category" class="wila-select" ${locked}>
+                <option value="0">همه دسته‌بندی‌ها</option>
+                ${b.site.categories.map(c => `<option value="${c.id}" ${Number(b.site.category) === Number(c.id) ? 'selected' : ''}>${escapeHtml(c.name)} (${toPersianDigits(c.count)})</option>`).join('')}
+              </select></div>
+            <div class="khazan-field"><label>جستجوی نام محصول</label>
+              <input id="wila-site-search" type="search" class="wila-input" value="${escapeHtml(b.site.search)}" placeholder="بخشی از نام محصول..." ${locked}></div>
+            <div class="khazan-field khazan-field-actions">
+              ${this.btn3d('wila-site-load', 'btn-primary', b.site.loading ? 'در حال بارگذاری...' : 'بارگذاری محصولات', b.site.loading || b.running ? 'disabled' : '')}
+              ${b.site.items.length ? this.btn3d('wila-site-add', 'btn-warning', `افزودن ${toPersianDigits(b.site.items.length)} محصول به صف`, b.running ? 'disabled' : '') : ''}
+            </div>
+            `}
             ${b.rows.length && !b.matching ? `<div class="khazan-field"><label>کدوم محصولات نشون داده بشن؟</label>
               <select id="wila-bulk-status" class="wila-select">
                 <option value="all" ${b.status === 'all' ? 'selected' : ''}>همه محصولات شیت</option>
@@ -250,6 +280,7 @@
                 <option value="draft" ${b.mode === 'draft' ? 'selected' : ''}>ذخیره به‌عنوان پیش‌نویس بازبینی (بدون تغییر صفحه زنده)</option>
               </select></div>` : ''}
           </div>
+          ${b.source === 'site' && (b.site.loaded || b.site.error) ? `<div class="khazan-statusbar"><span class="khazan-status-pill">${b.site.error ? '⚠️ ' + escapeHtml(b.site.error) : `🛍️ ${toPersianDigits(b.site.items.length)} محصول از سایت بارگذاری شد${b.site.hasMore ? ' (سقف نمایش؛ فیلتر را دقیق‌تر کنید)' : ''}`}</span></div>` : ''}
           ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
           ${b.rows.length && !b.matching ? `
             <div class="khazan-toggle-grid">
@@ -266,7 +297,7 @@
               <th><input type="checkbox" class="khazan-checkbox" id="wila-bulk-select-all" ${allVisibleSelected ? 'checked' : ''} ${selectable.length && !b.running ? '' : 'disabled'}></th><th>#</th><th>نام محصول (شیت)</th><th>وضعیت</th>${b.view === 'found' ? '<th>محصول سایت</th>' : ''}<th>وضعیت پردازش</th><th>عملیات</th>
             </tr></thead><tbody>${visible.length ? visible.map(i => {
               const r = b.rows[i], m = r.match;
-              const viaLabel = m && m.via === 'created' ? 'ساخته شد' : m && m.via === 'slug' ? 'تطبیق با نامک' : m && m.via === 'name_ambiguous' ? 'تطبیق با نام (چند مورد مشابه)' : 'تطبیق با نام';
+              const viaLabel = m && m.via === 'site' ? 'انتخاب از محصولات سایت' : m && m.via === 'created' ? 'ساخته شد' : m && m.via === 'slug' ? 'تطبیق با نامک' : m && m.via === 'name_ambiguous' ? 'تطبیق با نام (چند مورد مشابه)' : 'تطبیق با نام';
               let badge;
               if (!m) badge = '<span class="khazan-badge khazan-badge-muted">—</span>';
               else if (m.generated) badge = `<span class="khazan-badge khazan-badge-done" title="${escapeHtml('تولید شده در ' + formatJalali(m.generated.at))}">🕒 تولید شده: ${escapeHtml(shortJalali(m.generated.at))}</span>`;
@@ -537,6 +568,7 @@
         if (!this.state.activeTab) return;
         this.state.activeNav = e.currentTarget.getAttribute('data-nav') || this.state.activeTab;
         this.state.pendingScroll = e.currentTarget.getAttribute('data-scroll') || '';
+        if (this.state.activeTab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
@@ -549,6 +581,7 @@
         this.state.activeTab = target.tab;
         this.state.activeNav = target.key;
         this.state.pendingScroll = target.scroll || '';
+        if (target.tab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (target.tab === 'orphans') this.fetchOrphans();
         if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         this.render();

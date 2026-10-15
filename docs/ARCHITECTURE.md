@@ -44,7 +44,8 @@ includes/
   Admin/       AdminMenu, AdminAssets, SeoRepairPanel
   Http/        RestRouter (ثبت همه مسیرهای wila/v1)
   Http/Controllers/  QueueController, ReportController, ContentController, SettingsController, SeoRepairController
-  Services/Links/    OrphanFinder
+  Services/Links/    OrphanFinder, SmartLinkDistributor (+ LinkCandidateProvider, WordPressLinkCandidateProvider,
+                     AssignmentLedger, TransientAssignmentLedger, InMemoryAssignmentLedger)
   Services/
     Ai/        AiService (هماهنگ‌کننده)، AvalaiHttpClient, AiResponseDecoder, PromptBuilder, ContentParser
     Csv/       TextNormalizer, ProductMatcher, BulkRowProcessor
@@ -55,8 +56,10 @@ includes/
   Repository/  SiteEntityRepository, ContentTargetRepository, DatabaseRepository,
                BulkHistoryRepository, LinkRepository
   Http/Requests/     ContentGenerationRequest, ContentDraftRequest, SettingsUpdateRequest, ConnectionTestRequest,
-                     AvailableTaxonomiesRequest, ScanItemRequest, BulkMatchRequest, BulkProcessRequest, ItemsReportRequest
+                     AvailableTaxonomiesRequest, ScanItemRequest, BulkMatchRequest, BulkProcessRequest, ItemsReportRequest,
+                     SiteProductsRequest
   Legacy کلاس‌های WILA_* تا پایان مهاجرت (بارگذاری از Plugin::$legacy_files)
+tests/         تست‌های واحد مستقل از وردپرس (php tests/SmartLinkDistributorTest.php)
 templates/     قالب‌های PHP (admin/app-root, font-preconnect, ...)
 assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-forms.js (رویدادها و کمک‌های فرم)، khazan-queue.js (صف)،
                khazan-tabs.js (ناوبری و نماها)، khazan-leaves.js، wila-admin.js (Entry Point ~۱۶۰ خط: state، init، render، mixin ماژول‌ها)
@@ -82,4 +85,10 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
    - `khazan-forms.js`: ۱۴ متد کمکی فرم‌ها (برنامه‌ریز، مولد محتوا، رفع سئو، کپی) و `bindFormEvents` (همه رویدادهای input/change/click فرم‌ها). `wila-admin.js` به ~۱۶۰ خط رسید (state، `init`، `render`، `modalHtml`، `bindEvents` و سوار کردن ماژول‌ها). اعتبارسنجی مقادیر ارسالی همچنان در متدهای API/سمت سرور است؛ ماژول فرم‌ها فقط مقادیر را به state می‌رساند.
    - `Http\Requests\*`: `SettingsUpdateRequest`، `ConnectionTestRequest`، `AvailableTaxonomiesRequest`، `ScanItemRequest`، `BulkMatchRequest`، `BulkProcessRequest`، `ItemsReportRequest` و `ContentDraftRequest`؛ متدهای `SettingsController`، `QueueController`، `ReportController` و `create_content_draft` ۳ تا ۶ خطی شدند.
    - `ContentGuard` به `Guard\WrapperGuard`، `LinkGuard`، `KeywordDensityGuard` و `HeadingGuard` شکسته شد؛ `ContentGuard` با همان امضا و ثابت‌ها فقط هماهنگ‌کننده است (۵۹ خط).
-9. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)؛ مدیریت خطای شبکه یکپارچه در `apiFetch` (امروز هر متد try/catch خودش را دارد؛ برای حفظ رفتار دست نخورد)؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی (کران‌جاب‌ها/افزونه‌های جانبی)؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights.
+9. **انجام شد (ویژگی‌های جدید پس از مرحله ۸):**
+   - **تب مستقل «آرشیو محتوا»** (`tab: 'archive'`، نمای `viewArchive` در `khazan-tabs.js`): با ورود به تب، `/content/history` خودکار خوانده می‌شود؛ عملیات «مشاهده و کپی»، «بازیابی» (`restoreHistoryItem`: محتوا را به تب «تولید محتوای تکی» برمی‌گرداند) و «حذف». بخش آرشیو از پایین صفحه تولید محتوا حذف شد.
+   - **دکمه‌های «تولید طرح ساختاری» و «تایید و تولید محتوا»** با همان `btn3d` (دکمه سه‌بعدی) تولید انبوه جایگزین شدند؛ `id`ها و منطق دست‌نخورده.
+   - **تولید انبوه بدون CSV:** انتخاب منبع (CSV یا «محصولات سایت»). مسیر جدید `GET /wila/v1/bulk/site-products` (`QueueController::get_site_products` ← `SiteProductsRequest` ← `ContentTargetRepository::list_site_products`) فهرست محصولات را با دسته‌بندی، وضعیت محتوا (`has_description`)، سابقه تولید و متای سئو برمی‌گرداند؛ فیلترها: همه، فقط بدون توضیحات، فقط تولیدنشده، دسته‌بندی و جستجو. در فرانت‌اند ردیف‌های انتخاب‌شده با `via: 'site'` به همان جدول و صف تولید انبوه اضافه می‌شوند.
+   - **`SmartLinkDistributor`** (جایگزین منطق لینک‌سازی `BulkRowProcessor` و زمینه تولید محتوای تکی): لینک دسته = دسته‌بندی اصلی خودِ محصول (Primary در Yoast/Rank Math، وگرنه عمیق‌ترین دسته)؛ لینک محصول فقط از میان محصولات هم‌دسته (در صورت کمبود، دسته‌های والد) با شباهت دسته‌ای و عنوانی؛ توزیع عادلانه: اولویت با کمترین «ورودی» (لینک ورودی در پایگاه‌داده از `LinkRepository::inbound_counts` + لینک‌های اختصاص‌یافته در ردیف‌های قبلی همین اجرا)، سپس محصولاتی که ردیفشان هنوز در صف مانده (چون فرصت کمتری برای دریافت لینک دارند)، سپس شباهت و شناسه. هر انتخاب بلافاصله در `AssignmentLedger` (transient با `run_id` که فرانت‌اند برای هر اجرا می‌سازد) ثبت می‌شود تا ردیف بعدی (درخواست REST جدا) شمارنده به‌روز را ببیند. استخر کاندیدا برای هر ردیف با کوئری محدود به دسته‌های همان محصول ساخته می‌شود (نه اسکن کل کاتالوگ)؛ دسته‌بندی‌ها از `SiteEntityRepository` (`category_tree`، `product_categories`، `primary_category_id`) و محصولات منتشرشده از `published_product_ids_in_categories` می‌آیند؛ محصول صف که منتشر نشده باشد لینک نمی‌گیرد (آدرس پیش‌نویس برای بازدیدکننده ۴۰۴ است).
+   - **تست:** `tests/SmartLinkDistributorTest.php` (بدون وابستگی به وردپرس): ۲۰ محصول هم‌دسته در ۵۰ ترتیب تصادفی صف ⇒ اختلاف max−min تعداد لینک ورودی صفر (حداکثر مجاز ۱)، لینک دسته همیشه دسته خودِ محصول، بدون لینک تصادفی بین دسته‌های نامرتبط، اولویت محصول کم‌لینک در برابر ۱۳ لینک موجود، چرخش بین ردیف‌ها.
+10. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)؛ مدیریت خطای شبکه یکپارچه در `apiFetch`؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights؛ صفحه‌بندی واقعی لیست محصولات سایت (فعلاً سقف ۵۰۰ و نشانگر `has_more`).

@@ -1122,3 +1122,8 @@ img.khazan-watermark {
 .khazan-main textarea {
   font-family: 'Alan Sans', 'KhazanIranSans', sans-serif !important;
 }
+
+/* Bulk: site-products source panel */
+.khazan-field-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.khazan-field-actions .khazan-3d-btn { min-width: 10em; }
+#wila-bulk-source { margin: 4px 0 12px; }

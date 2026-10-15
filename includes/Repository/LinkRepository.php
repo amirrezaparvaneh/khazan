@@ -55,6 +55,30 @@ final class LinkRepository {
     }
 
     /**
+     * Inbound internal-link counts for the given target ids (ids without links are returned as 0).
+     *
+     * @param int[]  $ids
+     * @return array<int,int> target_id => count
+     */
+    public function inbound_counts(array $ids, $type = 'product') {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        $counts = array_fill_keys($ids, 0);
+        if (!$ids) {
+            return $counts;
+        }
+        $table = $this->database->links_table();
+        $in = implode(',', array_fill(0, count($ids), '%d'));
+        $rows = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT target_id, COUNT(*) AS inbound FROM {$table} WHERE target_type = %s AND target_id IN ({$in}) GROUP BY target_id",
+            array_merge(array($type), $ids)
+        ), ARRAY_A);
+        foreach ((array) $rows as $row) {
+            $counts[(int) $row['target_id']] = (int) $row['inbound'];
+        }
+        return $counts;
+    }
+
+    /**
      * Distinct (target_id, target_type) pairs that receive at least one internal link.
      */
     public function linked_targets() {

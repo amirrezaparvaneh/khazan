@@ -214,6 +214,7 @@
       const draftBtn = this.root.querySelector('#wila-create-draft');
       if (draftBtn) draftBtn.addEventListener('click', () => this.createDraft());
       this.root.querySelectorAll('.wila-history-view').forEach(btn => btn.addEventListener('click', e => this.showContentHistoryItem(e.currentTarget.getAttribute('data-id'))));
+      this.root.querySelectorAll('.wila-history-restore').forEach(btn => btn.addEventListener('click', e => this.restoreHistoryItem(e.currentTarget.getAttribute('data-id'))));
       this.root.querySelectorAll('.wila-history-delete').forEach(btn => btn.addEventListener('click', e => this.deleteHistoryItem(e.currentTarget.getAttribute('data-id'))));
       this.root.querySelectorAll('.wila-copy-btn').forEach(btn => btn.addEventListener('click', e => {
         const field = this.root.querySelector('#' + e.currentTarget.getAttribute('data-copy'));
