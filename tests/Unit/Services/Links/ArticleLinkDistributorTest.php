@@ -36,8 +36,8 @@ class FakeSource implements ArticleLinkSource {
         for ($i = 1; $i <= 5; $i++) $this->products[] = array('id' => 100 + $i, 'title' => "بوت چرم زنانه مدل $i", 'url' => "https://aka.test/product/p$i/", 'anchor' => "بوت چرم زنانه " . array('', 'برشکا', 'مارکو', 'آلفردو', 'رومینا', 'سارا')[$i], 'inbound' => $i === 3 ? 0 : 5, 'category_ids' => array(7));
         for ($i = 1; $i <= 4; $i++) $this->articles[] = array('id' => 200 + $i, 'title' => "راهنمای چرم " . array('', 'الف', 'ب', 'ج', 'د')[$i], 'url' => "https://aka.test/blog/a$i/", 'anchor' => "نگهداری چرم " . array('', 'الف', 'ب', 'ج', 'د')[$i], 'inbound' => $i === 2 ? 0 : 3);
     }
-    function categories() { return array(array('id' => 7, 'name' => 'بوت چرم زنانه', 'url' => 'https://aka.test/cat/boots/'), array('id' => 8, 'name' => 'کمربند', 'url' => 'https://aka.test/cat/belt/')); }
-    function product_candidates(array $a, $c) { return $this->products; }
+    function categories() { return array(array('id' => 7, 'name' => 'بوت چرم زنانه', 'url' => 'https://aka.test/cat/boots/'), array('id' => 8, 'name' => 'کمربند', 'url' => 'https://aka.test/cat/belt/', 'parent' => 0)); }
+    function product_candidates(array $a, array $c, array $r, array $t) { return $this->products; }
     function article_candidates(array $a) { return $this->articles; }
     function brand_page() { return $this->brand; }
 }
@@ -89,6 +89,51 @@ check($pg['page']['anchor'] === 'چرم آکا' && $pg['page']['url'] === 'https
 $manual = params(600); $manual['internal_links'] = array(array('anchor' => 'x', 'url' => 'https://aka.test/manual/'));
 $r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply($manual);
 check(count($r['internal_links']) === 3 && $r['internal_links'][0]['url'] === 'https://aka.test/manual/', 'manual links kept and count against the budget');
+
+echo "relevance tiers\n";
+class TierSource extends FakeSource {
+    function __construct() {
+        parent::__construct();
+        $this->brand = null; $this->articles = array();
+        $this->products = array(
+            array('id' => 1, 'title' => 'بوت چرم زنانه برشکا', 'url' => 'https://aka.test/product/boot1/', 'anchor' => 'بوت چرم زنانه برشکا', 'inbound' => 0, 'category_ids' => array(21)),
+            array('id' => 2, 'title' => 'بوت چرم مردانه مارکو', 'url' => 'https://aka.test/product/boot2/', 'anchor' => 'بوت چرم مردانه مارکو', 'inbound' => 0, 'category_ids' => array(21)),
+            array('id' => 3, 'title' => 'کاپشن چرم مردانه رادین', 'url' => 'https://aka.test/product/jacket1/', 'anchor' => 'کاپشن چرم مردانه رادین', 'inbound' => 9, 'category_ids' => array(11)),
+            array('id' => 4, 'title' => 'کاپشن چرم زنانه سورنا', 'url' => 'https://aka.test/product/jacket2/', 'anchor' => 'کاپشن چرم زنانه سورنا', 'inbound' => 7, 'category_ids' => array(11)),
+            array('id' => 5, 'title' => 'کت چرم کلاسیک آرمین', 'url' => 'https://aka.test/product/coat/', 'anchor' => 'کت چرم کلاسیک آرمین', 'inbound' => 2, 'category_ids' => array(12)),
+            array('id' => 6, 'title' => 'کیف چرم اداری', 'url' => 'https://aka.test/product/bag/', 'anchor' => 'کیف چرم اداری', 'inbound' => 1, 'category_ids' => array(31)),
+        );
+    }
+    function categories() { return array(
+        array('id' => 10, 'name' => 'پوشاک چرم', 'url' => 'https://aka.test/cat/clothes/', 'parent' => 0),
+        array('id' => 11, 'name' => 'کاپشن چرم', 'url' => 'https://aka.test/cat/jackets/', 'parent' => 10),
+        array('id' => 12, 'name' => 'کت چرم', 'url' => 'https://aka.test/cat/coats/', 'parent' => 10),
+        array('id' => 21, 'name' => 'بوت چرم', 'url' => 'https://aka.test/cat/boots/', 'parent' => 0),
+        array('id' => 31, 'name' => 'کیف چرم', 'url' => 'https://aka.test/cat/bags/', 'parent' => 0)); }
+}
+$jacket = array('h1_title' => 'راهنمای خرید کاپشن چرم', 'focus_keyword' => 'کاپشن چرم', 'long_tail' => '', 'word_count' => 1400, 'internal_links' => array());
+$r = (new ArticleLinkDistributor(new TierSource(), new InMemoryAssignmentLedger()))->apply($jacket);
+$prod = array_values(array_filter($r['internal_links'], function ($l) { return $l['type'] === 'product'; }));
+$purls = array_column($prod, 'url');
+check($purls === array('https://aka.test/product/jacket2/', 'https://aka.test/product/jacket1/'), 'jacket article: both jackets (inbound 7 and 9) beat boots with 0 inbound; least-linked jacket first');
+check(!in_array('https://aka.test/product/boot1/', $purls) && !in_array('https://aka.test/product/boot2/', $purls), 'no link from a jacket article to boots');
+$cat = array_values(array_filter($r['internal_links'], function ($l) { return $l['type'] === 'category'; }));
+check($cat && $cat[0]['url'] === 'https://aka.test/cat/jackets/', 'category link is the jacket category');
+
+$one = new TierSource(); $one->products = array_values(array_filter($one->products, function ($p) { return $p['id'] !== 4; }));
+$purls = array_column(array_filter((new ArticleLinkDistributor($one, new InMemoryAssignmentLedger()))->apply($jacket)['internal_links'], function ($l) { return $l['type'] === 'product'; }), 'url');
+check($purls === array('https://aka.test/product/jacket1/', 'https://aka.test/product/coat/'), 'one jacket only: 2nd slot goes to the sibling category (coat, Tier 2), not boots with 0 inbound');
+
+$none = new TierSource(); $none->products = array_values(array_filter($none->products, function ($p) { return in_array($p['id'], array(1, 2, 6)); }));
+$purls = array_column(array_filter((new ArticleLinkDistributor($none, new InMemoryAssignmentLedger()))->apply($jacket)['internal_links'], function ($l) { return $l['type'] === 'product'; }), 'url');
+check(count($purls) === 2 && $purls[0] === 'https://aka.test/product/boot1/', 'no jacket / related product at all: global Tier 3 fallback, least inbound first');
+
+$led = new InMemoryAssignmentLedger(); $seen = array();
+for ($i = 0; $i < 4; $i++) { $x = (new ArticleLinkDistributor(new TierSource(), $led))->apply($jacket); foreach ($x['internal_links'] as $l) if ($l['type'] === 'product') $seen[] = $l['url']; }
+check(count(array_diff($seen, array('https://aka.test/product/jacket1/', 'https://aka.test/product/jacket2/', 'https://aka.test/product/coat/'))) === 0, 'repeated jacket articles keep rotating inside the relevant group only');
+$title = array('h1_title' => 'نگهداری از بوت', 'focus_keyword' => 'نگهداری بوت', 'long_tail' => '', 'word_count' => 600, 'internal_links' => array());
+$bt = array_values(array_filter((new ArticleLinkDistributor(new TierSource(), new InMemoryAssignmentLedger()))->apply($title)['internal_links'], function ($l) { return $l['type'] === 'product'; }));
+check($bt && strpos($bt[0]['url'], 'boot') !== false, 'boot article links to a boot (generic words such as چرم / نگهداری never decide relevance)');
 
 echo "LinkGuard\n";
 $links = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1000))['internal_links'];

@@ -176,6 +176,28 @@ final class SiteEntityRepository {
         return array_map('intval', (array) $ids);
     }
 
+    /**
+     * Published products whose title contains one of the given words (the planner re-checks the title, WP search also scans content).
+     *
+     * @param string[] $tokens
+     * @return int[]
+     */
+    public function product_ids_matching_title(array $tokens, $limit = 60) {
+        $ids = array();
+        foreach (array_slice(array_values(array_filter($tokens)), 0, 4) as $token) {
+            $found = get_posts(array(
+                'post_type'      => Settings::product_post_type(),
+                'post_status'    => 'publish',
+                's'              => $token,
+                'posts_per_page' => (int) $limit,
+                'fields'         => 'ids',
+                'no_found_rows'  => true,
+            ));
+            $ids = array_merge($ids, array_map('intval', (array) $found));
+        }
+        return array_values(array_unique($ids));
+    }
+
     // ---- lightweight content statistics (aggregate queries, no per-row loops) ----
 
     /**

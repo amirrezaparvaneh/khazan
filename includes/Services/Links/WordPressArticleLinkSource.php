@@ -35,12 +35,23 @@ final class WordPressArticleLinkSource implements ArticleLinkSource {
         return array_values($this->entities->category_tree());
     }
 
-    public function product_candidates(array $assigned, $category_id) {
-        $all     = $this->entities->published_product_ids();
-        $counts  = $this->links->inbound_counts($all, Settings::product_post_type());
-        $related = $category_id ? $this->entities->published_product_ids_in_categories(array((int) $category_id)) : array();
+    public function product_candidates(array $assigned, array $category_ids, array $related_ids, array $topic_tokens) {
+        $all    = $this->entities->published_product_ids();
+        $counts = $this->links->inbound_counts($all, Settings::product_post_type());
+
+        $tier1 = array_values(array_unique(array_merge(
+            $category_ids ? $this->entities->published_product_ids_in_categories($category_ids) : array(),
+            $this->entities->product_ids_matching_title($topic_tokens)
+        )));
+        $tier2 = $related_ids ? $this->entities->published_product_ids_in_categories($related_ids) : array();
+
+        $ids = array_unique(array_merge(
+            GlobalLinkPool::shortlist($tier1, $counts, $assigned, 0, array(), self::SHORTLIST),
+            GlobalLinkPool::shortlist($tier2, $counts, $assigned, 0, array(), self::SHORTLIST),
+            GlobalLinkPool::shortlist($all, $counts, $assigned, 0, array(), self::SHORTLIST)
+        ));
         $out = array();
-        foreach (GlobalLinkPool::shortlist($all, $counts, $assigned, 0, $related, self::SHORTLIST) as $id) {
+        foreach ($ids as $id) {
             $out[] = array(
                 'id'           => $id,
                 'title'        => get_the_title($id),
