@@ -21,15 +21,24 @@ class MediaRepository {
      * @param array $source  array('url' => ...) or array('b64' => ...)
      * @param array $meta    slug, title, alt, caption
      * @param int   $parent_id post to attach to (0 = unattached, e.g. a category description)
+     * @param callable|null $transform function (string $path): ?string - may return the path of a processed copy (null = keep the original)
      * @return array|\WP_Error array(id, url)
      */
-    public function store(array $source, array $meta, $parent_id = 0) {
+    public function store(array $source, array $meta, $parent_id = 0, $transform = null) {
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
         $tmp = $this->materialize($source);
         if (is_wp_error($tmp)) return $tmp;
+
+        if (is_callable($transform)) {
+            $processed = call_user_func($transform, $tmp);
+            if (is_string($processed) && $processed !== $tmp && is_readable($processed)) {
+                @unlink($tmp);
+                $tmp = $processed;
+            }
+        }
 
         $mime = function_exists('wp_get_image_mime') ? wp_get_image_mime($tmp) : false;
         if (!$mime || !isset(self::EXTENSIONS[$mime])) {

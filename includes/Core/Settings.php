@@ -66,6 +66,11 @@ final class Settings {
     /** Landscape blog / featured-image ratio first; the safe square size is the retry when the API rejects it. */
     const IMAGE_SIZE       = '1024x576';
     const IMAGE_SIZE_SAFE  = '1024x1024';
+    /** Featured image: always 16:9, never square (1280x720, or 1024x576 when the model rejects it). */
+    const IMAGE_SIZE_FEATURED          = '1280x720';
+    const IMAGE_SIZE_FEATURED_FALLBACK = '1024x576';
+    /** Persian title typography burned onto the featured image (OFL licensed, shipped with the plugin). */
+    const IMAGE_FONT = 'assets/fonts/Vazirmatn-Bold.ttf';
     const IMAGE_CSS_CLASS  = 'aka-content-img';
     const META_IMAGE_ALT   = '_wp_attachment_image_alt';
     const META_GENERATED_IMAGE = '_wila_generated_image';

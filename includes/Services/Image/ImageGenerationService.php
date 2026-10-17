@@ -24,7 +24,11 @@ final class ImageGenerationService {
     /** @var MediaRepository */
     private $media;
 
-    public function __construct($http = null, MediaRepository $media = null) {
+    /** @var TitleOverlay|null */
+    private $overlay;
+
+    public function __construct($http = null, MediaRepository $media = null, $overlay = null) {
+        $this->overlay = $overlay;
         $this->http  = $http ?: new AvalaiHttpClient(Settings::avalai_api_key(), Settings::AI_MODEL);
         $this->media = $media ?: new MediaRepository();
     }
@@ -76,22 +80,38 @@ final class ImageGenerationService {
         $brief = ImageBrief::parse(is_wp_error($raw) ? '' : $raw, $params, $role);
         if ($slug_suffix !== '') $brief['slug'] = ImageBrief::slug($brief['slug'] . '-' . $slug_suffix);
 
-        $source = $this->render($brief['prompt']);
+        $featured = $role === 'featured';
+        $source = $this->render($brief['prompt'], $featured);
         if (is_wp_error($source)) return $source;
 
         $parent = (isset($params['content_kind']) && $params['content_kind'] === Settings::KIND_PRODUCT) ? absint(isset($params['target_id']) ? $params['target_id'] : 0) : 0;
-        $stored = $this->media->store($source, $brief, $parent);
+        // Featured image: the model draws a text-free background, the (Persian) title is burned on in PHP.
+        $transform = null;
+        if ($featured && !empty($params['h1_title'])) {
+            $overlay = $this->overlay ?: new TitleOverlay();
+            $title = (string) $params['h1_title'];
+            $transform = function ($path) use ($overlay, $title) { return $overlay->apply($path, $title); };
+        }
+        $stored = $this->media->store($source, $brief, $parent, $transform);
         if (is_wp_error($stored)) return $stored;
 
         return array('id' => $stored['id'], 'url' => $stored['url'], 'alt' => $brief['alt'], 'caption' => $brief['caption']);
     }
 
-    /** Landscape first; if the API rejects the size, retry once with the safe square size. */
-    private function render($prompt) {
-        $size   = apply_filters(Settings::FILTER_IMAGE_SIZE, Settings::IMAGE_SIZE);
-        $source = $this->http->generate_image($prompt, Settings::IMAGE_MODEL, $size);
-        if (is_wp_error($source) && $source->get_error_code() === 'image_api_error' && $size !== Settings::IMAGE_SIZE_SAFE) {
-            $source = $this->http->generate_image($prompt, Settings::IMAGE_MODEL, Settings::IMAGE_SIZE_SAFE);
+    /**
+     * Featured image: 1280x720, then 1024x576 - never square. Other images: landscape first, then the safe square size.
+     * The next size is tried only when the API rejects the previous one.
+     */
+    private function render($prompt, $featured = false) {
+        if ($featured) {
+            $sizes = array(Settings::IMAGE_SIZE_FEATURED, Settings::IMAGE_SIZE_FEATURED_FALLBACK);
+        } else {
+            $sizes = array_values(array_unique(array(apply_filters(Settings::FILTER_IMAGE_SIZE, Settings::IMAGE_SIZE), Settings::IMAGE_SIZE_SAFE)));
+        }
+        $source = null;
+        foreach ($sizes as $size) {
+            $source = $this->http->generate_image($prompt, Settings::IMAGE_MODEL, $size);
+            if (!is_wp_error($source) || $source->get_error_code() !== 'image_api_error') break;
         }
         return $source;
     }

@@ -185,3 +185,10 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
 - گاردها (فقط مقاله): `LinkGuard::cap_internal_links` (سقف و یکتایی URL، لینک خارجی دست‌نخورده) و `lock_product_anchors(..., $types)` برای قفل انکر محصول/مقاله/دسته/صفحه؛ `ensure_internal_links` لینک‌های جاافتاده مقاله را با جمله «برای مطالعه بیشتر» اضافه می‌کند. مسیر محصول بدون تغییر است.
 - اتصال: `ContentController::generate_full_content` (فقط `content_kind=article`)؛ لیست کامل یتیم‌ها دیگر برای مقاله اضافه نمی‌شود. پرامپت مقاله فقط `internal_links` تا `link_budget` را می‌پذیرد.
 - تست: `tests/Unit/Services/Links/ArticleLinkDistributorTest.php`
+
+### تصویر شاخص ۱۶:۹ با عنوان فارسی
+- اندازه تصویر شاخص `1280x720` و در صورت رد شدن توسط API `1024x576` است؛ هرگز مربع نمی‌شود (برای تصاویر میانی همچنان `1024x576` سپس `1024x1024`). پس‌زمینه بدون متن ساخته می‌شود و پرامپت آن بخش پایین را خلوت می‌خواهد.
+- `Services\Image\TitleOverlay` (GD): برش مرکزی به ۱۶:۹ در صورت نیاز، گرادیان سیاه در یک‌سوم پایین (شفافیت تا ۵۰٪، smoothstep)، عنوان با `assets/fonts/Vazirmatn-Bold.ttf` (مجوز OFL کنار آن)، راست‌چین، فاصله حداقل ۴۰ پیکسل از لبه‌ها، حداکثر ۲ خط (`TitleLayout`: کوچک‌کردن فونت، سپس «…»). خروجی JPEG است.
+- `Services\Image\PersianShaper`: GD حروف فارسی را نمی‌چسباند و راست‌به‌چپ نمی‌کند؛ این کلاس حروف را به شکل‌های پیوسته (Presentation Forms، لام‌الف، ZWNJ) تبدیل و ترتیب بصری را معکوس می‌کند (ارقام/لاتین دست‌نخورده).
+- Fallback: اگر GD/FreeType یا فونت نباشد یا هر خطایی رخ دهد، `apply()` مقدار `null` می‌دهد و همان تصویر خام ۱۶:۹ بدون خطا ذخیره می‌شود. `MediaRepository::store` پارامتر `$transform` دارد.
+- تست: `tests/Unit/Services/Image/TitleOverlayTest.php` (شکل‌دهی، چیدمان، fallback). بخش رسم GD در محیط توسعه بدون GD اجرا نشد.

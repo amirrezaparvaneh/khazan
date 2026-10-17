@@ -28,7 +28,7 @@ final class ImageBrief {
     public static function messages(array $params, $section_text, $role = 'inline') {
         $focus = self::focus($params);
         $system = 'You are an art director for a Persian leather goods e-commerce store. Reply with one JSON object only.';
-        $what = $role === 'featured' ? 'the wide featured (cover) photo of the page, representing the whole topic' : 'an in-article photo illustrating the middle section';
+        $what = $role === 'featured' ? 'the wide 16:9 featured (cover) photo of the page, representing the whole topic; keep the bottom third calm and uncluttered (a title is added later) and render NO text at all' : 'an in-article photo illustrating the middle section';
         $user = "Create an image brief for {$what}.\n"
             . "Page title (Persian): " . (isset($params['h1_title']) ? $params['h1_title'] : '') . "\n"
             . "Focus keyword (Persian): {$focus}\n"

@@ -37,8 +37,8 @@ class FakeHttp {
 }
 class FakeMedia extends Khazan\Repository\MediaRepository {
     public $meta;
-    public $n = 0; public $all = array();
-    function store(array $s, array $m, $p = 0) { $this->meta = $m; $this->all[] = $m; return array('id' => 77 + $this->n++, 'url' => 'https://aka.test/wp-content/uploads/' . $m['slug'] . '.jpg'); }
+    public $transform; public $n = 0; public $all = array();
+    function store(array $s, array $m, $p = 0, $t = null) { $this->transform = $t; $this->meta = $m; $this->all[] = $m; return array('id' => 77 + $this->n++, 'url' => 'https://aka.test/wp-content/uploads/' . $m['slug'] . '.jpg'); }
 }
 
 $params = array('focus_keyword' => 'بوت چرم زنانه', 'h1_title' => 'بوت چرم زنانه آلفردو', 'content_kind' => 'product', 'target_id' => 5);
@@ -80,7 +80,11 @@ check($r['image']['status'] === 'added' && $r['image']['featured_id'] === 77 && 
 check(substr_count($r['content'], '<figure') === 1 && strpos($r['content'], 'wp-image-77') === false && strpos($r['content'], 'wp-image-78') !== false, 'only the inline image is in the HTML');
 check($media->all[0]['slug'] !== $media->all[1]['slug'] && substr($media->all[1]['slug'], -7) === '-detail', 'distinct readable slugs: ' . $media->all[0]['slug'] . ' / ' . $media->all[1]['slug']);
 check(stripos($media->all[0]['prompt'], 'Editorial') !== false, 'article uses editorial standard');
-check($http->sizes === array('1024x576', '1024x576'), 'landscape size used');
+check($http->sizes === array('1280x720', '1024x576'), 'featured 1280x720, inline landscape');
+$http = new FakeHttp(new WP_Error('image_api_error', 'bad size')); $media = new FakeMedia();
+$r = (new ImageGenerationService($http, $media))->embed($art, array('content' => $html));
+check($http->sizes === array('1280x720', '1024x576', '1024x1024', '1024x1024') || !in_array('1024x1024', array_slice($http->sizes, 0, 2)), 'featured never falls back to square: ' . implode(',', $http->sizes));
+check($r['image']['status'] === 'failed' && $r['content'] === $html, 'all sizes rejected: content untouched, no error');
 $cat = $params; $cat['content_kind'] = 'product_cat';
 $media = new FakeMedia();
 $r = (new ImageGenerationService(new FakeHttp(array('url' => 'u')), $media))->embed($cat, array('content' => $html));
