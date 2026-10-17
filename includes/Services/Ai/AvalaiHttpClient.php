@@ -100,6 +100,38 @@ final class AvalaiHttpClient {
     }
 
     /**
+     * Image generation (OpenAI-compatible /images/generations): returns array('url' => ...) or array('b64' => ...), or WP_Error.
+     *
+     * @return array|\WP_Error
+     */
+    public function generate_image($prompt, $model, $size) {
+        if (!$this->is_configured()) {
+            return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
+        }
+        $response = wp_remote_post(Settings::IMAGE_ENDPOINT, array(
+            'headers' => array('Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $this->api_key),
+            'body'    => wp_json_encode(array('model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size)),
+            'timeout' => Settings::TIMEOUT_IMAGE,
+        ));
+        if (is_wp_error($response)) {
+            return $response;
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if ($code !== 200) {
+            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای تولید تصویر در AvalAI (کد ' . $code . ')';
+            return new \WP_Error('image_api_error', $msg);
+        }
+        if (!empty($data['data'][0]['url'])) {
+            return array('url' => esc_url_raw($data['data'][0]['url']));
+        }
+        if (!empty($data['data'][0]['b64_json'])) {
+            return array('b64' => $data['data'][0]['b64_json']);
+        }
+        return new \WP_Error('invalid_image_response', 'پاسخ نامعتبر از سرویس تولید تصویر.');
+    }
+
+    /**
      * Connectivity check used by the settings screen.
      *
      * @return array|\WP_Error

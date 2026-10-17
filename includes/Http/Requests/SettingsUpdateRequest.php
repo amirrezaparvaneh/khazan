@@ -47,6 +47,9 @@ final class SettingsUpdateRequest {
             $taxonomy = sanitize_key($this->input['product_category_taxonomy']);
             if (taxonomy_exists($taxonomy)) $options[Settings::OPT_PRODUCT_CATEGORY_TAXONOMY] = $taxonomy;
         }
+        if (isset($this->input['auto_image_enabled'])) {
+            $options[Settings::OPT_AUTO_IMAGE_ENABLED] = rest_sanitize_boolean($this->input['auto_image_enabled']) ? '1' : '0';
+        }
         return $options;
     }
 }

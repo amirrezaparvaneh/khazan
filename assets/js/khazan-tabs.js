@@ -703,6 +703,15 @@ ${siteExpanded ? `
               <textarea id="wila-homepage-keywords-input" class="wila-input" style="width:100%; height:70px; resize:vertical;" placeholder="مثلاً: چرم تیماج، خرید محصولات چرمی، کیف چرم طبیعی">${s.homepageKeywords || ''}</textarea>
             </div>
 
+            <div style="background:#fffbeb; padding:16px; border-radius:8px; border:1px solid #fde68a; margin-bottom:20px;">
+              <h4 style="margin-top:0; font-size:0.95rem; color:#92400e;">🖼️ تصویر خودکار بین متن</h4>
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.825rem; font-weight:500; cursor:pointer;">
+                <input type="checkbox" id="wila-auto-image-input" ${s.autoImageEnabled ? 'checked' : ''} />
+                تولید و درج خودکار تصویر با مدل <code>flux.2-pro</code> هنگام تولید محتوا
+              </label>
+              <p style="margin:8px 0 0 0; font-size:0.75rem; color:#b45309;">برای هر محتوای تولیدشده یک تصویر ساخته و در بخش میانی مقاله درج می‌شود؛ هر تصویر از اعتبار AvalAI هزینه دارد. در صورت خطا، محتوا بدون تصویر ذخیره می‌شود.</p>
+            </div>
+
             <div style="margin-bottom:20px; background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0;">
               <h4 style="margin-top:0; font-size:0.95rem; color:#0f172a;">تنظیمات AvalAI</h4>
               <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید API سرویس AvalAI: ${s.hasAvalAIKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>

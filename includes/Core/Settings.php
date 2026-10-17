@@ -21,6 +21,7 @@ final class Settings {
     const OPT_BRAND_NAME                 = 'wila_brand_name';
     const OPT_PRODUCT_POST_TYPE          = 'wila_product_post_type';
     const OPT_PRODUCT_CATEGORY_TAXONOMY  = 'wila_product_category_taxonomy';
+    const OPT_AUTO_IMAGE_ENABLED         = 'wila_auto_image_enabled';
     const OPT_DB_VERSION                 = 'wila_db_version';
     const OPT_DB_INSTALLED_VERSION_LEGACY = 'wila_db_installed_version';
 
@@ -58,6 +59,15 @@ final class Settings {
     const AI_PROVIDER = 'avalai';
     const AI_MODEL    = 'gpt-5.4-mini';
     const AI_ENDPOINT = 'https://api.avalai.ir/v1/chat/completions';
+
+    // ---- in-article image generation (AvalAI, OpenAI-compatible images API) ----
+    const IMAGE_MODEL      = 'flux.2-pro';
+    const IMAGE_ENDPOINT   = 'https://api.avalai.ir/v1/images/generations';
+    const IMAGE_SIZE       = '1024x1024';
+    const IMAGE_CSS_CLASS  = 'aka-content-img';
+    const META_IMAGE_ALT   = '_wp_attachment_image_alt';
+    const META_GENERATED_IMAGE = '_wila_generated_image';
+    const FILTER_IMAGE_SIZE = 'wila_image_size';
 
     /** Account credit endpoint (AvalAI user API: GET /credit -> limit, remaining_irt, remaining_unit, total_unit, exchange_rate, ...). */
     const AI_BALANCE_ENDPOINT = 'https://api.avalai.ir/user/v1/credit';
@@ -139,6 +149,7 @@ final class Settings {
     const TIMEOUT_DEFAULT = 20;
     const TIMEOUT_LONG    = 35;
     const TIMEOUT_BULK    = 180;
+    const TIMEOUT_IMAGE   = 120;
 
     // ---- token ceilings ----
     const TOKENS_SUGGESTION = 2048;
@@ -179,6 +190,11 @@ final class Settings {
             }
         }
         return $lists;
+    }
+
+    /** Auto in-article image generation switch (off by default: every image costs credit). */
+    public static function auto_image_enabled() {
+        return get_option(self::OPT_AUTO_IMAGE_ENABLED, '0') === '1';
     }
 
     public static function avalai_api_key() {

@@ -32,6 +32,8 @@ final class SettingsController extends BaseController {
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
             'homepage_keywords' => $homepage_keywords,
+            'auto_image_enabled' => Settings::auto_image_enabled(),
+            'image_model' => Settings::IMAGE_MODEL,
             'product_post_type' => Settings::product_post_type(),
             'product_category_taxonomy' => Settings::category_taxonomy(),
             'ai_pricing' => \Khazan\Services\Ai\CostEstimator::per_row($avalai_client->get_active_model()),

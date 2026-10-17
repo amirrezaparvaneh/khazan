@@ -218,6 +218,8 @@ final class BulkRowProcessor {
             'edit_url'            => $applied['edit_url'],
             'internal_link_count' => $result['internal_link_count'],
             'seo_title'           => $result['seo_title'],
+            'image'               => isset($result['image']) ? $result['image'] : array('status' => 'skipped'),
+            'image'               => isset($result['image']) ? $result['image'] : array('status' => 'skipped'),
             'generated'           => $generated,
         );
     }

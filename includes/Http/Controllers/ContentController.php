@@ -115,10 +115,11 @@ final class ContentController extends BaseController {
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new \WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
         $result = (new \Khazan\Services\Ai\AiService())->generate_full_content($params, $outline);
         if (is_wp_error($result)) return $result;
+        $result = (new \Khazan\Services\Image\ImageGenerationService())->embed($params, $result);
 
         (new \Khazan\Repository\DatabaseRepository())->insert_content_history($params, $result);
 
-        return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links']));
+        return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links'], 'image' => $result['image']));
     }
 
     public function get_content_history() {

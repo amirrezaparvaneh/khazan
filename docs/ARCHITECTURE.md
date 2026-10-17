@@ -158,3 +158,14 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
    - **پرامپت:** قانون ۸ و قواعد عنوان، اولویت کاربری ← جنس و ممنوعیت حذف جنسیت را می‌گویند.
    - **تست:** `KeyphraseExtractorTest` بخش‌های ۱۰ و ۱۱، `LinkGuardTest` بخش ۷ («کفش چرم مارکو» ← «کفش طبی مردانه مارکو»).
 27. **باقی‌مانده:** تست نهایی در وردپرس واقعی (فاز ۹)، از جمله تأیید پاسخ واقعی `/user/v1/credit` و نرخ واقعی مدل در AvalAI و رفتار کشوی منو روی دستگاه‌های واقعی؛ مدیریت خطای شبکه یکپارچه در `apiFetch`؛ `Http\Requests\*` برای `fix_seo_errors`/`apply_content_to_target`؛ حذف Wrapperهای `WILA_*` پس از اطمینان از نبود فراخوان بیرونی؛ فعال‌سازی یا حذف رسمی قابلیت پارک‌شده Insights؛ صفحه‌بندی واقعی لیست محصولات سایت (فعلاً سقف ۵۰۰ و نشانگر `has_more`).
+
+## تصویر خودکار بین متن (flux.2-pro)
+
+- `Services\Image\ImageGenerationService` — هماهنگ‌کننده: بریف → تولید تصویر → ذخیره در مدیا → درج در HTML. هر خطا فقط در `image.status = failed` گزارش می‌شود و محتوا بدون تغییر می‌ماند.
+- `Services\Image\ImageBrief` — پرامپت انگلیسی استودیویی (استاندارد ثابت `PROMPT_STANDARD`)، اسلاگ انگلیسی فایل، آلت و کپشن فارسی؛ با fallback امن.
+- `Services\Image\ContentImageInjector` — درج `<figure class="… aka-content-img">` پیش از H2 سوم (قالب در `templates/content/image-figure.php`)؛ idempotent.
+- `Repository\MediaRepository` — `media_handle_sideload`، عنوان = کلیدواژه کانونی، `_wp_attachment_image_alt`.
+- `AvalaiHttpClient::generate_image()` — فقط ترنسپورت (`Settings::IMAGE_ENDPOINT`، `IMAGE_MODEL`).
+- نقطه‌های اتصال: `BulkRowProcessor::process` و `ContentController::generate_full_content` (پس از گاردها، پیش از ذخیره/آرشیو).
+- سوییچ: گزینه `wila_auto_image_enabled` (پیش‌فرض خاموش) در تنظیمات؛ اندازه با فیلتر `wila_image_size`.
+- تست: `php tests/Unit/Services/Image/ImageGenerationTest.php`

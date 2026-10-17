@@ -30,6 +30,7 @@
           avalAIMaskedKey: data.avalai_masked_key || '',
           avalAIModel: data.avalai_model || 'gpt-5.4-mini',
           homepageKeywords: data.homepage_keywords || '',
+          autoImageEnabled: !!data.auto_image_enabled,
           productPostType: data.product_post_type || 'product',
           productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
         };
@@ -484,6 +485,7 @@
       const app = this;
       const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const homepageKeywords = document.getElementById('wila-homepage-keywords-input')?.value.trim() || '';
+      const autoImageInput = document.getElementById('wila-auto-image-input');
 
       try {
         await this.apiFetch('/settings', {
@@ -491,7 +493,8 @@
           body: JSON.stringify({
             provider: 'avalai',
             avalai_api_key: avalaiKey,
-            homepage_keywords: homepageKeywords
+            homepage_keywords: homepageKeywords,
+            ...(autoImageInput ? { auto_image_enabled: autoImageInput.checked } : {})
           })
         });
         app.toast('تنظیمات با موفقیت ذخیره شد.');
