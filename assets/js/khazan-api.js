@@ -83,7 +83,6 @@
             + this.copyField('wila-h-synonyms', 'مترادف‌ها و عبارات کلیدی', item.keyword_synonyms)
             + (links.length ? this.copyField('wila-h-links', 'لینک‌های خارجی', links.map(l => `${l.anchor || ''} ${l.url}`.trim()).join('\n'), { rows: Math.min(6, links.length + 1), ltr: true }) : '')
             + this.copyField('wila-h-content', 'محتوای HTML', item.content, { rows: 16 })
-            + this.copyField('wila-h-image', 'پرامپت تصویر شاخص', item.featured_image_prompt, { rows: 4, ltr: true })
         };
         this.render();
       } catch (e) { app.toast('خطا: ' + e.message); }
@@ -166,7 +165,7 @@
         st.generatorForm.h1Title = item.title || '';
         st.generatorForm.focusKeyword = item.focus_keyword || '';
         st.contentOutline = null;
-        st.generatedContent = item.content || ''; st.featuredImagePrompt = item.featured_image_prompt || ''; st.generatedSlug = item.slug || '';
+        st.generatedContent = item.content || ''; st.featuredImageId = 0; st.featuredImageUrl = ''; st.generatedSlug = item.slug || '';
         st.generatedSeoTitle = item.seo_title || ''; st.generatedMetaDescription = item.meta_description || ''; st.generatedKeywordSynonyms = item.keyword_synonyms || '';
         st.generatedInternalLinkCount = Number(item.internal_link_count || 0); st.generatedExternalLinkCount = Number(item.external_link_count || 0); st.generatedExternalLinks = Array.isArray(links) ? links : [];
         st.activeTab = 'generator'; st.activeNav = 'generator';
@@ -236,7 +235,7 @@
     generateFullContent: async function () {
       const app = this;
       this.state.isGeneratingContent = true; this.render();
-      try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; this.state.featuredImagePrompt = r.featured_image_prompt || ''; this.state.generatedSlug = r.slug || ''; this.state.generatedSeoTitle = r.seo_title || ''; this.state.generatedMetaDescription = r.meta_description || ''; this.state.generatedKeywordSynonyms = r.keyword_synonyms || ''; this.state.generatedInternalLinkCount = Number(r.internal_link_count || 0); this.state.generatedExternalLinkCount = Number(r.external_link_count || 0); this.state.generatedExternalLinks = Array.isArray(r.external_links) ? r.external_links : []; }
+      try { const r = await this.apiFetch('/content/generate', { method: 'POST', body: JSON.stringify({ ...this.getGeneratorPayload(), outline: this.state.contentOutline }) }); if (!r.success) throw new Error(r.message || 'محتوا تولید نشد.'); this.state.generatedContent = r.content; this.state.featuredImageId = Number(r.featured_image_id || 0); this.state.featuredImageUrl = r.featured_image_url || ''; this.state.generatedSlug = r.slug || ''; this.state.generatedSeoTitle = r.seo_title || ''; this.state.generatedMetaDescription = r.meta_description || ''; this.state.generatedKeywordSynonyms = r.keyword_synonyms || ''; this.state.generatedInternalLinkCount = Number(r.internal_link_count || 0); this.state.generatedExternalLinkCount = Number(r.external_link_count || 0); this.state.generatedExternalLinks = Array.isArray(r.external_links) ? r.external_links : []; }
       catch (e) { app.toast('خطا: ' + e.message); } finally { this.state.isGeneratingContent = false; this.render(); }
     },
 
@@ -244,7 +243,7 @@
       const app = this;
       const contentField = this.root.querySelector('#wila-generated-content');
       const content = contentField ? contentField.value : this.state.generatedContent;
-      try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content, slug: (this.root.querySelector('#wila-generated-slug') || {}).value || this.state.generatedSlug, focus_keyword: this.state.generatorForm.focusKeyword, keyword_synonyms: (this.root.querySelector('#wila-keyword-synonyms') || {}).value || this.state.generatedKeywordSynonyms, seo_title: (this.root.querySelector('#wila-seo-title') || {}).value || this.state.generatedSeoTitle, meta_description: (this.root.querySelector('#wila-meta-description') || {}).value || this.state.generatedMetaDescription }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
+      try { const r = await this.apiFetch('/content/draft', { method: 'POST', body: JSON.stringify({ title: this.state.generatorForm.h1Title, content, featured_image_id: this.state.featuredImageId || 0, slug: (this.root.querySelector('#wila-generated-slug') || {}).value || this.state.generatedSlug, focus_keyword: this.state.generatorForm.focusKeyword, keyword_synonyms: (this.root.querySelector('#wila-keyword-synonyms') || {}).value || this.state.generatedKeywordSynonyms, seo_title: (this.root.querySelector('#wila-seo-title') || {}).value || this.state.generatedSeoTitle, meta_description: (this.root.querySelector('#wila-meta-description') || {}).value || this.state.generatedMetaDescription }) }); if (!r.success) throw new Error(r.message || 'پیش‌نویس وبلاگ ایجاد نشد.'); window.open(r.edit_url, '_blank'); }
       catch (e) { app.toast('خطا: ' + e.message); }
     },
 

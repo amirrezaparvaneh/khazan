@@ -23,7 +23,7 @@ final class ContentDraftRequest {
     }
 
     /**
-     * @return array|\WP_Error array(title, content, slug, seo)
+     * @return array|\WP_Error array(title, content, slug, featured_image_id, seo)
      */
     public function validated() {
         $params  = $this->input;
@@ -39,6 +39,7 @@ final class ContentDraftRequest {
             'title'   => $title,
             'content' => $content,
             'slug'    => $slug,
+            'featured_image_id' => isset($params['featured_image_id']) ? absint($params['featured_image_id']) : 0,
             'seo'     => array(
                 'title'    => isset($params['seo_title']) ? sanitize_text_field($params['seo_title']) : $title,
                 'desc'     => isset($params['meta_description']) ? sanitize_textarea_field($params['meta_description']) : '',

@@ -42,7 +42,7 @@
 
     resetGenerated: function () {
       const st = this.state;
-      st.contentOutline = null; st.generatedContent = ''; st.featuredImagePrompt = ''; st.generatedSlug = ''; st.generatedSeoTitle = '';
+      st.contentOutline = null; st.generatedContent = ''; st.featuredImageId = 0; st.featuredImageUrl = ''; st.generatedSlug = ''; st.generatedSeoTitle = '';
       st.generatedMetaDescription = ''; st.generatedKeywordSynonyms = ''; st.generatedInternalLinkCount = 0; st.generatedExternalLinkCount = 0; st.generatedExternalLinks = [];
     },
 

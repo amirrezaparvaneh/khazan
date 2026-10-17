@@ -119,7 +119,7 @@ final class ContentController extends BaseController {
 
         (new \Khazan\Repository\DatabaseRepository())->insert_content_history($params, $result);
 
-        return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'featured_image_prompt' => $result['featured_image_prompt'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links'], 'image' => $result['image']));
+        return rest_ensure_response(array('success' => true, 'content_kind' => $params['content_kind'], 'content' => $result['content'], 'slug' => $result['slug'], 'seo_title' => $result['seo_title'], 'meta_description' => $result['meta_description'], 'keyword_synonyms' => $result['keyword_synonyms'], 'internal_link_count' => $result['internal_link_count'], 'external_link_count' => $result['external_link_count'], 'external_links' => $result['external_links'], 'image' => $result['image'], 'featured_image_id' => isset($result['image']['featured_id']) ? $result['image']['featured_id'] : 0, 'featured_image_url' => isset($result['image']['featured_url']) ? $result['image']['featured_url'] : ''));
     }
 
     public function get_content_history() {
@@ -143,7 +143,7 @@ final class ContentController extends BaseController {
         $input = (new ContentDraftRequest($request->get_json_params()))->validated();
         if (is_wp_error($input)) return $input;
 
-        $post_id = (new \Khazan\Repository\ContentTargetRepository())->create_blog_draft($input['title'], $input['content'], $input['slug'], $input['seo']);
+        $post_id = (new \Khazan\Repository\ContentTargetRepository())->create_blog_draft($input['title'], $input['content'], $input['slug'], $input['seo'], $input['featured_image_id']);
         if (is_wp_error($post_id)) return $post_id;
 
         return rest_ensure_response(array('success' => true, 'post_id' => $post_id, 'slug' => get_post_field('post_name', $post_id), 'edit_url' => get_edit_post_link($post_id, 'raw')));

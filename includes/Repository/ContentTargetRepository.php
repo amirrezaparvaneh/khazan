@@ -511,7 +511,7 @@ final class ContentTargetRepository {
      *
      * @return int|\WP_Error Post ID on success.
      */
-    public function create_blog_draft($title, $content, $slug, array $seo) {
+    public function create_blog_draft($title, $content, $slug, array $seo, $featured_image_id = 0) {
         $blog_post_type = apply_filters(Settings::FILTER_BLOG_POST_TYPE, 'blog');
         if (!post_type_exists($blog_post_type)) {
             return new \WP_Error('blog_post_type_not_found', 'نوع محتوای «وبلاگ» یافت نشد. با فیلتر wila_blog_post_type نام post type وبلاگ را تنظیم کنید.', array('status' => 400));
@@ -523,6 +523,7 @@ final class ContentTargetRepository {
         if (is_wp_error($post_id)) return $post_id;
 
         $this->write_post_seo($post_id, $seo);
+        (new MediaRepository())->adopt($post_id, $featured_image_id, $content);
         return $post_id;
     }
 }

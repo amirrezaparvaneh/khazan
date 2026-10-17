@@ -63,7 +63,9 @@ final class Settings {
     // ---- in-article image generation (AvalAI, OpenAI-compatible images API) ----
     const IMAGE_MODEL      = 'flux.2-pro';
     const IMAGE_ENDPOINT   = 'https://api.avalai.ir/v1/images/generations';
-    const IMAGE_SIZE       = '1024x1024';
+    /** Landscape blog / featured-image ratio first; the safe square size is the retry when the API rejects it. */
+    const IMAGE_SIZE       = '1024x576';
+    const IMAGE_SIZE_SAFE  = '1024x1024';
     const IMAGE_CSS_CLASS  = 'aka-content-img';
     const META_IMAGE_ALT   = '_wp_attachment_image_alt';
     const META_GENERATED_IMAGE = '_wila_generated_image';

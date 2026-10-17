@@ -22,20 +22,32 @@ final class ContentImageInjector {
     }
 
     /**
-     * Byte offset where the figure goes: before the 3rd H2; with only two H2s before the 2nd; otherwise after
-     * the middle paragraph. Returns -1 when the content has no usable position.
+     * Byte offset of the insertion point in the middle third of the text: the H2 (never the first) closest to
+     * the middle; without enough H2s, the paragraph end closest to the middle. -1 when there is no usable position.
      */
     public static function insert_offset($html) {
         $html = (string) $html;
+        $mid  = strlen($html) / 2;
         if (preg_match_all('~<h2\b~i', $html, $m, PREG_OFFSET_CAPTURE) && count($m[0]) >= 2) {
-            $heading = count($m[0]) >= 3 ? 2 : 1;
-            return $m[0][$heading][1];
+            return self::closest(array_slice(array_column($m[0], 1), 1), $mid);
         }
         if (preg_match_all('~</p>~i', $html, $m, PREG_OFFSET_CAPTURE) && count($m[0]) >= 2) {
-            $mid = (int) floor((count($m[0]) - 1) / 2);
-            return $m[0][$mid][1] + strlen('</p>');
+            return self::closest(array_map(function ($offset) { return $offset + strlen('</p>'); }, array_column($m[0], 1)), $mid);
         }
         return -1;
+    }
+
+    private static function closest(array $offsets, $target) {
+        $best = $offsets[0];
+        foreach ($offsets as $offset) {
+            if (abs($offset - $target) < abs($best - $target)) $best = $offset;
+        }
+        return $best;
+    }
+
+    /** Plain text from the start of the content (title area / intro), for the featured image brief. */
+    public static function intro_text($html) {
+        return mb_substr(wp_strip_all_tags((string) $html), 0, 600);
     }
 
     /** Plain text of the content just before the insertion point (the middle section), for the image brief. */

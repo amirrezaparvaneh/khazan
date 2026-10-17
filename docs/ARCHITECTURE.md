@@ -169,3 +169,11 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
 - نقطه‌های اتصال: `BulkRowProcessor::process` و `ContentController::generate_full_content` (پس از گاردها، پیش از ذخیره/آرشیو).
 - سوییچ: گزینه `wila_auto_image_enabled` (پیش‌فرض خاموش) در تنظیمات؛ اندازه با فیلتر `wila_image_size`.
 - تست: `php tests/Unit/Services/Image/ImageGenerationTest.php`
+
+### تکمیل: مقاله و دسته‌بندی بدون پرامپت نمایشی
+- `PromptBuilder` دیگر برچسب `WILA_FEATURED_IMAGE_PROMPT`، باکس `wila-image-placeholder` و `image_positions` را نمی‌خواهد؛ AI فقط HTML خالص می‌نویسد. `ContentParser` هر باکس/پرامپت احتمالی را حذف می‌کند و `featured_image_prompt` همیشه خالی است (ستون قدیمی دیتابیس حفظ شد). فیلد پرامپت از پاسخ REST و UI حذف شد.
+- `ImageGenerationService::embed`: مقاله = تصویر شاخص (`image.featured_id`، خارج از HTML) + ۱ تصویر میانی؛ دسته و محصول = ۱ تصویر میانی. هر دو تصویر مقاله پرامپت/اسلاگ متفاوت دارند (`…-detail`) و سبک مقاله ادیتوریال است.
+- محل درج: H2 (غیر از اولی) نزدیک‌ترین به وسط متن؛ بدون H2 کافی، نزدیک‌ترین پایان پاراگراف به وسط.
+- اندازه پیش‌فرض `1024x576` (افقی)؛ اگر API رد کند یک‌بار با `1024x1024` تکرار می‌شود.
+- مقاله پیش از ساخت نوشته تولید می‌شود، پس `create_blog_draft` با `featured_image_id` تصویر را `set_post_thumbnail` می‌کند و تصاویر تولیدشده را به نوشته وصل می‌کند (`MediaRepository::adopt`؛ فقط تصاویر تولیدشده توسط افزونه پذیرفته می‌شوند).
+- تست‌ها: `tests/Unit/Services/Image/ImageGenerationTest.php`، `tests/Unit/Services/Ai/PromptFreeOutputTest.php`

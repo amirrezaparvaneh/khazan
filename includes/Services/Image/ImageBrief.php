@@ -17,20 +17,24 @@ final class ImageBrief {
     /** Always appended: the commercial-photography standard, regardless of what the model wrote. */
     const PROMPT_STANDARD = 'Commercial product photography, soft diffused studio lighting, minimal luxury background, sharp focus, clearly visible natural leather grain texture, high-end e-commerce catalog style. No watermark, no text, no letters, no logo, no people.';
 
+    /** Articles are editorial pieces of a leather goods blog, not product shots. */
+    const ARTICLE_STANDARD = 'Editorial lifestyle photography, soft natural light, clean elegant composition, shallow depth of field, premium handcrafted leather goods mood, high-end magazine style. No watermark, no text, no letters, no logo.';
+
     const FALLBACK_SLUG = 'leather-product';
 
     /**
      * @return array chat messages asking for a JSON brief
      */
-    public static function messages(array $params, $section_text) {
+    public static function messages(array $params, $section_text, $role = 'inline') {
         $focus = self::focus($params);
         $system = 'You are an art director for a Persian leather goods e-commerce store. Reply with one JSON object only.';
-        $user = "Create an image brief for an in-article photo.\n"
+        $what = $role === 'featured' ? 'the wide featured (cover) photo of the page, representing the whole topic' : 'an in-article photo illustrating the middle section';
+        $user = "Create an image brief for {$what}.\n"
             . "Page title (Persian): " . (isset($params['h1_title']) ? $params['h1_title'] : '') . "\n"
             . "Focus keyword (Persian): {$focus}\n"
-            . "Excerpt from the middle of the article (Persian): " . self::excerpt($section_text, 500) . "\n\n"
+            . "Relevant excerpt (Persian): " . self::excerpt($section_text, 500) . "\n\n"
             . "JSON keys:\n"
-            . "- \"prompt\": English scene description for an image model (subject, material, angle, composition). Product photography only; do not mention text, logos or watermarks.\n"
+            . "- \"prompt\": English scene description for an image model (subject, material, angle, composition). Photography only; do not mention text, logos or watermarks.\n"
             . "- \"slug\": 3-6 lowercase English words describing the subject, hyphen separated, e.g. womens-leather-boots-alfredo (translate/transliterate the focus keyword).\n"
             . "- \"alt\": Persian alt text, 8-16 words, descriptive, must contain the exact focus keyword.\n"
             . "- \"caption\": one short, attractive Persian sentence about the product.";
@@ -40,13 +44,14 @@ final class ImageBrief {
     /**
      * @return array{prompt:string,slug:string,alt:string,caption:string,title:string}
      */
-    public static function parse($raw, array $params) {
+    public static function parse($raw, array $params, $role = 'inline') {
         $focus = self::focus($params);
         $data  = json_decode(self::json_text((string) $raw), true);
         $data  = is_array($data) ? $data : array();
 
         $prompt = isset($data['prompt']) ? trim(wp_strip_all_tags((string) $data['prompt'])) : '';
-        $prompt = ($prompt !== '' ? rtrim($prompt, '. ') . '. ' : 'Elegant natural leather fashion product. ') . self::PROMPT_STANDARD;
+        $article = isset($params['content_kind']) && $params['content_kind'] === \Khazan\Core\Settings::KIND_ARTICLE;
+        $prompt = ($prompt !== '' ? rtrim($prompt, '. ') . '. ' : 'Elegant natural leather goods. ') . ($article ? self::ARTICLE_STANDARD : self::PROMPT_STANDARD);
 
         $alt = isset($data['alt']) ? trim(wp_strip_all_tags((string) $data['alt'])) : '';
         if ($alt === '') {

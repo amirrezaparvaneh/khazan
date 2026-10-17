@@ -53,6 +53,34 @@ class MediaRepository {
         return array('id' => (int) $id, 'url' => wp_get_attachment_url($id));
     }
 
+    /** True for an attachment this plugin generated that the current user may use. */
+    public function is_generated_image($attachment_id) {
+        $attachment_id = absint($attachment_id);
+        return $attachment_id > 0 && get_post_type($attachment_id) === 'attachment'
+            && get_post_meta($attachment_id, Settings::META_GENERATED_IMAGE, true) !== ''
+            && current_user_can('edit_post', $attachment_id);
+    }
+
+    /**
+     * Binds a draft's generated images: featured image + attaches generated, still unattached images (incl. the
+     * ones referenced as wp-image-N in the content) to the post.
+     */
+    public function adopt($post_id, $featured_id, $content) {
+        $ids = array();
+        if ($this->is_generated_image($featured_id)) {
+            set_post_thumbnail($post_id, absint($featured_id));
+            $ids[] = absint($featured_id);
+        }
+        if (preg_match_all('~class="wp-image-(\d+)"~', (string) $content, $m)) {
+            $ids = array_merge($ids, array_map('absint', $m[1]));
+        }
+        foreach (array_unique($ids) as $id) {
+            if ($this->is_generated_image($id) && (int) get_post_field('post_parent', $id) === 0) {
+                wp_update_post(array('ID' => $id, 'post_parent' => $post_id));
+            }
+        }
+    }
+
     /** @return string|\WP_Error path of a temp file holding the image bytes */
     private function materialize(array $source) {
         if (!empty($source['url'])) {

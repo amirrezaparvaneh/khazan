@@ -43,7 +43,7 @@ final class PromptBuilder {
         $kind = $this->kind($params);
         $prompt = $this->content_system($params) . "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
         if ($kind === Settings::KIND_ARTICLE) {
-            $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}],\"image_positions\":[\"پس از بخش ...\"]}.";
+            $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\"},{\"level\":\"h3\",\"text\":\"...\",\"purpose\":\"...\"}]}.";
             $prompt .= '\nدر همین JSON فیلدهای seo_title، meta_description، keyword_synonyms (رشته با ویرگول)، slug (انگلیسی)، entities (آرایه موجودیت‌ها) و evidence_needed (آرایه شواهد لازم برای بازبینی انسانی) را هم اضافه کن. برای هر هدینگ word_budget حداکثر ۲۲۰ تعیین کن.';
         } else {
             $prompt .= "\nفقط طرح ساختاری را در JSON معتبر برگردان: {\"search_intent\":\"...\",\"strategy\":\"...\",\"headings\":[{\"level\":\"h2\",\"text\":\"...\",\"purpose\":\"...\",\"word_budget\":150}]}.";
@@ -68,8 +68,7 @@ final class PromptBuilder {
         }
         $prompt .= "===WILA_CONTENT_START===\n[HTML کامل بدنه محتوا]\n===WILA_CONTENT_END===\n";
         if ($is_article) {
-            $prompt .= "===WILA_FEATURED_IMAGE_PROMPT_START===\n[یک پرامپت انگلیسی دقیق برای تصویر شاخص با عنوان فارسی مقاله در مرکز، فونت Vazirmatn/Vazir، حاشیه امن چهارطرفه و نسبت 16:9]\n===WILA_FEATURED_IMAGE_PROMPT_END===\n" .
-                "===WILA_SLUG_START===\n[یک اسلاگ انگلیسی کوتاه و دقیق، فقط با حروف کوچک لاتین و خط تیره، بدون تاریخ/کلمات زائد؛ مرتبط با موضوع و کلیدواژه اصلی]\n===WILA_SLUG_END===\n";
+            $prompt .= "===WILA_SLUG_START===\n[یک اسلاگ انگلیسی کوتاه و دقیق، فقط با حروف کوچک لاتین و خط تیره، بدون تاریخ/کلمات زائد؛ مرتبط با موضوع و کلیدواژه اصلی]\n===WILA_SLUG_END===\n";
         }
         $prompt .= "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا، با یک ایموجی]\n===WILA_SEO_TITLE_END===\n" .
             "===WILA_META_DESCRIPTION_START===\n[توضیحات متا فارسی با طول ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===\n" .
@@ -207,7 +206,8 @@ final class PromptBuilder {
             "نقشه لینک داخلی داده‌شده را دقیقاً با HTML <a href=\"URL\">انکرتکست</a> و فقط در جمله طبیعی وارد کن. از انکرتکست عمومی پرهیز کن و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه بگذار.\n" .
             "برای تقویت اعتبار و استناد، متناسب با طول مقاله ۱ لینک خارجی معتبر (محتوای کوتاه) یا حداکثر ۲ لینک خارجی (محتوای بلند) از منابع رسمی، دانشگاهی، دولتی یا سازمان‌های شناخته‌شده اضافه کن. فقط URL واقعی و شناخته‌شده‌ای را لینک بده که به آن اطمینان داری؛ لینک ساختگی یا دامنه/صفحه حدسی نساز. در صورت نبود منبع قابل اتکا، لینک خارجی نده. از لینک‌های خارجی با rel=\"nofollow\" استفاده نکن مگر مقصد تجاری یا تبلیغاتی باشد.\n" .
             "اگر use_orphan_links فعال است، فهرست internal_links شامل همه صفحات یتیم افزونه و به‌ترتیب اولویت است: دسته‌بندی محصول، محصول، مقاله بلاگ، برگه عمومی. از همه نامزدهای مرتبط با موضوع و نیت محتوا، به‌ترتیب اولویت استفاده کن تا یتیمی صفحات به‌تدریج رفع شود؛ فقط موارد نامرتبط را حذف کن. برای هر مورد منتخب، انکرتکست دقیق و توصیف‌کننده مقصد بساز، URL همان مورد را استفاده کن و لینک را طبیعی در متن بگذار. سقف یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ کلمه قطعی است؛ اگر نامزدهای مرتبط بیشترند، برای محتواهای بعدی نگه‌شان دار.\n" .
-            "در جای لازم برای تصویر، دقیقاً این HTML را درج کن: <div class=\"wila-image-placeholder\"><strong>[پیشنهاد تصویر سئو]</strong><p><strong>Image Prompt (English):</strong> prompt</p><p><strong>Alt Text (فارسی):</strong> alt</p><p><strong>File Name (English):</strong> seo-content-strategy.webp</p></div>. پرامپت انگلیسی باید دقیق و دارای سبک بصری باشد.\n" .
+            "هیچ تصویر، باکس تصویر، placeholder یا پرامپت/توضیح ساخت تصویر در متن ننویس؛ فقط HTML خالص متن (تصاویر را سیستم به‌صورت خودکار می‌سازد).
+" .
             "الزام لینک خارجی: متناسب با حجم محتوا، حتماً ۱ الی ۲ لینک خارجی بسیار معتبر و متنوع (مانند مراجع علمی، استانداردهای رسمی، ویکی‌پدیا، یا منابع تراز اول حوزه) به صورت طبیعی در متن با تگ <a href=\"URL\" target=\"_blank\" rel=\"noopener noreferrer\"> قرار بده. از ارجاع به رقبا یا لینک‌های اسپم و نامعتبر پرهیز کن.";
         return $prompt . "\n" . \Khazan\Services\Content\ContentRules::writing_rules($kind);
     }
