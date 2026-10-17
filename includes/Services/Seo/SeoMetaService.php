@@ -75,6 +75,13 @@ final class SeoMetaService {
     }
 
     /**
+     * عنوان سئوی مقاله: عین همان کلیدواژه کانونی ذخیره‌شده در ابتدای عنوان، ایموجی فقط قبل از « | » یا در انتها
+     */
+    public static function guard_article_title($title, $focus, $brand = null, $hint = '') {
+        return SeoTitleGuard::fit_article($title, $brand === null ? Settings::brand_name() : $brand, $focus, $hint);
+    }
+
+    /**
      * متای پست: Yoast کلیدواژه اصلی و مترادف‌ها را جدا نگه می‌دارد، RankMath همه را در یک فهرست ویرگول‌دار می‌خواهد
      */
     public static function post_meta_map($seo) {

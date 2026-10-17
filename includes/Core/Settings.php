@@ -124,6 +124,23 @@ final class Settings {
         array('👞', array('کفش مردانه', 'رسمی', 'کفش')),
     );
     const SEO_TITLE_DEFAULT_EMOJI = '👞';
+    // عنوان سئوی مقاله: «[کلیدواژه دقیق] | [قلاب + ایموجی] | [برند]»؛ ایموجی هرگز اول عنوان نیست
+    const ARTICLE_TITLE_HOOK_DEFAULT = 'راهنمای کامل';
+    const ARTICLE_TITLE_EMOJI_DEFAULT = '📘';
+    const ARTICLE_TITLE_EMOJIS = array(
+        array('🧥', array('کاپشن', 'ژاکت', 'کت')),
+        array('👢', array('نیم‌بوت', 'نیمبوت', 'بوت', 'چکمه')),
+        array('👜', array('کیف', 'کوله')),
+        array('👞', array('کفش', 'کتانی')),
+        array('🧴', array('نگهداری', 'تمیز', 'پوسته')),
+    );
+    // مقاله: کلیدواژه عبارتی تا این تعداد کلمه کامل نگه داشته می‌شود و فقط بلندتر از آن کوتاه می‌شود
+    const ARTICLE_KEYPHRASE_MAX_WORDS = 6;
+    const ARTICLE_KEYPHRASE_CONNECTORS = array('از', 'و', 'با', 'در', 'به', 'برای', 'که', 'را', 'تا', 'یا', 'بر', 'یک', 'این', 'آن');
+    const ARTICLE_KEYPHRASE_LEADINS = array('راهنمای', 'راهنما', 'کامل', 'چگونه', 'نحوه', 'آموزش', 'بهترین', 'معرفی', 'بررسی');
+    // تکرار دقیق کلیدواژه کانونی مقاله: حدود یک بار به‌ازای هر ۲۵۰ کلمه، حداقل ۴ و حداکثر ۶
+    const ARTICLE_KEYWORD_MIN = 4;
+    const ARTICLE_KEYWORD_MAX = 6;
     // مزیت پیش‌فرض بخش دوم وقتی خروجی AI مزیت قابل‌استفاده ندارد؛ با فیلتر wila_seo_title_feature قابل تغییر است
     const SEO_TITLE_DEFAULT_FEATURE = 'چرم طبیعی تبریز';
     const FILTER_SEO_TITLE_FEATURE  = 'wila_seo_title_feature';

@@ -270,6 +270,11 @@ final class ContentTargetRepository {
             $seo['focuskw'] = $focus;
             $seo['title'] = SeoMetaService::guard_title($seo['title'], $focus, null, get_the_title($id) . ' ' . $category);
         }
+        elseif (get_post_type($id) === Settings::blog_post_type() && !empty($seo['title']) && !empty($seo['focuskw'])) {
+            // مقاله: همان رشته‌ای که به‌عنوان کلیدواژه کانونی ذخیره می‌شود، عیناً ابتدای عنوان سئو می‌نشیند
+            $seo['focuskw'] = trim($seo['focuskw']);
+            $seo['title'] = SeoMetaService::guard_article_title($seo['title'], $seo['focuskw'], null, get_the_title($id));
+        }
         $this->seo->write_post_seo($id, $seo);
     }
 

@@ -100,11 +100,15 @@ final class ContentGenerationRequest {
     }
 
     private function build($kind, $target, array $links, $use_orphan_links) {
+        $h1_title = $target ? $target['title'] : $this->text('h1_title');
+        $focus    = $this->text('focus_keyword');
+        // Articles: a natural long-tail phrase kept complete (no product formula, no connector stripping).
+        if ($kind === Settings::KIND_ARTICLE) $focus = \Khazan\Services\Seo\KeyphraseExtractor::extract_for_article($h1_title, $focus);
         $result = array(
             'content_kind'     => $kind,
             'target_id'        => $target ? $target['id'] : 0,
-            'h1_title'         => $target ? $target['title'] : $this->text('h1_title'),
-            'focus_keyword'    => $this->text('focus_keyword'),
+            'h1_title'         => $h1_title,
+            'focus_keyword'    => $focus,
             'long_tail'        => $this->text('long_tail'),
             'word_count'       => isset($this->input['word_count']) ? max(300, min(10000, absint($this->input['word_count']))) : 1200,
             'content_type'     => Settings::kind_label($kind),

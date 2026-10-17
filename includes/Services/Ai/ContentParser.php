@@ -103,7 +103,7 @@ final class ContentParser {
         // مترادف‌هایی که در Yoast ذخیره می‌شوند (ستون شیت در تولید انبوه) ملاک هدینگ‌ها هستند.
         $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
-        $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms);
+        $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms, self::kind($params) === Settings::KIND_ARTICLE ? Settings::ARTICLE_KEYWORD_MAX : \Khazan\Services\Content\Guard\KeywordDensityGuard::MAX_KEYWORD_OCCURRENCES);
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content, 4, self::category_urls(isset($params['internal_links']) ? $params['internal_links'] : array()));
         // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
@@ -192,19 +192,14 @@ final class ContentParser {
         $title = trim(sanitize_text_field((string) $title));
         if ($title === '') return '';
         if ($kind === Settings::KIND_PRODUCT) return \Khazan\Services\Seo\SeoMetaService::guard_title($title, $focus, null, $hint);
-        $emoji = '/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2B55}]\x{FE0F}?/u';
-        preg_match_all($emoji, $title, $found);
-        if (count($found[0]) > 1) {
-            $kept = false;
-            $title = preg_replace_callback($emoji, function ($m) use (&$kept) {
-                if (!$kept) { $kept = true; return $m[0]; }
-                return '';
-            }, $title);
-            $title = trim(preg_replace('/\s{2,}/u', ' ', $title));
-        } elseif (empty($found[0])) {
-            $defaults = array(Settings::KIND_ARTICLE => '📘', Settings::KIND_PRODUCT => '🛒', Settings::KIND_CATEGORY => '🛍️');
-            $title .= ' ' . $defaults[$kind];
+        if ($kind === Settings::KIND_ARTICLE) {
+            return \Khazan\Services\Seo\SeoMetaService::guard_article_title($title, $focus, null, $hint);
         }
+        $emoji = '/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2B55}]\x{FE0F}?/u';
+        // دسته: دقیقاً یک ایموجی و هرگز در ابتدای عنوان؛ در انتها می‌نشیند
+        preg_match($emoji, $title, $first);
+        $title = trim(preg_replace('/\s{2,}/u', ' ', preg_replace($emoji, '', $title)));
+        $title .= ' ' . ($first ? $first[0] : '🛍️');
         return $title;
     }
 

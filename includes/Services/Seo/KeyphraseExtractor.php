@@ -32,6 +32,26 @@ final class KeyphraseExtractor {
         return $out;
     }
 
+    /**
+     * Focus keyphrase of a blog ARTICLE: a natural long-tail phrase, not the product formula. The user's keyword (or the
+     * topic when empty) is kept COMPLETE up to 6 words - connectors are never dropped from the middle, so
+     * «جلوگیری از پوسته پوسته شدن کاپشن» never turns into «جلوگیری شدن کاپشن». Longer phrases lose generic lead-in words
+     * («راهنمای کامل …») first, are then cut to 6 words and never end on a dangling connector.
+     */
+    public static function extract_for_article($topic, $raw_keyword = '') {
+        $words = self::words($raw_keyword);
+        if (!$words) $words = self::words($topic);
+        $max = Settings::ARTICLE_KEYPHRASE_MAX_WORDS;
+        if (count($words) <= $max) return implode(' ', $words);
+
+        $lead = array_flip(array_map(array(__CLASS__, 'key'), Settings::ARTICLE_KEYPHRASE_LEADINS));
+        $connectors = array_flip(array_map(array(__CLASS__, 'key'), Settings::ARTICLE_KEYPHRASE_CONNECTORS));
+        while (count($words) > $max && isset($lead[self::key($words[0])])) array_shift($words);
+        $words = array_slice($words, 0, $max);
+        while (count($words) > 2 && isset($connectors[self::key(end($words))])) array_pop($words);
+        return implode(' ', $words);
+    }
+
     public static function count_words($phrase) {
         return count(self::words($phrase));
     }

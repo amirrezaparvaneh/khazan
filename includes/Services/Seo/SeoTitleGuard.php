@@ -31,6 +31,84 @@ final class SeoTitleGuard {
         return Settings::SEO_TITLE_DEFAULT_EMOJI;
     }
 
+    /** Emoji for an article: jackets / boots / bags ... first, the generic book emoji otherwise. */
+    public static function article_emoji_for($text) {
+        $text = self::norm($text);
+        foreach (array_merge(Settings::ARTICLE_TITLE_EMOJIS, Settings::SEO_TITLE_EMOJIS) as $entry) {
+            foreach ($entry[1] as $needle) {
+                if (mb_strpos($text, self::norm($needle)) !== false) return $entry[0];
+            }
+        }
+        return Settings::ARTICLE_TITLE_EMOJI_DEFAULT;
+    }
+
+    /**
+     * عنوان سئوی مقاله: «[کلیدواژه کانونی دقیق] | [قلاب + ایموجی] | [برند]» تا ۶۰ کاراکتر. عبارت اول همیشه عین کلیدواژه کانونی
+     * است (Yoast / Rank Math)، دقیقاً یک ایموجی و همیشه درست قبل از « | » یا در انتها؛ هرگز اول عنوان. کلیدواژه هرگز بریده نمی‌شود:
+     * برای کوتاه‌کردن ابتدا کلمات قلاب، بعد برند حذف می‌شود.
+     */
+    public static function fit_article($title, $brand, $focus = '', $hint = '') {
+        $title = self::strip_variables(strip_tags((string) $title));
+        $brand = trim(preg_replace('/\s+/u', ' ', (string) $brand));
+        $focus = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $focus)));
+
+        preg_match(self::EMOJI_PATTERN, $title, $found);
+        $plain = trim(preg_replace(self::EMOJI_PATTERN, '', $title));
+        $parts = array();
+        foreach (preg_split('/\s*[|｜–]\s*/u', $plain) as $part) {
+            $part = trim(preg_replace('/\s+/u', ' ', $part));
+            if ($part !== '') $parts[] = $part;
+        }
+        if ($focus === '') $focus = $parts ? array_shift($parts) : '';
+        if ($focus === '') return '';
+
+        // «کلیدواژه + قلاب» در یک بخش: بخش اول با کلیدواژه شروع شده و ادامه‌اش قلاب است
+        $hooks = array();
+        foreach ($parts as $i => $part) {
+            if (self::flat($part) === self::flat($focus)) continue;
+            if (mb_strpos(self::norm($part), self::norm($focus)) === 0) $part = trim(mb_substr($part, mb_strlen($focus)));
+            if ($part !== '') $hooks[] = $part;
+        }
+        $hook = '';
+        foreach ($hooks as $candidate) {
+            if (self::flat($candidate) === self::flat($brand) || self::flat($candidate) === self::flat(Settings::site_tagline())) continue;
+            $hook = $candidate;
+            break;
+        }
+        if ($hook === '') $hook = Settings::ARTICLE_TITLE_HOOK_DEFAULT;
+
+        $emoji = $found ? $found[0] : self::article_emoji_for($hint . ' ' . $focus);
+        $hook_words = array_slice(preg_split('/\s+/u', $hook), 0, 5);
+        $max = Settings::SEO_TITLE_MAX_CHARS;
+        $use_brand = $brand !== '';
+        while (true) {
+            $built = self::build_article($focus, implode(' ', $hook_words), $emoji, $use_brand ? $brand : '');
+            if (mb_strlen($built) <= $max) return $built;
+            if (count($hook_words) > 1) { array_pop($hook_words); continue; }
+            if ($use_brand) { $use_brand = false; continue; }
+            if ($hook_words) { $hook_words = array(); continue; }
+            return $built;
+        }
+    }
+
+    public static function build_article($focus, $hook, $emoji, $brand) {
+        $parts = array($hook === '' ? trim($focus . ' ' . $emoji) : $focus);
+        if ($hook !== '') $parts[] = trim($hook . ' ' . $emoji);
+        if ($brand !== '') $parts[] = $brand;
+        return implode(Settings::SEO_TITLE_SEPARATOR, $parts);
+    }
+
+    /** True when the single emoji of the title sits right before a separator or at the end - never first. */
+    public static function emoji_position_ok($title) {
+        preg_match_all(self::EMOJI_PATTERN, (string) $title, $found, PREG_OFFSET_CAPTURE);
+        if (count($found[0]) !== 1) return false;
+        $title = (string) $title;
+        $offset = $found[0][0][1];
+        if ($offset === 0) return false;
+        $after = ltrim(substr($title, $offset + strlen($found[0][0][0])));
+        return $after === '' || $after[0] === '|';
+    }
+
     /**
      * متغیرهای قالب یوست/رنک‌مث (%sep%، %sitedesc%، %%title%% …) را از رشته حذف می‌کند تا به عنوان نچسبند
      */
