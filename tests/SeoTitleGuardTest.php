@@ -86,7 +86,7 @@ echo "6. Prompt\n";
 $rules = ContentRules::seo_title_rules('product');
 check(strpos($rules, '[دقیقاً همان focus_keyword] | [مزیت') !== false && strpos($rules, '۶۰ کاراکتر') !== false, 'product rules dictate the 3-part formula and the 60-char cap');
 check(strpos($rules, '👢') !== false && strpos($rules, '👠') !== false && strpos($rules, '👞') !== false && strpos($rules, '👟') !== false && strpos($rules, '👜') !== false && strpos($rules, '🎒') !== false && strpos($rules, '👝') !== false, 'all allowed emojis are listed');
-check(strpos(ContentRules::seo_title_rules('article'), 'نام سایت را اضافه نکن') !== false, 'article rules are unchanged');
+check(strpos(ContentRules::seo_title_rules('article'), 'ایموجی هرگز در ابتدای عنوان نباشد') !== false && strpos(ContentRules::seo_title_rules('article'), 'درست قبل از جداکننده') !== false, 'article rules: emoji only before | or at the end, never first');
 
 echo "7. Rebuild guard: wrong AI output is forced into the 3-part formula\n";
 $focus = 'نیم‌بوت زنانه آلفردو';
