@@ -194,6 +194,12 @@ final class Settings {
         return $lists;
     }
 
+    /** Post type of the blog articles (filterable); falls back to core posts when it is not registered. */
+    public static function blog_post_type() {
+        $type = apply_filters(self::FILTER_BLOG_POST_TYPE, 'blog');
+        return post_type_exists($type) ? $type : 'post';
+    }
+
     /** Auto in-article image generation switch (off by default: every image costs credit). */
     public static function auto_image_enabled() {
         return get_option(self::OPT_AUTO_IMAGE_ENABLED, '0') === '1';

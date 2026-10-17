@@ -49,8 +49,12 @@ final class ContentGuard {
         return LinkGuard::neutralize_competing_links($html, $focus, $links, $synonyms);
     }
 
-    public static function lock_product_anchors($html, $links) {
-        return LinkGuard::lock_product_anchors($html, $links);
+    public static function lock_product_anchors($html, $links, $types = array('product')) {
+        return LinkGuard::lock_product_anchors($html, $links, $types);
+    }
+
+    public static function cap_internal_links($html, $links, $budget) {
+        return LinkGuard::cap_internal_links($html, $links, $budget);
     }
 
     public static function enforce_paragraphs($html, $max = 110) {

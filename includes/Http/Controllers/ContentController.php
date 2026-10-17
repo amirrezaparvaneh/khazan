@@ -113,6 +113,7 @@ final class ContentController extends BaseController {
         $body = $request->get_json_params();
         $outline = isset($body['outline']) && is_array($body['outline']) ? $body['outline'] : array();
         if (empty($params['h1_title']) || empty($params['focus_keyword']) || empty($outline)) return new \WP_Error('missing_content_details', 'مشخصات و طرح تاییدشده محتوا الزامی هستند.', array('status' => 400));
+        if ($params['content_kind'] === Settings::KIND_ARTICLE) $params = \Khazan\Services\Links\ArticleLinkDistributor::wordpress()->apply($params);
         $result = (new \Khazan\Services\Ai\AiService())->generate_full_content($params, $outline);
         if (is_wp_error($result)) return $result;
         $result = (new \Khazan\Services\Image\ImageGenerationService())->embed($params, $result);

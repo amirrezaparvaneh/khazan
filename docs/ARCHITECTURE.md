@@ -177,3 +177,11 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
 - اندازه پیش‌فرض `1024x576` (افقی)؛ اگر API رد کند یک‌بار با `1024x1024` تکرار می‌شود.
 - مقاله پیش از ساخت نوشته تولید می‌شود، پس `create_blog_draft` با `featured_image_id` تصویر را `set_post_thumbnail` می‌کند و تصاویر تولیدشده را به نوشته وصل می‌کند (`MediaRepository::adopt`؛ فقط تصاویر تولیدشده توسط افزونه پذیرفته می‌شوند).
 - تست‌ها: `tests/Unit/Services/Image/ImageGenerationTest.php`، `tests/Unit/Services/Ai/PromptFreeOutputTest.php`
+
+### لینک‌سازی هوشمند مقاله (ArticleLinkDistributor)
+- `ArticleLinkBudget::for_words`: زیر ۸۰۰ کلمه حداکثر ۳؛ ۸۰۰ تا ۱۵۰۰ کلمه ۴ تا ۵؛ بالای ۱۵۰۰ کلمه ۶ (حدود یک لینک به‌ازای هر ۲۵۰–۳۰۰ کلمه).
+- `ArticleLinkDistributor` (با `ArticleLinkSource` / `WordPressArticleLinkSource`): ترتیب پر شدن سهمیه = دسته، محصول، مقاله، صفحه برند، محصول دوم، مقاله دوم؛ سقف ۱ دسته + ۲ محصول + ۲ مقاله + ۱ صفحه. انواع ناموجود رد می‌شوند (بدون پرکردن اجباری). محصول و مقاله از مخزن سراسری (`GlobalLinkPool` + ورودی‌های دیتابیس + لجر `article-pool`) با کمترین لینک ورودی انتخاب می‌شوند؛ تناسب موضوعی فقط بین برابرها تعیین‌کننده است. لینک‌های دستی کاربر حفظ می‌شوند و از سهمیه کم می‌شوند.
+- انکرها: محصول = `KeyphraseExtractor::cap` (فرمول ۴ کلمه‌ای)، مقاله = کلیدواژه کانونی دقیق مقصد (Rank Math/Yoast، `ContentTargetRepository::article_link_anchor`)، دسته = پیشوند + نام دسته، صفحه = نام برند (فقط با کانتکست برند/کلمات صفحه اول).
+- گاردها (فقط مقاله): `LinkGuard::cap_internal_links` (سقف و یکتایی URL، لینک خارجی دست‌نخورده) و `lock_product_anchors(..., $types)` برای قفل انکر محصول/مقاله/دسته/صفحه؛ `ensure_internal_links` لینک‌های جاافتاده مقاله را با جمله «برای مطالعه بیشتر» اضافه می‌کند. مسیر محصول بدون تغییر است.
+- اتصال: `ContentController::generate_full_content` (فقط `content_kind=article`)؛ لیست کامل یتیم‌ها دیگر برای مقاله اضافه نمی‌شود. پرامپت مقاله فقط `internal_links` تا `link_budget` را می‌پذیرد.
+- تست: `tests/Unit/Services/Links/ArticleLinkDistributorTest.php`

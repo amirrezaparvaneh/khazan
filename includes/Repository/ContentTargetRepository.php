@@ -376,6 +376,20 @@ final class ContentTargetRepository {
     }
 
     /**
+     * انکر لینک به یک مقاله: کلیدواژه کانونی دقیق ذخیره‌شده (Rank Math / Yoast)، وگرنه عبارت کوتاه‌شده عنوان؛ حداکثر ۴ کلمه
+     */
+    public function article_link_anchor($id) {
+        $stored = '';
+        $rank = SeoMetaService::split_keywords((string) get_post_meta($id, 'rank_math_focus_keyword', true));
+        if ($rank) {
+            $stored = $rank[0];
+        } else {
+            $stored = trim(preg_replace('/\s+/u', ' ', (string) get_post_meta($id, '_yoast_wpseo_focuskw', true)));
+        }
+        return KeyphraseExtractor::limit($stored !== '' ? $stored : KeyphraseExtractor::from_title((string) get_the_title($id)));
+    }
+
+    /**
      * مترادف‌ها و عبارات فرعی ذخیره‌شده محصول (Yoast / RankMath) به‌صورت فهرست؛ برای جلوگیری از خودرقابتی انکرها
      */
     public function product_synonyms($id) {

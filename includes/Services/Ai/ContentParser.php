@@ -89,6 +89,10 @@ final class ContentParser {
             // هر URL فقط یک‌بار و حداکثر ۲ لینک محصول و ۱ لینک خارجی؛ لینک‌های برنامه‌ریزی‌شده‌ای که جا افتاده‌اند پایین‌تر اضافه می‌شوند
             $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
         }
+        if (self::kind($params) === Settings::KIND_ARTICLE && !empty($params['link_budget'])) {
+            // سقف لینک داخلی مقاله بر اساس تعداد کلمات؛ لینک‌های برنامه‌ریزی‌شده می‌مانند و لینک‌های اضافه آن‌رپ می‌شوند
+            $content = \Khazan\Services\Content\ContentGuard::cap_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array(), (int) $params['link_budget']);
+        }
         $content = \Khazan\Services\Content\ContentGuard::ensure_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
         if (self::kind($params) === Settings::KIND_PRODUCT) {
             // پیوند رقیب: انکر داخلی که کلمات کلیدواژه کانونی/مترادف‌های همین صفحه را تکرار می‌کند با عبارت امن جایگزین می‌شود
@@ -104,7 +108,7 @@ final class ContentParser {
         // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
         // قفل نهایی: انکر لینک‌های محصول برنامه‌ریزی‌شده دقیقاً همان انکر استاندارد است (AI نمی‌تواند آن را تحریف کند)
-        $content = \Khazan\Services\Content\ContentGuard::lock_product_anchors($content, isset($params['internal_links']) ? $params['internal_links'] : array());
+        $content = \Khazan\Services\Content\ContentGuard::lock_product_anchors($content, isset($params['internal_links']) ? $params['internal_links'] : array(), self::kind($params) === Settings::KIND_ARTICLE ? array('product', 'article', 'category', 'page') : array('product'));
         $content = \Khazan\Services\Content\ContentGuard::wrap($content);
 
         $external_links = self::extract_external_links($content);

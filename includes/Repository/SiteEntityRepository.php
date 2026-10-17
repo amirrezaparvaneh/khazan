@@ -158,6 +158,24 @@ final class SiteEntityRepository {
         return array_map('intval', (array) $ids);
     }
 
+    /**
+     * Published post ids of one post type (blog articles for the article link pool).
+     *
+     * @return int[]
+     */
+    public function published_post_ids($post_type, $limit = 2000) {
+        $ids = get_posts(array(
+            'post_type'      => $post_type,
+            'post_status'    => 'publish',
+            'posts_per_page' => (int) $limit,
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+        ));
+        return array_map('intval', (array) $ids);
+    }
+
     // ---- lightweight content statistics (aggregate queries, no per-row loops) ----
 
     /**

@@ -38,7 +38,8 @@ final class ContentGenerationRequest {
         $links            = $this->internal_links();
         $use_orphan_links = !empty($this->input['use_orphan_links']);
 
-        if ($use_orphan_links && empty($links)) {
+        // Articles get a word-count-sized, balanced plan from ArticleLinkDistributor instead of the whole orphan list.
+        if ($use_orphan_links && empty($links) && $kind !== Settings::KIND_ARTICLE) {
             $links = $this->append_orphan_links($links, $target, $kind);
         }
         if ($target) {

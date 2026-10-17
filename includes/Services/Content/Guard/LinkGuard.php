@@ -113,22 +113,27 @@ final class LinkGuard {
         }
         $category = null;
         $products = array();
+        $articles = array();
         foreach ((array) $links as $link) {
             if (empty($link['required']) || empty($link['url']) || empty($link['anchor'])) continue;
             if (isset($present[untrailingslashit($link['url'])])) continue;
-            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html(isset($link['type']) && $link['type'] === 'category' ? KeyphraseExtractor::limit($link['anchor'], Settings::CATEGORY_ANCHOR_MAX_WORDS) : KeyphraseExtractor::cap($link['anchor'])) . '</a>';
-            if (isset($link['type']) && $link['type'] === 'category') {
+            $type = isset($link['type']) ? $link['type'] : '';
+            $anchor = '<a href="' . esc_url($link['url']) . '">' . esc_html($type === 'category' ? KeyphraseExtractor::limit($link['anchor'], Settings::CATEGORY_ANCHOR_MAX_WORDS) : KeyphraseExtractor::cap($link['anchor'])) . '</a>';
+            if ($type === 'category') {
                 if ($category === null) $category = $anchor;
+            } elseif ($type === 'article') {
+                $articles[] = $anchor;
             } else {
                 $products[] = $anchor;
             }
         }
-        if ($category === null && !$products) return $html;
+        if ($category === null && !$products && !$articles) return $html;
 
         $parts = array();
         if ($category !== null) $parts[] = 'از دسته‌بندی ' . $category;
         if ($products) $parts[] = ($category !== null ? 'یا ' : 'از ') . 'محصولات مشابه مانند ' . implode(' و ', $products);
-        $sentence = 'همچنین می‌توانید ' . implode(' ', $parts) . ' دیدن کنید.';
+        $sentence = $parts ? 'همچنین می‌توانید ' . implode(' ', $parts) . ' دیدن کنید.' : '';
+        if ($articles) $sentence .= ($sentence !== '' ? ' ' : '') . 'برای مطالعه بیشتر، ' . implode(' و ', $articles) . ' را هم ببینید.';
         return rtrim($html) . '<p>' . $sentence . '</p>';
     }
 
@@ -170,6 +175,32 @@ final class LinkGuard {
                     $others++;
                 }
                 $products++;
+            }
+            $seen[$key] = true;
+            return $m[0];
+        }, (string) $html);
+    }
+
+    /**
+     * سقف لینک داخلی مقاله: هر URL داخلی فقط یک‌بار؛ لینک‌های برنامه‌ریزی‌شده (و دستی) در $links همیشه می‌مانند و لینک داخلی
+     * پیش‌بینی‌نشده فقط تا سقف باقی‌مانده $budget مجاز است؛ بقیه آن‌رپ می‌شوند (تگ حذف، متن می‌ماند). لینک خارجی دست‌نخورده است.
+     */
+    public static function cap_internal_links($html, $links, $budget) {
+        $planned = array();
+        foreach ((array) $links as $link) {
+            if (!empty($link['url'])) $planned[self::url_key($link['url'])] = true;
+        }
+        $extra = max(0, (int) $budget - count($planned));
+        $home_host = strtolower((string) wp_parse_url(home_url('/'), PHP_URL_HOST));
+        $seen = array();
+        return preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use (&$seen, &$extra, $planned, $home_host) {
+            $host = strtolower((string) wp_parse_url(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'), PHP_URL_HOST));
+            if ($host !== '' && $host !== $home_host) return $m[0];
+            $key = self::url_key($m[2]);
+            if ($key === '' || isset($seen[$key])) return $m[3];
+            if (!isset($planned[$key])) {
+                if ($extra < 1) return $m[3];
+                $extra--;
             }
             $seen[$key] = true;
             return $m[0];
@@ -233,10 +264,10 @@ final class LinkGuard {
      * برابر انکر استاندارد آن محصول نباشد (مثلاً AI به‌جای «کفش طبی مردانه مارکو» نوشته «کفش چرم مارکو») جبراً با همان انکر جایگزین می‌شود.
      * آخرین گام پیش از wrap اجرا می‌شود تا هیچ گارد دیگری آن را تغییر ندهد. مقایسه href با نرمال‌سازی (اسلش، #، حروف، &amp;).
      */
-    public static function lock_product_anchors($html, $links) {
+    public static function lock_product_anchors($html, $links, $types = array('product')) {
         $planned = array();
         foreach ((array) $links as $link) {
-            if (empty($link['url']) || empty($link['anchor']) || !isset($link['type']) || $link['type'] !== 'product') continue;
+            if (empty($link['url']) || empty($link['anchor']) || !isset($link['type']) || !in_array($link['type'], (array) $types, true)) continue;
             $planned[self::url_key($link['url'])] = trim(preg_replace('/\s+/u', ' ', (string) $link['anchor']));
         }
         if (!$planned) return (string) $html;
