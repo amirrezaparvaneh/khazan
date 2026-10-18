@@ -1097,7 +1097,7 @@ img.khazan-watermark {
 /* Bulk: site-products source panel */
 .khazan-field-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .khazan-field-actions .khazan-3d-btn { min-width: 10em; }
-#wila-bulk-source { margin: 4px 0 12px; }
+#wila-bulk-source, #wila-bulk-target { margin: 4px 0 12px; }
 
 /* ==========================================================
    CSV upload box: turquoise floating 3D folder

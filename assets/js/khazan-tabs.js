@@ -134,7 +134,7 @@
     },
 
     // برآورد تقریبی هزینه تولید برای تعداد ردیف انتخاب‌شده (نرخ‌های Core\Settings؛ فقط تخمین است)
-    costEstimateHtml: function (rows) {
+    costEstimateHtml: function (rows, noun) {
       const pr = this.state.aiPricing;
       if (!pr || rows == null) return '';
       const unit = pr.per_row_unit * rows;
@@ -142,7 +142,7 @@
       const rate = bal && bal.exchange_rate;
       const insufficient = bal && bal.remaining_unit != null && unit > bal.remaining_unit;
       const amount = rate ? `${formatNumber(unit * rate)} تومان (≈ ${formatUsd(unit)})` : formatUsd(unit);
-      const tip = `برآورد بر پایه حدود ${formatNumber(pr.input_tokens)} توکن ورودی و ${formatNumber(pr.output_tokens)} توکن خروجی برای هر محصول؛ هزینه واقعی ممکن است فرق کند.`;
+      const tip = `برآورد بر پایه حدود ${formatNumber(pr.input_tokens)} توکن ورودی و ${formatNumber(pr.output_tokens)} توکن خروجی برای هر ${noun || 'محصول'}؛ هزینه واقعی ممکن است فرق کند.`;
       return `<span class="khazan-status-pill khazan-cost-estimate ${insufficient ? 'is-warn' : ''}" title="${escapeHtml(tip)}">💰 هزینه تخمینی این پردازش: ~${amount}${insufficient ? ' — اعتبار فعلی کافی نیست' : ''}</span>`;
     },
 
@@ -335,6 +335,7 @@
     },
 
     viewBulk: function () {
+      if (this.state.bulk.target === 'categories') return this.viewBulkCategories();
       const { activeTab, summary, isScanning, scanProgress, scanTotal, scanCurrent, modal, aiSettings, plannerForm, plannerResult, isPlanning, isGeneratingContent } = this.state;
       let contentHtml = '';
         const b = this.state.bulk;
@@ -366,6 +367,7 @@
           </div>`;
         contentHtml = `<div class="wila-card">
           <h3 style="margin-top:0">تولید انبوه محتوا</h3>
+          ${this.bulkTargetSwitchHtml()}
           <div id="wila-bulk-source">${this.radioSwitch('source_mode', [['site', 'محصولات سایت 🛍️', 'site_products'], ['csv', 'بارگذاری فایل CSV 📄', 'csv_upload']], b.source, 'wila-bulk-source', 'data-source', !!locked)}</div>
           ${siteMode && b.site.collapsed ? `<div class="khazan-site-summary" id="wila-site-summary"><span>✅ تعداد ${toPersianDigits(srcIdx.length)} محصول به صف اضافه شد</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-reopen" ${b.running ? 'disabled' : ''}>تغییر یا بازگشت به انتخاب محصولات</button></div>` : ''}
           ${siteMode && !b.site.collapsed && srcIdx.length ? `<div class="khazan-site-summary khazan-site-queue-note" id="wila-site-queue-note"><span>🗂️ ${toPersianDigits(srcIdx.length)} محصول در صف تولید است</span><span class="khazan-site-summary-sep">—</span><button type="button" class="khazan-link-btn wila-site-return">بازگشت به صف</button></div>` : ''}
@@ -738,6 +740,7 @@ ${siteExpanded ? `
 
     enterBulkTab: function () {
       const b = this.state.bulk;
+      if (b.target === 'categories') { if (!this.state.bulkCat.loaded && !this.state.bulkCat.loading) this.loadSiteCategories(); return; }
       if (!b.running && !b.rows.some(r => r.source !== 'site')) b.source = 'site';
       if (b.source === 'site' && !b.site.loaded && !b.site.loading) this.loadSiteProducts();
     },

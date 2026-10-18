@@ -365,7 +365,7 @@
 
   window.KhazanQueue = {
     initialState: function () {
-      return { source: 'site', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, startedAt: 0, log: [] };
+      return { target: 'products', source: 'site', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, startedAt: 0, log: [] };
     },
     methods: methods
   };

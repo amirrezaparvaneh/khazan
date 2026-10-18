@@ -147,6 +147,32 @@ final class Settings {
     // کلمات عمومی فروشگاهی که در بخش مزیت (شعار سایت) حذف می‌شوند
     const SEO_TITLE_FEATURE_STOPWORDS = array('فروشگاه', 'فروشگاهی', 'محصولات', 'محصول', 'خرید', 'آنلاین', 'اینترنتی', 'مرکز', 'عرضه', 'بهترین', 'تولیدی', 'و', 'از', 'در', 'با', 'برای');
 
+    // ---- bulk product-category generation (transactional SEO + spider links) ----
+    const CATEGORY_WORD_COUNT      = 900;
+    const CATEGORY_KEYWORD_MIN     = 4;
+    const CATEGORY_KEYWORD_MAX     = 6;
+    /** About one outgoing category link per 250 words, always between 2 and 3. */
+    const CATEGORY_WORDS_PER_LINK  = 250;
+    const CATEGORY_LINKS_MIN       = 2;
+    const CATEGORY_LINKS_MAX       = 3;
+    const CATEGORY_META_MIN_CHARS  = 120;
+    const CATEGORY_META_MAX_CHARS  = 155;
+    /** Title formula: [exact category name] | [hook + emoji] | [brand]; the emoji never starts the title. */
+    const CATEGORY_TITLE_HOOK      = 'خرید و قیمت انواع مدل‌ها';
+    const CATEGORY_TITLE_HOOK_MIN  = 'خرید و قیمت';
+    const CATEGORY_TITLE_EMOJI_DEFAULT = '🛍️';
+    /** Anchor of the single homepage link (%s = brand name). */
+    const CATEGORY_HOME_ANCHORS    = array('فروشگاه اینترنتی %s', 'خرید محصولات چرم طبیعی از %s');
+    const CATEGORY_HOME_ANCHOR_FALLBACK = 'فروشگاه اینترنتی محصولات چرم طبیعی';
+    /** Ledger run id used when a category is generated outside a queue run. */
+    const CATEGORY_LINK_RUN_PREFIX = 'category-';
+    const META_CATEGORY_GENERATED  = '_wila_category_generated_at';
+    const META_CATEGORY_FOCUS      = '_wila_category_focus_keyword';
+    /** Rank Math term meta keys (written only when Rank Math is active). */
+    const RANK_MATH_TERM_TITLE     = 'rank_math_title';
+    const RANK_MATH_TERM_DESC      = 'rank_math_description';
+    const RANK_MATH_TERM_FOCUS     = 'rank_math_focus_keyword';
+
     /** Words that appear in many article topics / titles and say nothing about the product type (never decide relevance). */
     const ARTICLE_GENERIC_WORDS = array('راهنما', 'راهنمای', 'خرید', 'انتخاب', 'بهترین', 'انواع', 'مدل', 'مدل‌های', 'قیمت', 'نحوه', 'نگهداری', 'چگونه', 'آموزش', 'معرفی', 'مجموعه', 'کلکسیون', 'نکات', 'مقایسه', 'تفاوت', 'چیست', 'ایرانی', 'اصل', 'کامل', 'فروشگاه', 'محصولات', 'ویژگی', 'ویژگی‌های');
 

@@ -129,6 +129,35 @@ final class PromptBuilder {
         return $prompt;
     }
 
+    /**
+     * Bulk product-category description: transactional structure, exact-name keyphrase with a 4-6 balanced density,
+     * the planned spider links only (1 homepage + 2-3 categories) and the SEO title / meta formulas.
+     */
+    public function bulk_category($params) {
+        $focus = trim((string) $params['focus_keyword']);
+        $brand = isset($params['brand']) ? (string) $params['brand'] : \Khazan\Core\Settings::brand_name();
+        $target = isset($params['target']) ? $params['target'] : array();
+        $data = array_filter(array(
+            'نام دسته' => $focus,
+            'زیردسته‌ها' => isset($target['subcategories']) ? $target['subcategories'] : array(),
+            'دسته والد' => isset($target['parent_category']) ? $target['parent_category'] : array(),
+            'نمونه محصولات' => isset($target['sample_products']) ? $target['sample_products'] : array(),
+            'تعداد محصولات' => isset($target['product_count']) ? (int) $target['product_count'] : 0,
+        ));
+
+        return "نویسنده ارشد سئوی فروشگاهی فارسی هستی. برای دسته‌بندی محصول زیر توضیحات HTML بنویس؛ این صفحه، صفحه اصلی خرید است و باید با قصد خرید (Transactional Intent) بهینه شود.\n" .
+            "کلیدواژه کانونی: «{$focus}» (دقیقاً نام دسته). حدود " . (int) $params['word_count'] . " واژه.\n" .
+            \Khazan\Services\Content\CategoryRules::writing_rules() .
+            \Khazan\Services\Content\CategoryRules::blueprint($focus) .
+            \Khazan\Services\Content\CategoryRules::density_rule() .
+            \Khazan\Services\Content\CategoryRules::link_rules(isset($params['internal_links']) ? $params['internal_links'] : array()) .
+            \Khazan\Services\Content\CategoryRules::seo_rules($focus, $brand) .
+            "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
+            "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===\n" .
+            "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا]\n===WILA_SEO_TITLE_END===\n" .
+            "===WILA_META_DESCRIPTION_START===\n[متا طبق قواعد بالا]\n===WILA_META_DESCRIPTION_END===";
+    }
+
     public function anchor_rules() {
         return "[قواعد الزامی انکرتکست؛ مقدم بر تعداد و تنوع پیشنهادها]\n" .
                "۱. انکرتکست باید منحصراً و ۱۰۰٪ توصیف‌کننده ماهیت صفحه مقصد (Target) باشد. مبدا (Source) فقط زمینه و محل طبیعی درج لینک را تعیین می‌کند، نه موضوع انکر را.\n" .

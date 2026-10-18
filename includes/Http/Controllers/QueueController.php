@@ -7,6 +7,8 @@ namespace Khazan\Http\Controllers;
 
 use Khazan\Http\Requests\BulkMatchRequest;
 use Khazan\Http\Requests\BulkProcessRequest;
+use Khazan\Http\Requests\CategoryListRequest;
+use Khazan\Http\Requests\CategoryProcessRequest;
 use Khazan\Http\Requests\ScanItemRequest;
 use Khazan\Http\Requests\SiteProductsRequest;
 
@@ -59,5 +61,22 @@ final class QueueController extends BaseController {
             array('success' => true, 'items' => $result['items'], 'has_more' => $result['has_more'], 'categories' => $targets->product_filter_categories(), 'counts' => $result['counts']),
             $result['counts']
         ));
+    }
+
+    /**
+     * Product categories for the bulk queue: content / SEO status per category.
+     */
+    public function get_site_categories($request) {
+        if (!taxonomy_exists(\Khazan\Core\Settings::category_taxonomy())) {
+            return new \WP_Error('category_taxonomy_unavailable', 'دسته‌بندی محصولات در این سایت یافت نشد. آن را در تنظیمات مشخص کنید.', array('status' => 400));
+        }
+        $result = (new \Khazan\Repository\CategoryRepository())->list_for_queue((new CategoryListRequest($request))->to_args());
+        return rest_ensure_response(array_merge(array('success' => true, 'items' => $result['items'], 'has_more' => $result['has_more'], 'counts' => $result['counts']), $result['counts']));
+    }
+
+    public function bulk_process_category($request) {
+        $input = new CategoryProcessRequest($request->get_json_params());
+        $result = (new \Khazan\Services\Content\CategoryBulkGenerator())->process($input->term_id(), $input->options());
+        return is_wp_error($result) ? $result : rest_ensure_response(array_merge(array('success' => true), $result));
     }
 }

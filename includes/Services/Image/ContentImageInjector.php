@@ -25,8 +25,12 @@ final class ContentImageInjector {
      * Byte offset of the insertion point in the middle third of the text: the H2 (never the first) closest to
      * the middle; without enough H2s, the paragraph end closest to the middle. -1 when there is no usable position.
      */
-    public static function insert_offset($html) {
+    public static function insert_offset($html, $before_h2 = 0) {
         $html = (string) $html;
+        // an explicit position («before the Nth H2», e.g. product categories) wins when the text has that many H2s
+        if ($before_h2 > 0 && preg_match_all('~<h2\b~i', $html, $nth, PREG_OFFSET_CAPTURE) && count($nth[0]) >= $before_h2) {
+            return (int) $nth[0][$before_h2 - 1][1];
+        }
         $mid  = strlen($html) / 2;
         if (preg_match_all('~<h2\b~i', $html, $m, PREG_OFFSET_CAPTURE) && count($m[0]) >= 2) {
             return self::closest(array_slice(array_column($m[0], 1), 1), $mid);
@@ -51,8 +55,8 @@ final class ContentImageInjector {
     }
 
     /** Plain text of the content just before the insertion point (the middle section), for the image brief. */
-    public static function section_text($html) {
-        $offset = self::insert_offset($html);
+    public static function section_text($html, $before_h2 = 0) {
+        $offset = self::insert_offset($html, $before_h2);
         if ($offset < 0) return wp_strip_all_tags((string) $html);
         $before = substr((string) $html, 0, $offset);
         $start  = strripos($before, '<h2');
@@ -72,9 +76,9 @@ final class ContentImageInjector {
     }
 
     /** @return string content with the figure inserted, or unchanged when already present / no position. */
-    public static function inject($html, array $image) {
+    public static function inject($html, array $image, $before_h2 = 0) {
         $html = (string) $html;
-        $offset = self::insert_offset($html);
+        $offset = self::insert_offset($html, $before_h2);
         if ($offset < 0 || self::has_image($html)) return $html;
         return substr($html, 0, $offset) . "\n" . self::figure($image) . "\n" . substr($html, $offset);
     }

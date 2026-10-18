@@ -172,6 +172,17 @@ final class AiService {
     }
 
     /**
+     * تولید یک‌مرحله‌ای توضیحات دسته‌بندی محصول (خریدمحور) با لینک‌های عنکبوتی برنامه‌ریزی‌شده
+     */
+    public function generate_bulk_category_content($params) {
+        $prompt = $this->prompts->bulk_category($params);
+        $max_tokens = (int) min(8000, max(3000, $params['word_count'] * 4.5));
+        $raw = $this->send($prompt, false, false, $max_tokens);
+        if (is_wp_error($raw)) return $raw;
+        return CategoryContentParser::parse($raw, $params);
+    }
+
+    /**
      * ارسال پرامپت به‌صورت آرایه استاندارد messages
      */
     private function send($prompt, $suggestions_request = false, $json_response = true, $max_tokens = null) {

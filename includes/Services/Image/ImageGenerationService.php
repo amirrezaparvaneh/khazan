@@ -58,11 +58,13 @@ final class ImageGenerationService {
             }
         }
 
-        if (!ContentImageInjector::has_image($result['content']) && ContentImageInjector::insert_offset($result['content']) >= 0) {
-            $inline = $this->create($params, 'inline', ContentImageInjector::section_text($result['content']), isset($done['featured_id']) ? 'detail' : '');
+        // product categories ask for a fixed spot (before the 3rd H2); everything else keeps the middle-of-text rule
+        $before_h2 = isset($params['image_before_h2']) ? (int) $params['image_before_h2'] : 0;
+        if (!ContentImageInjector::has_image($result['content']) && ContentImageInjector::insert_offset($result['content'], $before_h2) >= 0) {
+            $inline = $this->create($params, 'inline', ContentImageInjector::section_text($result['content'], $before_h2), isset($done['featured_id']) ? 'detail' : '');
             if (is_wp_error($inline)) $errors[] = $inline->get_error_message();
             else {
-                $result['content'] = ContentImageInjector::inject($result['content'], $inline);
+                $result['content'] = ContentImageInjector::inject($result['content'], $inline, $before_h2);
                 $done['inline_id'] = $inline['id'];
                 $done['url']       = $inline['url'];
             }
