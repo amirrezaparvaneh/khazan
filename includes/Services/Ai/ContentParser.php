@@ -207,7 +207,8 @@ final class ContentParser {
      * اعتبارسنجی پیشنهادهای اصلاح خوانایی؛ فقط وصله‌های سالم و منطبق بر قطعه اصلی نگه داشته می‌شوند
      */
     public static function repair_patches($parsed, $segments) {
-        if (!isset($parsed['patches']) || !is_array($parsed['patches'])) return new \WP_Error('invalid_repairs', 'پاسخ اصلاح معتبر نیست.');
+        if (!isset($parsed['patches'])) $parsed['patches'] = array();
+        if (!is_array($parsed['patches'])) return new \WP_Error('invalid_repairs', 'پاسخ اصلاح معتبر نیست.');
         $patches = array();
         $seen = array();
         foreach (array_slice($parsed['patches'], 0, 20) as $patch) {
@@ -220,6 +221,31 @@ final class ContentParser {
             $seen[$i] = true;
         }
         return $patches;
+    }
+
+    /**
+     * اعتبارسنجی پیشنهادهای عنوان سئو و متا؛ عنوان از گارد سئو عبور می‌کند و فقط پیشنهادهای تغییریافته نگه داشته می‌شوند
+     *
+     * @param string $kind post|term|product (نوع محتوا برای انتخاب گارد عنوان)
+     */
+    public static function repair_meta_patches($parsed, $meta, $kind = 'post') {
+        $out = array();
+        if (!isset($parsed['meta_patches']) || !is_array($parsed['meta_patches'])) return $out;
+        $focus = trim((string) ($meta['focuskw'] ?? ''));
+        foreach ($parsed['meta_patches'] as $patch) {
+            if (!is_array($patch) || !isset($patch['field'], $patch['after']) || !is_string($patch['field']) || !is_string($patch['after'])) continue;
+            $field = $patch['field'];
+            if (!in_array($field, array('title', 'desc'), true) || isset($out[$field])) continue;
+            $after = trim(sanitize_text_field($patch['after']));
+            if ($field === 'title' && $after !== '') {
+                if ($kind === 'product') $after = \Khazan\Services\Seo\SeoMetaService::guard_title($after, $focus);
+                elseif ($focus !== '') $after = \Khazan\Services\Seo\SeoMetaService::guard_article_title($after, $focus);
+            }
+            $before = (string) ($meta[$field] ?? '');
+            if ($after === '' || $after === $before) continue;
+            $out[$field] = array('field' => $field, 'before' => $before, 'after' => $after, 'reason' => isset($patch['reason']) && is_string($patch['reason']) ? sanitize_text_field($patch['reason']) : '');
+        }
+        return array_values($out);
     }
 
     public static function blueprint($json_text) {

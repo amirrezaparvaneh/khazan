@@ -238,3 +238,11 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
 - `tests/Unit/Services/Links/CategorySpiderLinkerTest.php` — توزیع مساوی (بدون یتیم، اختلاف ≤ ۱) روی چندین اندازه و ترتیب تصادفی، انکر دقیق و قفل، یک لینک صفحهٔ اصلی، بدون لینک به خود، ترتیب هم‌خانواده/چرخش، قفل انکر در `CategoryLinkGuard`.
 - `tests/Unit/Services/Content/CategoryBulkGeneratorTest.php` — عنوان (کلیدواژه اول + کلمات خرید + جای ایموجی)، متا، ذخیرهٔ `wpseo_taxonomy_meta` و Rank Math، تراکم و توزیع، پارسر کامل، هماهنگ‌کننده با ابزارهای جعلی.
 - اجرا: `php tests/Unit/Services/Links/CategorySpiderLinkerTest.php` و `php tests/Unit/Services/Content/CategoryBulkGeneratorTest.php`.
+
+## متاباکس «بررسی و اصلاح خوانایی و سئو» (بازنویسی)
+
+- `POST /wila/v1/seo-repair` علاوه بر `patches` (اصلاح متن) اکنون `meta_patches` (عنوان سئو و توضیحات متا) و `issues` (نتیجه اسکن خودکار) را برمی‌گرداند. ورودی جدید اختیاری `meta` ({title, desc, focuskw}) است و در نبود آن از مقادیر ذخیره‌شده Yoast / Rank Math خوانده می‌شود.
+- `Http\Requests\SeoRepairRequest`: اعتبارسنجی و پاک‌سازی ورودی؛ `SeoRepairController::analyze` فقط درخواست را می‌سازد، سرویس را صدا می‌زند و پاسخ می‌دهد (احراز هویت با nonce استاندارد `wp_rest` و `current_user_can` در `permission`).
+- `Services\Seo\SeoIssueScanner`: اسکن قطعی بدون AI (عنوان سئو بدون عبارت کلیدی دقیق، متای خالی/نامناسب، چگالی، پاراگراف طولانی). خروجی آن به پرامپت داده می‌شود تا با کادر خالی هم اصلاح هدفمند انجام شود.
+- `ContentParser::repair_meta_patches`: پیشنهاد عنوان از `SeoMetaService::guard_*` عبور می‌کند (کلیدواژه عیناً اول، یک ایموجی، حداکثر ۶۰ کاراکتر).
+- `assets/js/wila-seo-repair.js`: رویدادها با delegation روی `document` بسته می‌شوند (علت سکوت قبلی: Gutenberg اسکریپت را از DOM جابه‌جا شدهٔ متاباکس جدا می‌کرد)؛ حالت loading، خطای قرمز فارسی، کارت‌های پیشنهاد با چک‌باکس و اعمال مستقیم روی ویرایشگر و فیلدهای Yoast.

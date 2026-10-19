@@ -7,7 +7,9 @@ namespace Khazan\Http\Controllers;
 
 use Khazan\Admin\SeoRepairPanel;
 use Khazan\Core\Settings;
+use Khazan\Http\Requests\SeoRepairRequest;
 use Khazan\Services\Ai\AiService;
+use Khazan\Services\Seo\SeoMetaService;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -29,23 +31,35 @@ final class SeoRepairController extends BaseController {
     }
 
     public function analyze($request) {
-        $segments = $request->get_param('segments');
-        $instructions = $request->get_param('instructions');
-        if (!is_array($segments) || count($segments) > 300 || strlen(wp_json_encode($segments)) > 80000 || !is_string($instructions) || strlen($instructions) > 8000) {
-            return new \WP_Error('invalid_repair_input', 'حجم متن بیش از حد مجاز یا ورودی نامعتبر است.', array('status' => 400));
-        }
-        foreach ($segments as $segment) {
-            if (!is_string($segment) || $segment !== wp_strip_all_tags($segment)) return new \WP_Error('invalid_segment', 'فقط قطعه متن ساده مجاز است.', array('status' => 400));
-        }
+        $input = SeoRepairRequest::from($request);
+        if (is_wp_error($input)) return $input;
+        $kind = $request->get_param('kind') === 'term' ? 'term' : (get_post_type(absint($request->get_param('id'))) === 'product' ? 'product' : 'post');
+        $meta = $this->with_saved_meta($input->meta(), $request, $kind);
         // Bound concurrent requests and API spend per editor.
-        $lock = \Khazan\Core\Settings::TRANSIENT_REPAIR_LOCK_PREFIX . get_current_user_id();
+        $lock = Settings::TRANSIENT_REPAIR_LOCK_PREFIX . get_current_user_id();
         if (get_transient($lock)) return new \WP_Error('repair_busy', 'بررسی در جریان است؛ کمی بعد تلاش کنید.', array('status' => 429));
         set_transient($lock, 1, 190);
         try {
-            $result = (new AiService())->suggest_seo_repairs(array_values($segments), sanitize_textarea_field($instructions));
+            $result = (new AiService())->suggest_seo_repairs($input->segments(), $input->instructions(), $meta, $kind);
         } finally {
             delete_transient($lock);
         }
-        return is_wp_error($result) ? $result : rest_ensure_response(array('patches' => $result));
+        return is_wp_error($result) ? $result : rest_ensure_response($result);
+    }
+
+    /** Fills metadata the editor did not send from the saved Yoast / Rank Math values. */
+    private function with_saved_meta($meta, $request, $kind) {
+        $id = absint($request->get_param('id'));
+        $service = new SeoMetaService();
+        if ($kind === 'term') {
+            $term = get_term($id);
+            $saved = $term && !is_wp_error($term) ? $service->read_term_seo($term->taxonomy, $id) : array();
+        } else {
+            $saved = $service->read_post_seo($id);
+        }
+        foreach (array('title', 'desc', 'focuskw') as $key) {
+            if ($meta[$key] === '' && !empty($saved[$key])) $meta[$key] = $saved[$key];
+        }
+        return $meta;
     }
 }

@@ -87,10 +87,17 @@ final class AiService {
         return array_merge($data, array('cached' => false));
     }
 
-    public function suggest_seo_repairs($segments, $instructions) {
-        $parsed = AiResponseDecoder::decode_json($this->send($this->prompts->seo_repairs($segments, $instructions)));
+    /**
+     * @return array|\WP_Error {patches, meta_patches, issues}
+     */
+    public function suggest_seo_repairs($segments, $instructions, $meta = array(), $kind = 'post') {
+        if (!$this->is_configured()) return new \WP_Error('no_api_key', 'کلید API هوش مصنوعی تنظیم نشده است. آن را در تنظیمات افزونه وارد کنید.', array('status' => 400));
+        $issues = \Khazan\Services\Seo\SeoIssueScanner::scan($segments, $meta);
+        $parsed = AiResponseDecoder::decode_json($this->send($this->prompts->seo_repairs($segments, $instructions, $meta, $issues)));
         if (is_wp_error($parsed)) return $parsed;
-        return ContentParser::repair_patches($parsed, $segments);
+        $patches = ContentParser::repair_patches($parsed, $segments);
+        if (is_wp_error($patches)) return $patches;
+        return array('patches' => $patches, 'meta_patches' => ContentParser::repair_meta_patches($parsed, $meta, $kind), 'issues' => $issues);
     }
 
     public function generate_content_blueprint($params) {
