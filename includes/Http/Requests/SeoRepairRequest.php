@@ -29,11 +29,11 @@ final class SeoRepairRequest {
         $instructions = $request->get_param('instructions');
         $meta = $request->get_param('meta');
         if ($instructions === null) $instructions = '';
-        if (!is_array($segments) || count($segments) > self::MAX_SEGMENTS || strlen(wp_json_encode($segments)) > self::MAX_BYTES || !is_string($instructions) || strlen($instructions) > 8000) {
+        if (!is_array($segments) || count($segments) > self::MAX_SEGMENTS || strlen(wp_json_encode($segments)) > self::MAX_BYTES || !is_string($instructions) || strlen($instructions) > 20000) {
             return new \WP_Error('invalid_repair_input', 'حجم متن بیش از حد مجاز یا ورودی نامعتبر است.', array('status' => 400));
         }
         foreach ($segments as $segment) {
-            if (!is_string($segment) || $segment !== wp_strip_all_tags($segment)) return new \WP_Error('invalid_segment', 'فقط قطعه متن ساده مجاز است.', array('status' => 400));
+            if (!is_string($segment)) return new \WP_Error('invalid_segment', 'فقط قطعه متن ساده مجاز است.', array('status' => 400));
         }
         $self = new self();
         $self->segments = array_values($segments);
