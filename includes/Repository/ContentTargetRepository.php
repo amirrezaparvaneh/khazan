@@ -104,6 +104,8 @@ final class ContentTargetRepository {
             'current_content'   => $this->plain($post->post_content, 120),
             'parent_categories' => $this->product_parent_categories($id),
             'related_products'  => $include_related ? $this->related_products($id) : array(),
+            // ویژگی‌های دستی ثبت‌شده در «مدیریت سریع ویژگی‌های محصولات»؛ تزریق اجباری به پرامپت در PromptBuilder
+            'custom_specs'      => (new ProductSpecsRepository())->get($id),
         );
         if (function_exists('wc_get_product')) {
             $product = wc_get_product($id);

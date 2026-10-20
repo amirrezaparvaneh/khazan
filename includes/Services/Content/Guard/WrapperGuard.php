@@ -21,6 +21,7 @@ final class WrapperGuard {
     public static function wrap($html) {
         $html = self::unwrap($html);
         if ($html === '') return '';
+        $html = PersianTextNormalizer::normalize($html);
         return '<div class="' . self::WRAPPER_CLASS . '">' . $html . '</div>';
     }
 

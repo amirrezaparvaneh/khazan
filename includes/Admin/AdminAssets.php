@@ -40,8 +40,9 @@ final class AdminAssets {
             'khazan-forms'  => array('assets/js/khazan-forms.js', array('khazan-utils')),
             'khazan-queue'  => array('assets/js/khazan-queue.js', array('khazan-utils', 'khazan-csv')),
             'khazan-categories' => array('assets/js/khazan-categories.js', array('khazan-utils', 'khazan-csv')),
+            'khazan-product-specs' => array('assets/js/khazan-product-specs.js', array('khazan-utils')),
             'khazan-tabs'   => array('assets/js/khazan-tabs.js', array('khazan-utils')),
-            'wila-admin-script' => array('assets/js/wila-admin.js', array('khazan-leaves', 'khazan-utils', 'khazan-csv', 'khazan-api', 'khazan-forms', 'khazan-queue', 'khazan-categories', 'khazan-tabs')),
+            'wila-admin-script' => array('assets/js/wila-admin.js', array('khazan-leaves', 'khazan-utils', 'khazan-csv', 'khazan-api', 'khazan-forms', 'khazan-queue', 'khazan-categories', 'khazan-product-specs', 'khazan-tabs')),
         );
         foreach ($scripts as $handle => $script) {
             wp_enqueue_script($handle, $this->url($script[0]), $script[1], $this->version($script[0]), true);

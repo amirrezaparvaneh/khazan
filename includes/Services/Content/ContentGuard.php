@@ -80,4 +80,8 @@ final class ContentGuard {
     public static function enforce_link_anchors($html, $map = array()) {
         return LinkGuard::enforce_link_anchors($html, $map);
     }
+
+    public static function normalize_persian_text($html) {
+        return Guard\PersianTextNormalizer::normalize($html);
+    }
 }

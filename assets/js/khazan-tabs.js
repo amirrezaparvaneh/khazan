@@ -18,7 +18,8 @@
     gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
     chart: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
     target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
-    link: '<path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>'
+    link: '<path d="M10 14a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1"/><path d="M14 10a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>',
+    tag: '<path d="M20.59 13.41L13 21l-9-9V4h8l9 9.41a2 2 0 010 2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/>'
   };
 
   function icon(name, size) {
@@ -30,6 +31,7 @@
     { key: 'home', tab: 'home', icon: 'home', label: 'خانه', title: 'خانه' },
     { key: 'generator', tab: 'generator', icon: 'edit', label: 'تولید محتوای تکی', title: 'تولید محتوای تکی' },
     { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه محتوا', title: 'تولید انبوه محتوا' },
+    { key: 'specs', tab: 'specs', icon: 'tag', label: 'ویژگی‌های محصولات', title: 'مدیریت ویژگی‌های محصولات' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
     { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
     { key: 'archive', tab: 'archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
@@ -42,7 +44,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -758,6 +760,7 @@ ${siteExpanded ? `
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
+        if (this.state.activeTab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
       }));
 
@@ -772,6 +775,7 @@ ${siteExpanded ? `
         if (target.tab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (target.tab === 'orphans') this.fetchOrphans();
         if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
+        if (target.tab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
       }));
 

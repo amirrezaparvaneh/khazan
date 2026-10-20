@@ -1762,3 +1762,14 @@ img.khazan-watermark {
   -ms-user-select: text !important;
   user-select: text !important;
 }
+
+/* مدیریت سریع ویژگی‌های محصولات */
+.khazan-specs-table td { vertical-align: top; }
+.khazan-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px 12px;
+  min-width: 360px;
+}
+.khazan-specs-grid .khazan-field { margin: 0; padding: 0; background: none; border: 0; }
+.khazan-specs-grid .khazan-field label { font-size: 0.75rem; font-weight: 500; color: #64748b; margin-bottom: 4px; }

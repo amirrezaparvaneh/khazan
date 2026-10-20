@@ -34,6 +34,7 @@ final class Settings {
     const META_PREVIOUS_CONTENT      = '_wila_previous_content';
     const META_PREVIOUS_DESCRIPTION  = '_wila_previous_description';
     const META_SOURCE_PRODUCT        = '_wila_source_product';
+    const META_PRODUCT_CUSTOM_SPECS  = '_wila_product_custom_specs';
 
     // ---- public filter hooks (names are part of the plugin API) ----
     const FILTER_PRODUCT_POST_TYPE         = 'wila_product_post_type';
@@ -212,6 +213,17 @@ final class Settings {
     const KIND_ARTICLE  = 'article';
     const KIND_PRODUCT  = 'product';
     const KIND_CATEGORY = 'product_cat';
+
+    /**
+     * «مدیریت سریع ویژگی‌های محصولات»: فیلدهای فنی قطعی که مدل هرگز نباید حدس بزند (کلید متا => برچسب فارسی).
+     * منبع این مقادیر همیشه تنظیمات دستی ادمین است، نه حدس هوش مصنوعی.
+     */
+    const PRODUCT_SPEC_FIELDS = array(
+        'sole_material'   => 'جنس زیره',
+        'upper_material'  => 'نوع چرم رویه',
+        'lining_material' => 'جنس آستر',
+        'stitching_type'  => 'نوع دوخت و کفی',
+    );
 
     /**
      * Per-model pricing (USD / 1K tokens), filterable.

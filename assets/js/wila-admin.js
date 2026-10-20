@@ -41,6 +41,7 @@
       seoFix: { kind: 'product', search: '', targetId: 0, targets: [], targetsLoading: false, targetsError: '', current: null, currentLoading: false, errors: '', result: null, running: false, applying: false },
       bulk: window.KhazanQueue.initialState(),
       bulkCat: window.KhazanCategories.initialState(),
+      productSpecs: window.KhazanProductSpecs.initialState(),
       targets: [],
       targetsLoading: false,
       targetsError: '',
@@ -163,6 +164,7 @@
       this.bindTabEvents();
       this.bindQueueEvents();
       this.bindCategoryEvents();
+      this.bindProductSpecsEvents();
       this.bindFormEvents();
 
       const closeBtn = this.root.querySelector('#wila-close-modal-btn');
@@ -171,7 +173,7 @@
   };
 
   // ماژول‌های API، فرم‌ها، صف و تب‌ها روی app سوار می‌شوند (متدها با this === app اجرا می‌شوند)
-  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanTabs.methods);
+  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanProductSpecs.methods, window.KhazanTabs.methods);
 
   document.addEventListener('DOMContentLoaded', () => app.init());
 })();

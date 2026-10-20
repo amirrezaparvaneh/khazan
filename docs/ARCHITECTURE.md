@@ -245,4 +245,20 @@ assets/js/     khazan-utils.js، khazan-csv.js، khazan-api.js (REST)، khazan-f
 - `Http\Requests\SeoRepairRequest`: اعتبارسنجی و پاک‌سازی ورودی؛ `SeoRepairController::analyze` فقط درخواست را می‌سازد، سرویس را صدا می‌زند و پاسخ می‌دهد (احراز هویت با nonce استاندارد `wp_rest` و `current_user_can` در `permission`).
 - `Services\Seo\SeoIssueScanner`: اسکن قطعی بدون AI (عنوان سئو بدون عبارت کلیدی دقیق، متای خالی/نامناسب، چگالی، پاراگراف طولانی). خروجی آن به پرامپت داده می‌شود تا با کادر خالی هم اصلاح هدفمند انجام شود.
 - `ContentParser::repair_meta_patches`: پیشنهاد عنوان از `SeoMetaService::guard_*` عبور می‌کند (کلیدواژه عیناً اول، یک ایموجی، حداکثر ۶۰ کاراکتر).
+
+## نرمال‌سازی چسبیدگی کلمات فارسی (PersianTextNormalizer)
+
+- `Services\Content\Guard\PersianTextNormalizer::normalize($html)`: لایه پس‌پردازش متن که مرز تگ‌های `<a>`/`<strong>` را از کلمه قبل/بعد با یک فاصله استاندارد جدا می‌کند (مثل `خرید<a>کفش</a>طبی` → `خرید <a>کفش</a> طبی`) و نیم‌فاصله (ZWNJ) شکسته کنار فاصله معمولی، فاصله بدون عرض (ZWSP) و فاصله غیرشکن (NBSP) را در متن (نه در تگ‌ها/ویژگی‌ها) پاکسازی می‌کند؛ idempotent است.
+- محل اجرا: داخل `Guard\WrapperGuard::wrap()` (گام پایانی مشترک همه خط‌تولیدها: محصول، دسته‌بندی، مقاله و اعمال دستی در `ContentTargetRepository::apply`) تا دقیقاً یک‌بار، درست پیش از ذخیره محتوا در دیتابیس، روی هر محتوا اجرا شود. از طریق `ContentGuard::normalize_persian_text()` هم مستقیماً در دسترس است.
+- تست: `tests/Unit/Services/Content/PersianTextNormalizerTest.php`.
+
+## مدیریت سریع ویژگی‌های محصولات (Product Attributes Quick Specs Manager)
+
+- `Core\Settings::PRODUCT_SPEC_FIELDS` و `META_PRODUCT_CUSTOM_SPECS`: منبع واحد کلید/برچسب فیلدهای فنی قطعی (جنس زیره، نوع چرم رویه، جنس آستر، نوع دوخت و کفی) و کلید متای ذخیره آن‌ها روی محصول.
+- `Repository\ProductSpecsRepository`: دسترسی داده خالص؛ `get()`/`save()` (فقط فیلدهای تعریف‌شده و غیرخالی، حذف متا در صورت خالی شدن همه) و `list_products()` (فهرست صفحه‌بندی‌شده/جستجوپذیر با `WP_Query` برای جدول پیشخوان).
+- `ContentTargetRepository::product_context()` همیشه `custom_specs` را از `ProductSpecsRepository::get()` به شیء زمینه (context) محصول اضافه می‌کند؛ این همان شیء است که هم تولید تکی و هم تولید انبوه CSV به عنوان `params['target']` به `PromptBuilder` می‌دهند.
+- `PromptBuilder::product_specs_block()`: بخش اجباری «### مشخصات قطعی و غیرقابل تغییر محصول» را در `commerce_system()` (تولید تکی) و `bulk_product()` (تولید انبوه) تزریق می‌کند؛ اگر محصولی مشخصاتی ثبت نکرده باشد، به‌جای حدس زدن جنس زیره/رویه، دستور استفاده از عبارت عمومی «زیره استاندارد و باکیفیت» را به مدل می‌دهد (قانون خط قرمز).
+- REST: `GET /wila/v1/product-specs` (فهرست + برچسب فیلدها) و `POST /wila/v1/product-specs/save` (ذخیره ایجکس یک محصول) از طریق `Http\Requests\ProductSpecsListRequest`/`ProductSpecsSaveRequest` و کنترلر لاغر `Http\Controllers\ProductSpecsController`.
+- پیشخوان: تب جدید «ویژگی‌های محصولات» (`assets/js/khazan-product-specs.js`، ماژول `KhazanProductSpecs` با همان الگوی mixin ماژول‌های دیگر) با جدول جستجوپذیر/صفحه‌بندی‌شده، فیلدهای متنی هر محصول و دکمه ذخیره ایجکس بدون رفرش صفحه.
+- تست: `tests/Unit/Repository/ProductSpecsRepositoryTest.php` (اعتبارسنجی درخواست ایجکس، ذخیره/خوانش متا، تزریق به شیء زمینه محصول، حضور بخش اجباری و قانون خط قرمز در متن واقعی پرامپت).
 - `assets/js/wila-seo-repair.js`: رویدادها با delegation روی `document` بسته می‌شوند (علت سکوت قبلی: Gutenberg اسکریپت را از DOM جابه‌جا شدهٔ متاباکس جدا می‌کرد)؛ حالت loading، خطای قرمز فارسی، کارت‌های پیشنهاد با چک‌باکس و اعمال مستقیم روی ویرایشگر و فیلدهای Yoast.

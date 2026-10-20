@@ -9,6 +9,7 @@
 namespace Khazan\Http;
 
 use Khazan\Http\Controllers\ContentController;
+use Khazan\Http\Controllers\ProductSpecsController;
 use Khazan\Http\Controllers\QueueController;
 use Khazan\Http\Controllers\ReportController;
 use Khazan\Http\Controllers\SeoRepairController;
@@ -34,6 +35,7 @@ final class RestRouter {
         $content  = new ContentController();
         $settings = new SettingsController();
         $seo      = new SeoRepairController();
+        $specs    = new ProductSpecsController();
 
         register_rest_route($this->namespace, '/queue', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($queue, 'get_scan_queue'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/scan-item', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'scan_single_item'), 'permission_callback' => array($this, 'check_permission')));
@@ -72,6 +74,8 @@ final class RestRouter {
         ));
         register_rest_route($this->namespace, '/test-connection', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'test_avalai_connection'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/seo-repair', array('methods' => 'POST', 'callback' => array($seo, 'analyze'), 'permission_callback' => array($seo, 'permission')));
+        register_rest_route($this->namespace, '/product-specs', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($specs, 'list_products'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/product-specs/save', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($specs, 'save_specs'), 'permission_callback' => array($this, 'check_permission')));
     }
 
     public function check_permission() {

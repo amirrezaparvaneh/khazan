@@ -128,6 +128,7 @@ final class PromptBuilder {
             \Khazan\Services\Content\ContentRules::product_blueprint() . "حدود " . (int) $params['word_count'] . " واژه.\n" .
             \Khazan\Services\Content\ContentRules::writing_rules($kind) .
             ($links ? "لینک داخلی اجباری با <a href=\"URL\">:\n" . implode("\n", $links) . "\n" : '') . $this->locked_links_block($params['internal_links']) .
+            $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array()) .
             "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
         if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
@@ -257,13 +258,33 @@ final class PromptBuilder {
             "نیت جستجو تجاری/تراکنشی است: مفید، شفاف و کاربرمحور بنویس، نه مقاله آموزشی. عبارت کانونی را طبیعی در ۱۰۰ واژه نخست، عنوان سئو و متا و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها بیاور و از keyword stuffing پرهیز کن. جمله‌ها کوتاه و معلوم، پاراگراف‌ها کوتاه و هیچ بخشی بیش از ۲۲۰ واژه بدون H2/H3 نباشد. H1 نساز و H3 بدون H2 نساز.\n";
         if ($is_product) {
             $prompt .= \Khazan\Services\Content\ContentRules::product_blueprint() .
-                "لینک اجباری: حتماً فقط یک بار (نه بیشتر) به دسته‌بندی والد این محصول (target.parent_categories) با HTML <a href=\"URL\">انکر کلکسیون‌محور داده‌شده برای دسته در internal_links (نه نام خام دسته)</a> در جمله‌ای طبیعی لینک بده. در صورت ارتباط طبیعی، دقیقاً ۲ لینک به ۲ محصول مرتبط متفاوت (هر محصول فقط یک بار در کل متن) (target.related_products) بده و انکرتکست هر لینک را فقط از فیلد anchor همان مورد (کلیدواژه کانونی آن محصول) بگیر، نه نام کامل محصول؛ مجبور به استفاده از همه آن‌ها نیستی.\n";
+                "لینک اجباری: حتماً فقط یک بار (نه بیشتر) به دسته‌بندی والد این محصول (target.parent_categories) با HTML <a href=\"URL\">انکر کلکسیون‌محور داده‌شده برای دسته در internal_links (نه نام خام دسته)</a> در جمله‌ای طبیعی لینک بده. در صورت ارتباط طبیعی، دقیقاً ۲ لینک به ۲ محصول مرتبط متفاوت (هر محصول فقط یک بار در کل متن) (target.related_products) بده و انکرتکست هر لینک را فقط از فیلد anchor همان مورد (کلیدواژه کانونی آن محصول) بگیر، نه نام کامل محصول؛ مجبور به استفاده از همه آن‌ها نیستی.\n" .
+                $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array());
         } else {
             $prompt .= "ساختار پیشنهادی دسته‌بندی: مقدمه‌ای که دسته و محصولات آن را معرفی می‌کند، راهنمای انتخاب (معیارهای واقعی)، معرفی زیردسته‌ها (target.subcategories) با لینک به URL هرکدام و در صورت وجود، یک لینک طبیعی به دسته والد (target.parent_category)، انواع محصولات، و پرسش‌های متداول. نام محصولات نمونه (sample_products) را فقط برای مثال بیاور و ادعا درباره‌شان نساز. محتوا باید برای نمایش بالا یا پایین لیست محصولات مناسب و غیرتکراری باشد.\n";
         }
         $prompt .= $this->locked_links_block(isset($params['internal_links']) ? $params['internal_links'] : array());
         $prompt .= "نقشه لینک داخلی داده‌شده (internal_links) را فقط با HTML <a href=\"URL\">انکرتکست</a> و در جمله طبیعی وارد کن؛ انکر باید توصیف‌کننده مقصد باشد، لینک به صفحه اول سایت و به خود صفحه مقصد (target.url) ممنوع است و حداکثر یک لینک داخلی به ازای هر ۲۵۰ تا ۳۵۰ واژه مجاز است. اگر use_orphan_links فعال است، فقط نامزدهای واقعاً مرتبط را به‌ترتیب اولویت به‌کار ببر.";
         return $prompt;
+    }
+
+    /**
+     * بخش اجباری «مشخصات قطعی و غیرقابل تغییر محصول» از مقادیر ثبت‌شده در مدیریت سریع ویژگی‌های محصول
+     * (Settings::PRODUCT_SPEC_FIELDS). هرگز اجازه حدس زدن جنس زیره/رویه/آستر را به مدل نمی‌دهد؛ اگر محصولی
+     * مشخصاتی ثبت نکرده باشد، به‌جای حدس به عبارت عمومی دستور می‌دهد.
+     */
+    private function product_specs_block($specs) {
+        $specs = is_array($specs) ? array_filter($specs, function ($value) { return trim((string) $value) !== ''; }) : array();
+        if (!$specs) {
+            return "### مشخصات قطعی و غیرقابل تغییر محصول:\nاین محصول هیچ مشخصات فنی ثبت‌شده‌ای در سامانه ندارد.\n" .
+                "*قانون خط قرمز:* تحت هیچ شرایطی جنس زیره، رویه، آستر یا هر مشخصات فنی دیگری را حدس نزن یا تخیل نکن؛ به‌جای ادعای جنس خاص، از عبارات عمومی مانند «زیره استاندارد و باکیفیت» استفاده کن.\n";
+        }
+        $lines = array();
+        foreach (\Khazan\Core\Settings::PRODUCT_SPEC_FIELDS as $key => $label) {
+            if (isset($specs[$key])) $lines[] = '- ' . $label . ': ' . $specs[$key];
+        }
+        return "### مشخصات قطعی و غیرقابل تغییر محصول:\n" . implode("\n", $lines) . "\n" .
+            "*قانون خط قرمز:* صرفاً بر اساس مشخصات فوق متن را تنظیم کن و تحت هیچ شرایطی جنس زیره یا متریال دیگری را حدس نزن یا تخیل نکن؛ برای هر مشخصه‌ای که در لیست بالا نیامده، از عبارت عمومی مانند «زیره استاندارد و باکیفیت» استفاده کن.\n";
     }
 
     /**
