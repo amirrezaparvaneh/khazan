@@ -1,13 +1,13 @@
 <?php
 /**
- * Plugin Name:       خـزان | دستیار هوشمند تولید محتوا و مهندسی سئو
- * Plugin URI:        https://github.com/your-username/wp-internal-link-analyzer
- * Description:       سامانه تحلیل جامع لینک‌های داخلی، دسته‌‌بندی محصولات، مقالات و پیشنهادات هوشمند لینک‌سازی با AvalAI و مدل GPT-5.4 Mini
- * Version:           1.6.0
+ * Plugin Name:       خزان
+ * Plugin URI:        https://github.com/amirrezaparvaneh/wp-internal-link-analyzer
+ * Description:       افزونه هوشمند تولید و بهینه‌سازی محتوا، سئو و تصاویر بر پایه AvalAI برای ووکامرس و وردپرس
+ * Version:           1.0.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            امیــــــــررضا پـروانه
- * Text Domain:       wp-internal-link-analyzer
+ * Text Domain:       khazan
  * Domain Path:       /languages
  */
 
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WILA_VERSION', '1.6.0');
+define('WILA_VERSION', '1.0.0');
 define('WILA_PLUGIN_FILE', __FILE__);
 define('WILA_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WILA_PLUGIN_URL', plugin_dir_url(__FILE__));

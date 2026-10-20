@@ -25,8 +25,8 @@ final class AdminMenu {
 
     public function add_menu_page() {
         add_menu_page(
-            'خـزان - دستیار هوشمند تولید محتوا و مهندسی سئو',
-            'خـزان',
+            'خزان',
+            'خزان',
             self::CAPABILITY,
             self::SLUG,
             array($this, 'render'),
