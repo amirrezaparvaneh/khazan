@@ -64,12 +64,12 @@ $art = P::normalize_seo_title('🧥 ' . $focus . ' | راهنمای کامل', '
 check(mb_strpos($art, $focus) === 0 && !preg_match('/[\x{1F300}-\x{1FAFF}]/u', $art), 'article title follows the project title rule (no emoji)');
 
 echo "density rule\n";
-check(strpos(R::article_keyword_rule(600), 'حداقل 4 بار') !== false, '600 words: at least 4');
-check(strpos(R::article_keyword_rule(1500), 'حداقل 6 بار') !== false, '1500 words: at least 6');
-check(strpos(R::article_keyword_rule(1000), 'حداقل 4 بار') !== false, '1000 words: 4');
+check(strpos(R::article_keyword_rule(600), 'حداقل 6 بار') !== false, '600 words: 1% = at least 6');
+check(strpos(R::article_keyword_rule(1500), 'حداقل 15 بار') !== false, '1500 words: at least 15');
+check(strpos(R::article_keyword_rule(1000), 'حداقل 10 بار') !== false && strpos(R::article_keyword_rule(1000), 'حداکثر 20 بار') !== false, '1000 words: 10 to 20');
 $rule = R::article_keyword_rule(1200);
-check(strpos($rule, 'Exact Match') !== false && strpos($rule, 'پاراگراف اول') !== false && strpos($rule, 'H2') !== false && strpos($rule, 'میانه') !== false && strpos($rule, 'نتیجه‌گیری') !== false, 'rule lists intro, H2, middle and conclusion');
-check(strpos(R::writing_rules('article', 1200), 'حداقل 5 بار') !== false && strpos(R::writing_rules('product'), 'چگالی کلیدواژه کانونی') !== false, 'article rule in writing rules; product uses the density standard');
+check(strpos($rule, 'Exact Match') !== false && strpos($rule, 'نخست') !== false && strpos($rule, 'H2') !== false && strpos($rule, 'میانه') !== false && strpos($rule, 'نتیجه‌گیری') !== false, 'rule lists intro, H2, middle and conclusion');
+check(strpos(R::writing_rules('article', 1200), 'حداقل 12 بار') !== false && strpos(R::writing_rules('product'), 'چگالی کلیدواژه کانونی') !== false, 'article rule in writing rules; product uses the density standard');
 check(strpos(R::seo_title_rules('article', $focus), 'ایموجی در عنوان ممنوع') !== false, 'prompt forbids emoji in titles');
 
 echo "\n$passed passed, $failed failed\n";

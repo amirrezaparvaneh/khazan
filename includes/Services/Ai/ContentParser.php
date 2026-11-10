@@ -82,46 +82,52 @@ final class ContentParser {
             // Product and category pages never link to the homepage.
             $content = self::strip_homepage_links($content);
         }
-        $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, self::kind($params));
-        $focus = isset($params['focus_keyword']) ? (string) $params['focus_keyword'] : '';
-        $content = \Khazan\Services\Content\ContentGuard::enforce_link_anchors($content, self::locked_anchor_map(isset($params['internal_links']) ? $params['internal_links'] : array()));
-        if (self::kind($params) === Settings::KIND_PRODUCT) {
-            // هر URL فقط یک‌بار و حداکثر ۲ لینک محصول و ۱ لینک خارجی؛ لینک‌های برنامه‌ریزی‌شده‌ای که جا افتاده‌اند پایین‌تر اضافه می‌شوند
-            $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
-        }
-        if (self::kind($params) === Settings::KIND_ARTICLE && !empty($params['link_budget'])) {
-            // سقف لینک داخلی مقاله بر اساس تعداد کلمات؛ لینک‌های برنامه‌ریزی‌شده می‌مانند و لینک‌های اضافه آن‌رپ می‌شوند
-            $content = \Khazan\Services\Content\ContentGuard::cap_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array(), (int) $params['link_budget']);
-        }
-        $content = \Khazan\Services\Content\ContentGuard::ensure_internal_links($content, isset($params['internal_links']) ? $params['internal_links'] : array());
-        if (self::kind($params) === Settings::KIND_PRODUCT) {
-            // پیوند رقیب: انکر داخلی که کلمات کلیدواژه کانونی/مترادف‌های همین صفحه را تکرار می‌کند با عبارت امن جایگزین می‌شود
-            $own_synonyms = \Khazan\Services\Seo\SeoMetaService::split_keywords(!empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms);
-            $content = \Khazan\Services\Content\ContentGuard::neutralize_competing_links($content, $focus, isset($params['internal_links']) ? $params['internal_links'] : array(), $own_synonyms);
-        }
-        $content = \Khazan\Services\Content\ContentGuard::ensure_external_link($content, $focus);
-        // مترادف‌هایی که در Yoast ذخیره می‌شوند (ستون شیت در تولید انبوه) ملاک هدینگ‌ها هستند.
-        $guard_synonyms = !empty($params['seo_synonyms']) ? $params['seo_synonyms'] : $keyword_synonyms;
-        $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $focus, $guard_synonyms);
-        $content = \Khazan\Services\Content\ContentGuard::cap_keyword_density($content, $focus, $guard_synonyms, self::kind($params) === Settings::KIND_ARTICLE ? Settings::ARTICLE_KEYWORD_MAX : \Khazan\Services\Content\Guard\KeywordDensityGuard::MAX_KEYWORD_OCCURRENCES);
-        $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content, 4, self::category_urls(isset($params['internal_links']) ? $params['internal_links'] : array()));
-        // هر متن آزاد داخل <p> و هیچ <p> بالای ۱۱۰ واژه (آنالیزور سئو از ۱۵۰ واژه خطا می‌دهد)
-        $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);
-        // قفل نهایی: انکر لینک‌های محصول برنامه‌ریزی‌شده دقیقاً همان انکر استاندارد است (AI نمی‌تواند آن را تحریف کند)
-        $content = \Khazan\Services\Content\ContentGuard::lock_product_anchors($content, isset($params['internal_links']) ? $params['internal_links'] : array(), self::kind($params) === Settings::KIND_ARTICLE ? array('product', 'article', 'category', 'page') : array('product'));
-        $content = \Khazan\Services\Content\ContentGuard::wrap($content);
+        $kind  = self::kind($params);
+        $focus = isset($params['focus_keyword']) ? trim((string) $params['focus_keyword']) : '';
+        $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, $kind);
 
+        // Standards pipeline: nothing is injected. Links outside the plan / verified sources are unwrapped, a URL is linked
+        // once, paragraphs stay short; whatever still misses a standard is reported by the audit and repaired once by the model.
+        $plan     = isset($params['internal_links']) ? (array) $params['internal_links'] : array();
+        $sources  = isset($params['verified_sources']) ? (array) $params['verified_sources'] : \Khazan\Services\Content\BusinessFacts::verified_sources();
+        $verified = array();
+        foreach ($sources as $src) if (!empty($src['url'])) $verified[] = $src['url'];
+        $host = strtolower((string) wp_parse_url(isset($params['home_url']) ? $params['home_url'] : home_url('/'), PHP_URL_HOST));
+        $self = isset($params['target']['url']) ? (string) $params['target']['url'] : '';
+        $links = \Khazan\Services\Links\LinkSanitizer::apply($content, $plan, $self, $host, $verified);
+        $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($links['html']);
+
+        $title = sanitize_text_field($seo_title ?: $params['h1_title']);
+        $meta  = sanitize_textarea_field($meta_description);
+        $opts  = array('kind' => $kind, 'home_host' => $host);
+        if (!empty($params['audit_title']) && $title !== '') $opts['title'] = $title;
+        if (!empty($params['audit_meta']) && $meta !== '') $opts['meta'] = $meta;
+        if (!empty($params['audit_words_min'])) {
+            $opts['words_min'] = (int) $params['audit_words_min'];
+        } elseif ($kind === Settings::KIND_ARTICLE && !empty($params['word_count'])) {
+            // the author may ask for a shorter article than the standard minimum; the audit then follows the request
+            list($range_min) = \Khazan\Services\Content\SeoStandards::words_range($kind);
+            $opts['words_min'] = (int) min($range_min, round((int) $params['word_count'] * 0.9));
+        }
+        $audit = \Khazan\Services\Content\ContentAudit::analyze($content, $focus, $opts);
+        if ($links['missing']) $audit['failures']['links_missing'] = count($links['missing']) . ' لینک برنامه‌ریزی‌شده در متن نیامده است.';
+        $audit['ok'] = !$audit['failures'];
+
+        $content = \Khazan\Services\Content\ContentGuard::wrap($content);
         $external_links = self::extract_external_links($content);
         return array(
             'content' => $content,
             'featured_image_prompt' => '', // legacy DB column; prompts are no longer produced or shown
             'slug' => $slug,
-            'seo_title' => sanitize_text_field($seo_title ?: $params['h1_title']),
-            'meta_description' => sanitize_textarea_field($meta_description),
+            'seo_title' => $title,
+            'meta_description' => $meta,
             'keyword_synonyms' => sanitize_text_field($keyword_synonyms),
-            'internal_link_count' => self::count_content_links($content, true),
-            'external_link_count' => count($external_links),
+            'internal_link_count' => $audit['internal_links'],
+            'external_link_count' => $audit['external_links'],
             'external_links' => $external_links,
+            'audit' => $audit,
+            'missing_links' => $links['missing'],
+            'notes' => self::extract_block($raw, 'WILA_NOTES'),
         );
     }
 
@@ -193,7 +199,7 @@ final class ContentParser {
         if ($title === '') return '';
         // project rule: focus keyword first, « | brand » last, no emoji, 50-60 characters
         $focus = trim((string) $focus) !== '' ? $focus : $hint;
-        $fitted = \Khazan\Services\Seo\SeoMetaRules::fit_title($title, $focus, Settings::brand_name());
+        $fitted = \Khazan\Services\Seo\SeoMetaRules::fit_title($title, $focus, Settings::brand_name(), $kind);
         return $fitted !== '' ? $fitted : $title;
     }
 

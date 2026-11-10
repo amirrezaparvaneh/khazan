@@ -117,7 +117,7 @@ final class BulkRowProcessor {
     private function build_links($auto_links, $product_id, array $context, array $options) {
         $internal_links = array();
         if ($auto_links) {
-            $plan = $this->distributor()->plan($product_id, $this->run_id($options), $this->queue_ids($options), SmartLinkDistributor::DEFAULT_LIMIT);
+            $plan = $this->distributor()->plan($product_id, $this->run_id($options), $this->queue_ids($options), max(0, \Khazan\Services\Links\LinkPolicy::internal_target(Settings::KIND_PRODUCT, self::target_words()) - 1));
             $internal_links = $plan['internal_links'];
             $context['parent_categories'] = $plan['category'] ? array(array('name' => $plan['category']['name'], 'url' => $plan['category']['url'])) : array();
             $context['related_products'] = array_map(function ($entry) {
@@ -148,6 +148,12 @@ final class BulkRowProcessor {
         return array_values(array_filter(array_map('absint', array_slice($options['queue_ids'], 0, 5000))));
     }
 
+    /** Middle of the product length range from the SEO standards. */
+    public static function target_words() {
+        list($min, $max) = \Khazan\Services\Content\SeoStandards::words_range(Settings::KIND_PRODUCT);
+        return (int) round(($min + $max) / 2);
+    }
+
     private function build_params($product_id, array $row, array $context, array $internal_links) {
         $category = $product_id ? $this->targets->primary_category_name($product_id) : '';
         $focus = \Khazan\Services\Seo\KeyphraseExtractor::optimal($row['focus_keyword'], $context['title'], $category);
@@ -158,7 +164,8 @@ final class BulkRowProcessor {
             'focus_keyword'     => $focus,
             'long_tail'         => $row['related_keywords'],
             'seo_synonyms'      => $row['related_keywords'],
-            'word_count'        => 1000,
+            'word_count'        => self::target_words(),
+            'verified_sources'  => \Khazan\Services\Content\BusinessFacts::verified_sources(),
             'content_type'      => Settings::kind_label(Settings::KIND_PRODUCT),
             'funnel_stage'      => 'BOFU',
             'description'       => '',
@@ -217,8 +224,10 @@ final class BulkRowProcessor {
             'url'                 => $context['url'],
             'edit_url'            => $applied['edit_url'],
             'internal_link_count' => $result['internal_link_count'],
+            'audit'               => isset($result['audit']) ? $result['audit'] : null,
+            'repaired'            => !empty($result['repaired']),
+            'notes'               => isset($result['notes']) ? $result['notes'] : '',
             'seo_title'           => $result['seo_title'],
-            'image'               => isset($result['image']) ? $result['image'] : array('status' => 'skipped'),
             'image'               => isset($result['image']) ? $result['image'] : array('status' => 'skipped'),
             'generated'           => $generated,
         );
