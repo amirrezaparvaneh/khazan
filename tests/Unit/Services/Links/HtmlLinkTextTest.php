@@ -65,6 +65,16 @@ check('url is escaped', strpos(H::insert('<p>کلاه چرم مردانه</p>', 
 check('internal count', H::internal_count('<p><a href="/a">a</a><a href="https://google.com">g</a><a href="#x">x</a></p>', $host) === 1);
 check('plain text', H::plain('<p>سلام <b>دنیا</b></p><!-- c -->') === 'سلام دنیا');
 
+// candidates and model-chosen spots
+$doc = '<h2>تیتر بلند درباره کلاه که نباید انتخاب شود</h2><p>در زمستان یک کلاه گرم و چرمی برای آقایان انتخاب خوبی است و ظاهر را کامل می‌کند.</p><p>کوتاه</p><p><a href="/z">x</a> پاراگرافی که لینک دارد و به اندازه کافی بلند است برای انتخاب.</p>';
+$c = H::candidates($doc);
+check('candidates: only long paragraphs without links, never headings', count($c) === 1 && strpos($c[0]['text'], 'زمستان') !== false);
+$s = H::spot_at($doc, $c[0]['token'], 'کلاه گرم و چرمی', $opts);
+check('spot_at accepts words copied from the paragraph', $s !== null && $s['anchor'] === 'کلاه گرم و چرمی');
+check('spot_at refuses words that are not in the paragraph', H::spot_at($doc, $c[0]['token'], 'کلاه چرم مردانه', $opts) === null);
+check('spot_at refuses a single word and a heading token', H::spot_at($doc, $c[0]['token'], 'کلاه', $opts) === null && H::spot_at($doc, 1, 'تیتر بلند', $opts) === null);
+check('spot_at result can be inserted', strpos(H::insert($doc, $s, '/t'), '<a href="/t">کلاه گرم و چرمی</a>') !== false);
+
 // anchor phrases
 $ph = P::build(array('focus' => 'کلاه چرم مردانه', 'queries' => array('خرید کلاه چرم مردانه', 'قیمت کلاه چرم مردانه', 'آکا چرم', 'akaleather.com', 'کلاه شاپو چرم'), 'title' => 'کلاه چرم مردانه | آکا چرم', 'synonyms' => array('کلاه چرمی مردانه'), 'brand' => 'آکا چرم'));
 check('anchor phrases are cleaned, deduplicated and brand-free', $ph === array('کلاه چرم مردانه', 'کلاه شاپو چرم', 'کلاه چرمی مردانه'));
