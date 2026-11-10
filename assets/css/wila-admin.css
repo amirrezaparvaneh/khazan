@@ -2017,3 +2017,13 @@ body.khz-drawer-lock { overflow: hidden; }
 #wila-app-root a.khz-opp-link { color: inherit; text-decoration: none; }
 #wila-app-root a.khz-opp-link:hover { color: var(--wila-primary); }
 #wila-app-root .khz-opp-compete a.khz-opp-link { color: var(--wila-text-muted); }
+
+/* ---- Opportunity card: redirect check ---- */
+.khz-opp-card.is-resolved { opacity: 0.72; border-top-color: #10b981; }
+.khz-opp-card.is-resolved:hover { opacity: 1; }
+.khz-opp-note { font-size: 0.8rem; line-height: 1.9; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--wila-border); }
+.khz-opp-note b { display: block; }
+.khz-opp-note.is-ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+.khz-opp-note.is-warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.khz-opp-check { margin: 10px 0 0; font-size: 0.78rem; color: var(--wila-text-muted); }
+.khz-opp-actions[hidden] { display: none; }

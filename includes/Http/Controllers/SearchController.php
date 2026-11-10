@@ -7,6 +7,7 @@ namespace Khazan\Http\Controllers;
 
 use Khazan\Modules\Search\ContentUpdater;
 use Khazan\Modules\Search\PageAnalyzer;
+use Khazan\Modules\Search\RedirectCheck;
 use Khazan\Modules\Search\SearchConsole;
 use Khazan\Services\Links\HtmlLinkText;
 
@@ -72,6 +73,15 @@ final class SearchController extends BaseController {
         $p = $request->get_json_params();
         $v = is_array($p) && isset($p[$key]) ? $p[$key] : $request->get_param($key);
         return is_scalar($v) ? (string) $v : '';
+    }
+
+    public function redirects($request) {
+        $p = $request->get_json_params();
+        $urls = array();
+        foreach (is_array($p) && isset($p['pages']) && is_array($p['pages']) ? $p['pages'] : array() as $u) {
+            if (is_string($u) && RedirectCheck::is_own($u)) $urls[] = esc_url_raw($u);
+        }
+        return rest_ensure_response(array('success' => true, 'results' => (object) RedirectCheck::check_many($urls)));
     }
 
     public function analyze($request) {
