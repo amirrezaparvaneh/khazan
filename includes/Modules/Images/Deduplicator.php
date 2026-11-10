@@ -64,7 +64,7 @@ final class Deduplicator {
     }
 
     /** Duplicate groups with usage and a keeper; dry-run, changes nothing. */
-    public static function report($max_groups = 8) {
+    public static function report($max_groups = 5) {
         global $wpdb;
         $hashes = $wpdb->get_col($wpdb->prepare(
             "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> 'missing' GROUP BY meta_value HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC LIMIT %d",
@@ -78,7 +78,7 @@ final class Deduplicator {
                 $post = get_post($id);
                 if (!$post || $post->post_type !== 'attachment') continue;
                 $file = get_attached_file($id);
-                $members[] = array('id' => $id, 'title' => get_the_title($id), 'url' => wp_get_attachment_url($id), 'date' => $post->post_date, 'refs' => self::count_references($id), 'bytes' => $file && is_readable($file) ? filesize($file) : 0);
+                $members[] = array('id' => $id, 'title' => get_the_title($id), 'url' => wp_get_attachment_url($id), 'date' => $post->post_date, 'refs' => self::count_references($id, true), 'bytes' => $file && is_readable($file) ? filesize($file) : 0);
             }
             if (count($members) < 2) continue;
             $keeper = self::pick_keeper($members);
@@ -111,8 +111,8 @@ final class Deduplicator {
         return array('groups' => $groups, 'copies' => $copies, 'bytes' => $bytes);
     }
 
-    /** Number of places that reference the attachment (0 = unused). */
-    public static function count_references($attachment_id) {
+    /** Number of places that reference the attachment (0 = unused). $quick only looks up the original file name (used for the report); removal always runs the full check. */
+    public static function count_references($attachment_id, $quick = false) {
         global $wpdb;
         $attachment_id = (int) $attachment_id;
         $n = self::needles((string) get_attached_file($attachment_id), (array) wp_get_attachment_metadata($attachment_id), $attachment_id);
@@ -126,7 +126,7 @@ final class Deduplicator {
         $count += (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type <> 'attachment' AND post_status NOT IN ('auto-draft') AND post_content LIKE %s", '%wp-image-' . $attachment_id . '%'));
         $count += (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type <> 'attachment' AND post_status NOT IN ('auto-draft') AND post_content LIKE %s", '%"id":' . $attachment_id . ',%'));
 
-        foreach ($n['names'] as $name) {
+        foreach ($quick ? array_slice($n['names'], 0, 1) : $n['names'] as $name) {
             $count += (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type <> 'attachment' AND post_status NOT IN ('auto-draft') AND post_content LIKE %s", $like($name)));
             $count += (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE post_id <> %d AND meta_key NOT IN ('_wp_attached_file','_wp_attachment_metadata') AND meta_key NOT LIKE %s AND meta_value LIKE %s", $attachment_id, '\_khazan%', $like($name)));
             $count += (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->termmeta} WHERE meta_value LIKE %s", $like($name)));
