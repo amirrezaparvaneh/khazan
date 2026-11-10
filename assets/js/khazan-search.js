@@ -12,11 +12,12 @@
 
   const short = (u) => { const p = String(u || '').replace(/^https?:\/\/[^/]+/, '') || '/'; try { return decodeURI(p); } catch (e) { return p; } };
   const KINDS = {
-    near_top: { label: 'نزدیک صفحه‌ی اول', tone: 'green', hint: 'با کمی تقویت به صفحه‌ی اول می‌رسند' },
-    low_ctr: { label: 'کلیک کم', tone: 'amber', hint: 'رتبه خوب، کلیک کم؛ مشکل عنوان و توضیحات' },
-    deep: { label: 'رتبه‌ی عمیق', tone: 'blue', hint: 'تقاضا هست ولی صفحه پایین است' },
-    cannibal: { label: 'رقابت صفحه‌ها', tone: 'red', hint: 'چند صفحه برای یک عبارت با هم رقابت می‌کنند' }
+    near_top: { label: 'کمی تا صفحه‌ی اول', tone: 'green', hint: 'جایگاه ۵ تا ۲۰ گوگل است. با کمی کار به صفحه‌ی اول می‌رسد.' },
+    low_ctr: { label: 'دیده می‌شود، کلیک نمی‌گیرد', tone: 'amber', hint: 'جایگاهش خوب است ولی کمتر کسی کلیک می‌کند. عنوان و توضیحات را بهتر کنید.' },
+    deep: { label: 'خیلی پایین در گوگل', tone: 'blue', hint: 'صفحه‌ی ۲ تا ۸ نتایج است. مردم دنبالش می‌گردند ولی به آن نمی‌رسند.' },
+    cannibal: { label: 'دو صفحه با هم رقابت می‌کنند', tone: 'red', hint: 'چند صفحه‌ی خودتان برای یک عبارت با هم رقابت می‌کنند و هیچ‌کدام بالا نمی‌آید.' }
   };
+
 
   const methods = {
     loadSearch: async function () {
@@ -70,7 +71,7 @@
 
     openAnalysis: async function (card) {
       const s = this.state.search;
-      s.drawer = { page: card.page, title: card.title, kind: card.kind, diagnosis: card.diagnosis, analyzed: !!card.analyzed, loading: !!card.analyzed, result: null, backup: '', error: '', draft: null, busy: '', withMeta: true, focus: true, scroll: 0 };
+      s.drawer = { page: card.page, title: card.page_name || card.title, kind: card.kind, diagnosis: card.diagnosis, analyzed: !!card.analyzed, loading: !!card.analyzed, result: null, backup: '', error: '', draft: null, busy: '', withMeta: true, focus: true, scroll: 0 };
       this.render();
       if (!card.analyzed) return;
       try {
@@ -254,7 +255,7 @@
       const table = (rows, name, title) => `
         <h4 style="margin:16px 0 6px">${title}</h4>
         <div style="overflow-x:auto"><table class="wila-table" style="width:100%;font-size:0.82rem"><thead><tr><th>${name === 'query' ? 'عبارت' : 'صفحه'}</th><th>کلیک</th><th>نمایش</th><th>CTR</th><th>جایگاه</th></tr></thead><tbody>
-        ${(rows || []).slice(0, 20).map(r => `<tr><td style="max-width:360px;overflow:hidden;text-overflow:ellipsis" ${name === 'page' ? 'dir="ltr"' : ''}>${escapeHtml(r[name])}</td><td>${fa(r.clicks)}</td><td>${fa(r.impressions)}</td><td>${pct(r.ctr)}</td><td>${pos(r.position)}</td></tr>`).join('') || '<tr><td colspan="5">هنوز داده‌ای دریافت نشده است.</td></tr>'}
+        ${(rows || []).slice(0, 20).map(r => `<tr><td style="max-width:360px;overflow:hidden;text-overflow:ellipsis" ${name === 'page' ? 'dir="ltr"' : ''}>${name === 'page' ? `<a class="khz-opp-link" href="${escapeHtml(r[name])}" target="_blank" rel="noopener">${escapeHtml(r[name])}</a>` : escapeHtml(r[name])}</td><td>${fa(r.clicks)}</td><td>${fa(r.impressions)}</td><td>${pct(r.ctr)}</td><td>${pos(r.position)}</td></tr>`).join('') || '<tr><td colspan="5">هنوز داده‌ای دریافت نشده است.</td></tr>'}
         </tbody></table></div>`;
       const sites = (s.sites || []).length && !d.connected ? `
         <label style="display:block;margin:10px 0 4px">سایت را انتخاب کنید</label>
@@ -276,18 +277,20 @@
         return `
         <article class="khz-opp-card khz-tone-${k.tone}">
           <header class="khz-opp-head">
-            <span class="khz-opp-badge">${k.label}</span>
+            <span class="khz-opp-badge" title="${escapeHtml(k.hint)}">${k.label}</span>
             ${c.potential ? `<span class="khz-opp-gain" title="برآورد کلیک اضافه در ۹۰ روز، اگر برنامه اجرا شود">+${fa(c.potential)} کلیک</span>` : ''}
           </header>
-          <h4 class="khz-opp-title" ${c.kind === 'cannibal' || c.kind === 'near_top' ? '' : 'dir="ltr"'}>${escapeHtml(c.kind === 'low_ctr' || c.kind === 'deep' ? short(c.title) : c.title)}</h4>
-          ${c.kind !== 'low_ctr' && c.kind !== 'deep' && c.page ? `<div class="khz-opp-url" dir="ltr">${escapeHtml(short(c.page))}</div>` : ''}
+          ${c.kind === 'cannibal' ? `<h4 class="khz-opp-title">${escapeHtml(c.title)}</h4><div class="khz-opp-q">عبارت جست‌وجو</div>` : `
+            <h4 class="khz-opp-title"><a class="khz-opp-link" href="${escapeHtml(c.page)}" target="_blank" rel="noopener">${escapeHtml(c.page_name || short(c.title))}<span class="khz-opp-ext" aria-hidden="true">↗</span></a></h4>
+            <div class="khz-opp-sub2">${c.page_type ? `<span class="khz-opp-type">${escapeHtml(c.page_type)}</span>` : ''}<span class="khz-opp-url" dir="ltr">${escapeHtml(short(c.page))}</span></div>
+            ${c.kind === 'near_top' && c.title && c.title !== c.page ? `<div class="khz-opp-q">عبارت اصلی: <b>${escapeHtml(c.title)}</b></div>` : ''}`}
           <div class="khz-opp-metrics">
             <span><b>${pos(c.position)}</b> جایگاه</span>
             <span><b>${fa(c.impressions)}</b> نمایش</span>
             ${c.kind !== 'cannibal' ? `<span><b>${fa(c.clicks)}</b> کلیک</span><span><b>${pct(c.ctr)}</b> CTR</span>` : ''}
           </div>
           <p class="khz-opp-diag">${escapeHtml(c.diagnosis)}</p>
-          ${c.competing ? `<div class="khz-opp-compete">${c.competing.map(p => `<div><span dir="ltr">${escapeHtml(short(p.page))}</span><i>جایگاه ${pos(p.position)}</i></div>`).join('')}</div>` : ''}
+          ${c.competing ? `<div class="khz-opp-compete">${c.competing.map(p => `<div><a class="khz-opp-link" href="${escapeHtml(p.page)}" target="_blank" rel="noopener" dir="ltr">${escapeHtml(short(p.page))}</a><i>جایگاه ${pos(p.position)}</i></div>`).join('')}</div>` : ''}
           <ul class="khz-opp-actions">
             ${c.actions.map(a => `<li><span class="khz-opp-ico khz-act-${a.type}">${ACTIONS[a.type].icon}</span><div><b>${escapeHtml(a.label)}</b><span>${escapeHtml(a.detail)}</span></div></li>`).join('')}
           </ul>
@@ -302,6 +305,7 @@
             ${tile('all', 'همه', o.cards.length)}
             ${Object.keys(KINDS).map(k => tile(k, KINDS[k].label, (o.counts || {})[k] || 0)).join('')}
           </div>
+          <ul class="khz-opp-legend">${Object.keys(KINDS).map(k => `<li class="khz-tone-${KINDS[k].tone}"><b>${KINDS[k].label}:</b> ${KINDS[k].hint}</li>`).join('')}</ul>
           ${o.potential ? `<div class="khz-opp-total">اگر همه‌ی برنامه‌ها اجرا شود، حدود <b>${fa(o.potential)}</b> کلیک اضافه در هر ۹۰ روز</div>` : ''}
           <div class="khz-opp-grid">${cards.length ? cards.map(card).join('') : '<p>موردی در این گروه نیست.</p>'}</div>
         </div>` : '';

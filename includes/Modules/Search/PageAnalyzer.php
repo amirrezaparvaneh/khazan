@@ -164,6 +164,30 @@ final class PageAnalyzer {
         return new \WP_Error('khazan_page', 'صفحه‌ی مربوط به این آدرس در وردپرس پیدا نشد.', array('status' => 404));
     }
 
+    /** Light lookup for card headers: the page's real name and what kind of page it is (no content is loaded). */
+    public static function label($url) {
+        $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+        $key = HtmlLinkText::url_key($url, $host);
+        if ($key === null) return null;
+        if ($key === '/') return array('name' => 'صفحه‌ی اصلی', 'type' => 'صفحه');
+        $id = url_to_postid($url);
+        if ($id) {
+            $post = get_post($id);
+            $obj = get_post_type_object($post->post_type);
+            return array('name' => html_entity_decode(get_the_title($post), ENT_QUOTES, 'UTF-8'), 'type' => $obj ? $obj->labels->singular_name : $post->post_type);
+        }
+        $slug = basename($key);
+        foreach (array_diff(get_taxonomies(array('public' => true), 'names'), array('nav_menu')) as $tax) {
+            $term = get_term_by('slug', sanitize_title($slug), $tax);
+            if (!$term) $term = get_term_by('slug', $slug, $tax);
+            if ($term && !is_wp_error($term) && HtmlLinkText::url_key(get_term_link($term), $host) === $key) {
+                $obj = get_taxonomy($tax);
+                return array('name' => html_entity_decode($term->name, ENT_QUOTES, 'UTF-8'), 'type' => $obj ? $obj->labels->singular_name : $tax);
+            }
+        }
+        return null;
+    }
+
     private static function store() {
         $s = get_option(self::OPTION, array());
         return is_array($s) ? $s : array();
