@@ -57,7 +57,12 @@ final class SearchController extends BaseController {
         $cards = SearchConsole::plan($opps);
         $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
         $done = array_flip(PageAnalyzer::analyzed_keys());
-        foreach ($cards as $i => $c) $cards[$i]['analyzed'] = isset($done[(string) HtmlLinkText::url_key($c['page'], $host)]);
+        foreach ($cards as $i => $c) {
+            $cards[$i]['analyzed'] = isset($done[(string) HtmlLinkText::url_key($c['page'], $host)]);
+            $label = $c['page'] !== '' ? PageAnalyzer::label($c['page']) : null;
+            $cards[$i]['page_name'] = $label ? $label['name'] : '';
+            $cards[$i]['page_type'] = $label ? $label['type'] : '';
+        }
         $counts = array();
         foreach ($cards as $c) $counts[$c['kind']] = (isset($counts[$c['kind']]) ? $counts[$c['kind']] : 0) + 1;
         return rest_ensure_response(array('success' => true, 'cards' => $cards, 'counts' => $counts, 'potential' => array_sum(array_column($cards, 'potential'))));
