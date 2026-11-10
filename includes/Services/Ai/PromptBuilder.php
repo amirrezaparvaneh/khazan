@@ -140,32 +140,50 @@ final class PromptBuilder {
     }
 
     /**
-     * Bulk product-category description: transactional structure, exact-name keyphrase with a 4-6 balanced density,
-     * the planned spider links only (1 homepage + 2-3 categories) and the SEO title / meta formulas.
+     * Bulk product-category description written to the project's content standards: keyword ownership, length and
+     * density from SeoStandards, verified business facts only, role-based internal links with natural anchor options,
+     * verified external sources only, and a notes block for removed claims / open questions.
      */
     public function bulk_category($params) {
-        $focus = trim((string) $params['focus_keyword']);
+        $main  = trim((string) $params['focus_keyword']);
         $brand = isset($params['brand']) ? (string) $params['brand'] : \Khazan\Core\Settings::brand_name();
         $target = isset($params['target']) ? $params['target'] : array();
+        $words = isset($params['word_count']) ? (int) $params['word_count'] : \Khazan\Services\Content\CategoryRules::target_words();
+        $secondary = isset($params['secondary_keywords']) ? (array) $params['secondary_keywords'] : array();
+        $slug = isset($target['url']) ? \Khazan\Services\Content\BusinessFacts::slug_from_url($target['url']) : '';
         $data = array_filter(array(
-            'نام دسته' => $focus,
+            'نام دسته' => $main,
             'زیردسته‌ها' => isset($target['subcategories']) ? $target['subcategories'] : array(),
             'دسته والد' => isset($target['parent_category']) ? $target['parent_category'] : array(),
-            'نمونه محصولات' => isset($target['sample_products']) ? $target['sample_products'] : array(),
-            'تعداد محصولات' => isset($target['product_count']) ? (int) $target['product_count'] : 0,
+            'نمونه محصولات (فقط برای مثال؛ درباره‌شان ادعا نساز)' => isset($target['sample_products']) ? $target['sample_products'] : array(),
         ));
 
-        return "نویسنده ارشد سئوی فروشگاهی فارسی هستی. برای دسته‌بندی محصول زیر توضیحات HTML بنویس؛ این صفحه، صفحه اصلی خرید است و باید با قصد خرید (Transactional Intent) بهینه شود.\n" .
-            "کلیدواژه کانونی: «{$focus}» (دقیقاً نام دسته). حدود " . (int) $params['word_count'] . " واژه.\n" .
-            \Khazan\Services\Content\CategoryRules::writing_rules() .
-            \Khazan\Services\Content\CategoryRules::blueprint($focus) .
-            \Khazan\Services\Content\CategoryRules::density_rule() .
-            \Khazan\Services\Content\CategoryRules::link_rules(isset($params['internal_links']) ? $params['internal_links'] : array()) .
-            \Khazan\Services\Content\CategoryRules::seo_rules($focus, $brand) .
-            "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
+        return "نویسنده ارشد سئوی فروشگاهی فارسی هستی. متن اصلی (زیر لیست محصولات) صفحه دسته‌بندی زیر را بنویس؛ محتوا باید مفید، دقیق، یکتا و مطابق دستورالعمل‌های گوگل (E-E-A-T، بدون پرکردن کلمه کلیدی و بدون ادعای بی‌منبع) باشد و به نیت خرید و انتخاب کاربر پاسخ دهد.\n" .
+            \Khazan\Services\Content\CategoryRules::keywords_block($main, $secondary) .
+            \Khazan\Services\Content\CategoryRules::structure_rules($main, $words) .
+            \Khazan\Services\Content\BusinessFacts::prompt_block($slug) .
+            \Khazan\Services\Content\CategoryRules::link_rules(isset($params['internal_links']) ? $params['internal_links'] : array(), isset($params['verified_sources']) ? $params['verified_sources'] : array()) .
+            \Khazan\Services\Content\CategoryRules::seo_rules($main, $brand) .
+            "داده‌های صفحه:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===\n" .
-            "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا]\n===WILA_SEO_TITLE_END===\n" .
-            "===WILA_META_DESCRIPTION_START===\n[متا طبق قواعد بالا]\n===WILA_META_DESCRIPTION_END===";
+            "===WILA_SEO_TITLE_START===\n[عنوان سئو]\n===WILA_SEO_TITLE_END===\n" .
+            "===WILA_META_DESCRIPTION_START===\n[متا]\n===WILA_META_DESCRIPTION_END===\n" .
+            "===WILA_NOTES_START===\n[ادعاهایی که حذف یا تعمیم دادی و سؤال‌هایی که باید مالک تأیید کند؛ خالی هم می‌تواند باشد]\n===WILA_NOTES_END===";
+    }
+
+    /**
+     * Repair pass: the previous text plus the exact audit failures; everything that already passes must stay as it is.
+     */
+    public function category_repair($params, $content, array $failures, array $missing_links) {
+        $main = trim((string) $params['focus_keyword']);
+        $brief = \Khazan\Services\Content\ContentAudit::repair_brief($failures);
+        $links = array();
+        foreach ($missing_links as $link) $links[] = '- ' . $link['url'] . ' ← یکی از: ' . implode(' | ', isset($link['anchor_options']) ? $link['anchor_options'] : array($link['anchor']));
+        return "متن زیر برای دسته «{$main}» نوشته شده و در بازبینی این ایرادها را دارد:\n" . $brief . "\n" .
+            ($links ? "لینک‌های برنامه‌ریزی‌شده‌ای که در متن نیامده‌اند و باید هر کدام یک‌بار در جمله‌ای طبیعی بیایند:\n" . implode("\n", $links) . "\n" : '') .
+            "فقط همین ایرادها را رفع کن؛ بخش‌های درست، ساختار، لینک‌های موجود و واقعیت‌ها را حفظ کن. ادعای جدید نساز و جمله تکراری یا پرکننده اضافه نکن؛ برای افزایش طول، محتوای واقعی و مفید اضافه کن. اگر تراکم بالاست، تکرارها را با مترادف و عبارت بلند عوض کن.\n" .
+            \Khazan\Services\Content\CategoryRules::structure_rules($main, isset($params['word_count']) ? (int) $params['word_count'] : \Khazan\Services\Content\CategoryRules::target_words()) .
+            "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML کامل اصلاح‌شده]\n===WILA_CONTENT_END===\n===WILA_NOTES_START===\n[یادداشت]\n===WILA_NOTES_END===\n[متن فعلی]\n" . $content;
     }
 
     public function anchor_rules() {

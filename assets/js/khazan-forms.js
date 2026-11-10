@@ -249,6 +249,9 @@
       const saveBtn = this.root.querySelector('#wila-save-settings-btn');
       if (saveBtn) saveBtn.addEventListener('click', () => this.saveSettings());
 
+      const modelsBtn = this.root.querySelector('#wila-ai-models-refresh-btn');
+      if (modelsBtn) modelsBtn.addEventListener('click', () => this.fetchAiModels(true));
+
       const testBtn = this.root.querySelector('#wila-test-api-btn');
       if (testBtn) testBtn.addEventListener('click', () => this.testConnection());
 

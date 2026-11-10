@@ -39,6 +39,15 @@ final class SettingsUpdateRequest {
                 $options[Settings::OPT_AVALAI_API_KEY] = $key;
             }
         }
+        if (isset($this->input['ai_model'])) {
+            $model = trim(sanitize_text_field($this->input['ai_model']));
+            if (Settings::is_valid_model_id($model)) $options[Settings::OPT_AI_MODEL] = $model;
+        }
+        if (isset($this->input['ai_base_url'])) {
+            $url = trim(esc_url_raw((string) $this->input['ai_base_url'], array('https')));
+            // خالی = بازگشت به آدرس پیش‌فرض AvalAI
+            $options[Settings::OPT_AI_BASE_URL] = $url === '' ? '' : rtrim($url, '/');
+        }
         if (isset($this->input['product_post_type'])) {
             $type = sanitize_key($this->input['product_post_type']);
             if (post_type_exists($type)) $options[Settings::OPT_PRODUCT_POST_TYPE] = $type;

@@ -17,50 +17,64 @@ if (!defined('ABSPATH')) {
 
 final class CategoryRules {
 
-    /** Purchase-guide heading structure (the name is the exact focus keyphrase). */
-    public static function blueprint($focus) {
-        $f = trim((string) $focus);
-        return "[ساختار ثابت صفحه دسته‌بندی؛ نیت جستجو تجاری/تراکنشی است نه آموزشی]\n" .
-            "۱. مقدمه (یک پاراگراف کوتاه): معرفی دسته «{$f}» و نیاز خریدار؛ کلیدواژه کانونی در همین پاراگراف اول بیاید.\n" .
-            "۲. <h2>راهنمای خرید و انتخاب بهترین {$f}</h2> (۲ پاراگراف کوتاه): معیارهای واقعی انتخاب.\n" .
-            "۳. <h2>عوامل موثر بر قیمت {$f} و ارزش خرید آن</h2> (۲ پاراگراف کوتاه و یک فهرست <ul><li>): فقط عوامل کلی؛ عدد و قیمت ننویس.\n" .
-            "۴. <h2>ویژگی‌های ظاهری و کیفیت دوخت در مدل‌های این دسته</h2> (۲ پاراگراف کوتاه؛ در این هدینگ نام کامل دسته را تکرار نکن). اگر زیردسته (target.subcategories) هست در همین بخش معرفی‌شان کن.\n" .
-            "۵. <h2>سوالات متداول درباره خرید {$f}</h2>: دقیقاً ۳ پرسش کاربردی، هر کدام با ساختار <h3>سوال</h3><p>پاسخ کوتاه</p>.\n" .
-            "۶. یک پاراگراف پایانی کوتاه (جمع‌بندی) بعد از پرسش‌ها، با دعوت طبیعی به انتخاب و خرید؛ کلیدواژه کانونی در آن هم بیاید.\n" .
-            "H1 و بخش اضافه نساز. هدینگ‌ها ترغیب‌کننده خرید و راهنمای انتخاب باشند. فاصله بین دو زیرعنوان حداکثر ۲۲۰ واژه.\n";
+    /** Target body length: the middle of the allowed range. */
+    public static function target_words() {
+        return (int) round((SeoStandards::get('body_words_min') + SeoStandards::get('body_words_max')) / 2);
     }
 
-    /** Exact-match density 4-6 and the balanced distribution Yoast checks. */
-    public static function density_rule() {
-        return "[تراکم و پخش کلیدواژه کانونی]\n" .
-            "کلیدواژه کانونی (نام دقیق دسته) را عیناً و با همان ترتیب کلمات، در کل متن (هدینگ‌ها هم حساب می‌شوند) بین " . Settings::CATEGORY_KEYWORD_MIN . " تا " . Settings::CATEGORY_KEYWORD_MAX . " بار بیاور، هرگز بیشتر. توزیع باید مساوی باشد: ۱ بار در پاراگراف اول، در ۲ تا ۳ هدینگ H2، ۱ بار در یک پاراگراف میانی و ۱ بار در پاراگراف پایانی. هیچ بخشی نباید همه تکرارها را جمع کند؛ در بقیه جاها از «این دسته‌بندی»، «این مدل‌ها» یا توصیف دیگر استفاده کن.\n";
+    /** Allowed number of exact main-keyword occurrences for a body of $words words (density range of the standards). */
+    public static function keyword_range($words) {
+        return array((int) ceil($words * SeoStandards::get('density_min') / 100), (int) floor($words * SeoStandards::get('density_max') / 100));
     }
 
-    /** Short writing rules shared with the product pipeline in spirit (active voice, explicit <p>, no invented facts). */
-    public static function writing_rules() {
-        return "[قواعد نگارش]\n" .
-            "فقط HTML ساده با <h2>، <h3>، <p>، <ul>، <li>، <strong> و <a>؛ HTML فشرده بدون خط خالی بین تگ‌ها. هر پاراگراف داخل <p> و حداکثر ۶۰ تا ۹۰ واژه (۳ تا ۴ جمله کوتاه). جمله‌ها کوتاه، معلوم و فاعل‌محور؛ مجهول (ساخته شده است، عرضه می‌شود) حداکثر ۵٪.\n" .
-            "فقط از داده‌های target استفاده کن؛ قیمت، تخفیف، گارانتی، آمار، موجودی، رتبه و نظر مشتری نساز. هیچ تصویر، باکس تصویر یا پرامپت تصویر ننویس (سیستم خودکار می‌سازد). لینک خارجی نساز.\n";
+    public static function keywords_block($main, array $secondary) {
+        $line = "[کلمات کلیدی]\nکلمه اصلی: «{$main}»\n";
+        $line .= $secondary ? 'کلمات فرعی (فقط همین‌ها؛ کلمه دیگری به‌عنوان کلیدواژه نساز): «' . implode('»، «', $secondary) . "»\n"
+            : "کلمه فرعی ثبت‌نشده است؛ از مترادف‌های طبیعی استفاده کن و کلمه کلیدی جدید نساز.\n";
+        return $line;
     }
 
-    /** Link instructions: exactly the planned links, each once, with the locked anchor texts. */
-    public static function link_rules(array $links) {
+    /** Structure, length, density and heading rules - all numbers come from SeoStandards. */
+    public static function structure_rules($main, $words) {
+        $s = SeoStandards::all();
+        list($kmin, $kmax) = self::keyword_range($words);
+        return "[طول، ساختار و تراکم]\n" .
+            "۱. متن اصلی (بدون H1) حدود {$words} کلمه باشد و هرگز کمتر از {$s['body_words_min']} کلمه نباشد؛ طول را از پوشش واقعی موضوع بگیر، نه از پرکردن. سقف معمول {$s['body_words_max']} کلمه است و فقط با محتوای واقعی می‌تواند بیشتر شود.\n" .
+            "۲. کلمه اصلی «{$main}» عیناً در کل متن (با هدینگ‌ها و لینک‌ها) بین {$kmin} تا {$kmax} بار بیاید (تراکم {$s['density_min']} تا {$s['density_max']} درصد)؛ در ۱۰۰ کلمه اول، در حداقل یک زیرعنوان و در بخش‌های مختلف پخش شود، نه پشت‌سرهم. بقیه جاها از کلمات فرعی، مترادف و عبارت‌های بلند طبیعی استفاده کن.\n" .
+            "۳. حداقل {$s['h2_min']} زیرعنوان H2 با محتوای واقعی: راهنمای انتخاب، تفاوت مدل‌ها یا انواع، نکات خرید یا نگهداری و پرسش‌های متداول (هر پرسش H3 با پاسخ در <p>). کلمه اصلی فقط در ۱ یا ۲ عنوان H2 و فقط وقتی کاملاً طبیعی است؛ در بقیه زیرعنوان‌ها از کلمات فرعی و عبارت‌های بلند استفاده کن.\n" .
+            "۴. حداقل یک جدول <table> مفید (مقایسه مدل‌ها، راهنمای انتخاب یا نکات خرید) داخل متن بگذار؛ در جدول فقط متن ساده بیاید، بدون لینک.\n" .
+            "۵. فاصله بین دو زیرعنوان حداکثر {$s['section_words_max']} کلمه؛ هر پاراگراف داخل <p> و حداکثر ۹۰ کلمه؛ جمله‌ها کوتاه، معلوم و روان. فقط <h2>، <h3>، <p>، <ul>، <li>، <strong>، <table>، <thead>، <tbody>، <tr>، <th>، <td> و <a>؛ HTML فشرده بدون خط خالی.\n" .
+            "۶. هر بخش باید اطلاعات واقعی و مفید برای خریدار بدهد؛ هر صفحه ساختار و جمله‌های خودش را دارد و قالب ثابت تکراری ممنوع است. تجربه، کارگاه، آمار و نظر مشتری نساز.\n" .
+            "۷. هیچ تصویر، باکس تصویر یا پرامپت تصویر ننویس.\n";
+    }
+
+    /** Link instructions: the plan with natural anchor options, once each, spread over sections. */
+    public static function link_rules(array $links, array $verified_sources) {
         $lines = array();
         foreach ($links as $link) {
             if (empty($link['url']) || empty($link['anchor'])) continue;
-            $lines[] = '[لینک: ' . $link['url'] . ' | انکرتکست اجباری: ' . $link['anchor'] . ']';
+            $options = isset($link['anchor_options']) ? implode(' | ', $link['anchor_options']) : $link['anchor'];
+            $lines[] = '- [' . (isset($link['role']) ? $link['role'] : $link['type']) . '] ' . $link['url'] . ' ← انکر طبیعی، یکی از: ' . $options;
         }
-        if (!$lines) return "هیچ لینک داخلی ننویس.\n";
-        return "[لینک‌های داخلی؛ دقیقاً همین‌ها]\n" . implode("\n", $lines) . "\n" .
-            "هر لینک را فقط یک‌بار با HTML <a href=\"URL\">انکرتکست</a> در جمله‌ای طبیعی و در بخش‌های مختلف متن بیاور (نه پشت‌سرهم)، با انکرتکست کلمه‌به‌کلمه همان مقدار اجباری بدون تغییر یا کوتاه‌کردن. لینک صفحه اصلی دقیقاً یک‌بار و ترجیحاً در پاراگراف پایانی. هیچ لینک داخلی دیگری و هرگز لینک به خود این دسته نساز.\n";
+        $out = "[لینک‌های داخلی؛ دقیقاً همین‌ها، نه کمتر و نه بیشتر]\n" . ($lines ? implode("\n", $lines) . "\n" : "لینک داخلی نساز.\n");
+        if ($lines) {
+            $out .= "هر آدرس فقط یک‌بار و در اولین جای مناسب لینک شود؛ در هر پاراگراف حداکثر ۲ لینک؛ لینک‌ها بین بخش‌های مختلف پخش شوند، نه کنار هم. انکر باید یکی از گزینه‌های بالا یا شکل طبیعی و کوتاه همان باشد و هر بار فرق کند؛ «اینجا» و «کلیک کنید» ممنوع. لینک محصول با نام دقیق مدل. به خود این صفحه لینک نده. در جدول لینک نگذار. دسته‌های والد و زیردسته‌ها با لینک دوطرفه به هم وصل‌اند.\n";
+        }
+        if ($verified_sources) {
+            $out .= "لینک خارجی: فقط از این منابع تأییدشده، ۱ تا ۲ مورد و فقط اگر واقعاً مرتبط است (target=\"_blank\" rel=\"noopener\"):\n";
+            foreach ($verified_sources as $src) $out .= '- ' . $src['url'] . ($src['title'] !== '' ? ' (' . $src['title'] . ')' : '') . "\n";
+        } else {
+            $out .= "هیچ لینک خارجی ننویس (منبع تأییدشده‌ای ثبت نشده است).\n";
+        }
+        return $out;
     }
 
-    /** Title / meta formulas. */
-    public static function seo_rules($focus, $brand) {
-        $f = trim((string) $focus);
+    /** Title / meta rules of the standards. */
+    public static function seo_rules($main, $brand) {
+        $s = SeoStandards::all();
         $b = $brand !== '' ? $brand : 'نام برند';
-        return "[قواعد عنوان سئو و متا]\n" .
-            "۱. عنوان سئو: دقیقاً این رشته در ابتدای عنوان بیاید: «{$f}»، سپس « | »، سپس عبارت خرید و قیمت مانند «" . Settings::CATEGORY_TITLE_HOOK . "» همراه دقیقاً یک ایموجی مرتبط، سپس « | » و نام برند «{$b}». ایموجی فقط درست قبل از « | » یا در انتها باشد و هرگز اول عنوان نباشد. حداکثر ۶۰ کاراکتر. نمونه: «{$f} | " . Settings::CATEGORY_TITLE_HOOK . " 🛍️ | {$b}».\n" .
-            "۲. توضیحات متا: بین " . Settings::CATEGORY_META_MIN_CHARS . " تا " . Settings::CATEGORY_META_MAX_CHARS . " کاراکتر، شامل عبارت دقیق «{$f}»، اشاره به خرید اینترنتی، قیمت مناسب، ضمانت کیفیت و یک دعوت به اقدام (CTA) مانند «همین حالا سفارش دهید».\n";
+        return "[عنوان سئو و متا؛ هر دو یکتا و بدون ایموجی]\n" .
+            "۱. عنوان سئو {$s['title_min']} تا {$s['title_max']} کاراکتر، کلمه اصلی «{$main}» در ابتدا و پایان دقیقاً « | {$b}». الگو: «{$main}؛ خرید انواع مدل، قیمت و اقساط | {$b}» (در صورت نیاز کوتاه‌تر یا با تنوع). عبارت «ارسال رایگان» هرگز در عنوان نیاید.\n" .
+            "۲. متا {$s['meta_min']} تا {$s['meta_max']} کاراکتر، شامل کلمه اصلی، و فقط ویژگی‌های تأییدشده فروشگاه (ارسال رایگان، بازگشت کالا تا ۷ روز، اقساط ۴ قسطه اسنپ‌پی و ترب‌پی) و یک دعوت طبیعی به اقدام.\n";
     }
 }

@@ -127,7 +127,7 @@ final class CategoryRepository {
     }
 
     public function mark_generated($id) {
-        $info = array('at' => current_time('mysql'), 'model' => Settings::AI_MODEL, 'mode' => 'replace');
+        $info = array('at' => current_time('mysql'), 'model' => Settings::ai_model(), 'mode' => 'replace');
         update_term_meta($id, Settings::META_CATEGORY_GENERATED, wp_json_encode($info));
         return $info;
     }

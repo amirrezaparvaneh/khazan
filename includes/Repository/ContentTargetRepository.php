@@ -166,6 +166,29 @@ final class ContentTargetRepository {
         return new SmartLinkDistributor(new WordPressLinkCandidateProvider(null, null, $this), new TransientAssignmentLedger());
     }
 
+    /**
+     * Published products of a category (and its sub-categories) for the link planner: {id, title, url, model}.
+     * The model name is the exact product title - category pages link 3-4 products by their real names.
+     */
+    public function category_products($term_id, $limit = 24) {
+        $ids = get_posts(array(
+            'post_type'      => Settings::product_post_type(),
+            'post_status'    => 'publish',
+            'posts_per_page' => max(1, (int) $limit),
+            'fields'         => 'ids',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => (int) $term_id, 'include_children' => true)),
+        ));
+        $out = array();
+        foreach ($ids as $id) {
+            $title = trim(html_entity_decode(get_the_title($id), ENT_QUOTES, 'UTF-8'));
+            $url = get_permalink($id);
+            if ($title !== '' && $url) $out[] = array('id' => (int) $id, 'title' => $title, 'url' => $url, 'model' => $title);
+        }
+        return $out;
+    }
+
     private function category_context($id) {
         $term = get_term($id, Settings::category_taxonomy());
         if (!$term || is_wp_error($term)) {

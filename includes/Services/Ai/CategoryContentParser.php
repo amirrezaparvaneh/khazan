@@ -1,10 +1,12 @@
 <?php
 /**
- * Post-processes the raw model output of a bulk product-category description. No network access.
+ * Post-processes the raw model output of a product-category description. No network access.
  *
- * Order: extract -> sanitize -> planned links only (1 homepage + 2-3 categories, anchors locked, no self link) ->
- * paragraphs -> keyphrase density and distribution -> final anchor lock -> wrapper. The SEO title and meta description
- * are rebuilt by CategoryTitleGuard / CategoryMetaGuard so they always follow the transactional formula.
+ * Order: extract -> sanitize -> LinkSanitizer (planned links only, verified externals only, one per URL, max 2 per
+ * paragraph) -> paragraphs -> title / meta rules -> ContentAudit against SeoStandards -> wrapper.
+ * Nothing is injected into the text: a text that misses a standard is reported in `audit` / `missing_links`, and the
+ * generator asks the model to repair exactly those points (one pass). The result always carries the final audit so the
+ * UI can show the Yoast-style table with real numbers.
  *
  * @package WP_Internal_Link_Analyzer
  */
@@ -12,13 +14,11 @@
 namespace Khazan\Services\Ai;
 
 use Khazan\Core\Settings;
+use Khazan\Services\Content\ContentAudit;
 use Khazan\Services\Content\ContentGuard;
-use Khazan\Services\Content\Guard\CategoryKeyphraseDensityGuard;
-use Khazan\Services\Content\Guard\CategoryLinkGuard;
-use Khazan\Services\Content\Guard\LinkGuard;
 use Khazan\Services\Content\HtmlSanitizer;
-use Khazan\Services\Seo\CategoryMetaGuard;
-use Khazan\Services\Seo\CategoryTitleGuard;
+use Khazan\Services\Links\LinkSanitizer;
+use Khazan\Services\Seo\SeoMetaRules;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -28,8 +28,8 @@ final class CategoryContentParser {
 
     /**
      * @param string $raw    model output
-     * @param array  $params content_kind, h1_title, focus_keyword, internal_links, target {url}, brand (optional)
-     * @return array|\WP_Error result array in the shape the archive and the repository expect
+     * @param array  $params focus_keyword, internal_links (plan), verified_sources, target {url}, brand, prev_title, prev_meta
+     * @return array|\WP_Error
      */
     public static function parse($raw, array $params) {
         $raw = trim((string) $raw);
@@ -39,33 +39,43 @@ final class CategoryContentParser {
             if (preg_match('~<(?:p|h2|h3)\b~i', $clean)) $content = trim($clean);
         }
         if ($content === '') {
-            return new \WP_Error('invalid_content_response', 'محتوای HTML از AvalAI دریافت نشد. لطفاً مجدداً امتحان کنید.');
+            return new \WP_Error('invalid_content_response', 'محتوای HTML از سرویس هوش مصنوعی دریافت نشد. لطفاً مجدداً امتحان کنید.');
         }
 
         $focus = trim((string) (isset($params['focus_keyword']) ? $params['focus_keyword'] : ''));
-        $links = isset($params['internal_links']) ? (array) $params['internal_links'] : array();
+        $plan  = isset($params['internal_links']) ? (array) $params['internal_links'] : array();
         $self  = isset($params['target']['url']) ? (string) $params['target']['url'] : '';
         $brand = isset($params['brand']) ? (string) $params['brand'] : Settings::brand_name();
-        $seed  = abs(crc32($focus));
+        $host  = strtolower((string) parse_url(isset($params['home_url']) ? $params['home_url'] : home_url('/'), PHP_URL_HOST));
+        $verified = array();
+        foreach (isset($params['verified_sources']) ? (array) $params['verified_sources'] : array() as $src) $verified[] = $src['url'];
 
         $content = self::clean($content);
-        $content = CategoryLinkGuard::enforce($content, $links, $self);
-        $content = ContentGuard::enforce_paragraphs($content);
-        $content = CategoryKeyphraseDensityGuard::enforce($content, $focus, $seed);
-        $content = LinkGuard::lock_product_anchors($content, $links, CategoryLinkGuard::TYPES);
-        $content = ContentGuard::wrap($content);
+        $links = LinkSanitizer::apply($content, $plan, $self, $host, $verified);
+        $content = ContentGuard::enforce_paragraphs($links['html']);
 
-        $external = CategoryLinkGuard::external_links($content);
+        $title_raw = ContentParser::extract_block($raw, 'WILA_SEO_TITLE');
+        $meta_raw  = ContentParser::extract_block($raw, 'WILA_META_DESCRIPTION');
+        $title = SeoMetaRules::fit_title($title_raw !== '' ? $title_raw : (isset($params['prev_title']) ? $params['prev_title'] : ''), $focus, $brand);
+        $meta  = SeoMetaRules::fit_meta($meta_raw !== '' ? $meta_raw : (isset($params['prev_meta']) ? $params['prev_meta'] : ''), $focus);
+
+        $audit = ContentAudit::analyze($content, $focus, array('kind' => Settings::KIND_CATEGORY, 'home_host' => $host, 'title' => $title, 'meta' => $meta));
+        if ($links['missing']) $audit['failures']['links_missing'] = count($links['missing']) . ' لینک برنامه‌ریزی‌شده در متن نیامده است.';
+        $audit['ok'] = !$audit['failures'];
+
         return array(
-            'content'               => $content,
+            'content'               => ContentGuard::wrap($content),
             'featured_image_prompt' => '',
             'slug'                  => '',
-            'seo_title'             => CategoryTitleGuard::fit(ContentParser::extract_block($raw, 'WILA_SEO_TITLE'), $focus, $brand, isset($params['h1_title']) ? $params['h1_title'] : ''),
-            'meta_description'      => CategoryMetaGuard::fit(ContentParser::extract_block($raw, 'WILA_META_DESCRIPTION'), $focus, $brand),
+            'seo_title'             => $title,
+            'meta_description'      => $meta,
             'keyword_synonyms'      => '',
-            'internal_link_count'   => count(CategoryLinkGuard::internal_links($content)),
-            'external_link_count'   => count($external),
-            'external_links'        => $external,
+            'internal_link_count'   => $audit['internal_links'],
+            'external_link_count'   => $audit['external_links'],
+            'external_links'        => array(),
+            'audit'                 => $audit,
+            'missing_links'         => $links['missing'],
+            'notes'                 => ContentParser::extract_block($raw, 'WILA_NOTES'),
         );
     }
 

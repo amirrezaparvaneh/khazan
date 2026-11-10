@@ -31,6 +31,8 @@ final class SettingsController extends BaseController {
             'has_avalai_key' => !empty($avalai_key),
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
+            'ai_base_url' => Settings::ai_base_url(),
+            'ai_default_base_url' => Settings::AI_BASE_URL,
             'homepage_keywords' => $homepage_keywords,
             'auto_image_enabled' => Settings::auto_image_enabled(),
             'image_model' => Settings::IMAGE_MODEL,
@@ -68,6 +70,25 @@ final class SettingsController extends BaseController {
         }
 
         return rest_ensure_response(array('success' => true, 'message' => 'تنظیمات با موفقیت ذخیره شد.'));
+    }
+
+    /**
+     * Live model catalogue of the provider for the model picker (cached for an hour; ?refresh=1 bypasses the cache).
+     */
+    public function get_ai_models($request) {
+        $key = \Khazan\Services\Ai\AvalaiHttpClient::resolve_key(null);
+        $cache_key = Settings::TRANSIENT_AI_MODELS . '_' . md5($key . Settings::ai_base_url());
+        $cached = $request->get_param('refresh') ? false : get_transient($cache_key);
+        if (is_array($cached)) {
+            return rest_ensure_response(array('success' => true, 'models' => $cached, 'cached' => true, 'active' => Settings::ai_model()));
+        }
+        $ids = (new \Khazan\Services\Ai\AvalaiHttpClient($key, Settings::ai_model()))->models($key);
+        if (is_wp_error($ids)) {
+            $data = $ids->get_error_data();
+            return new \WP_Error($ids->get_error_code(), $ids->get_error_message(), array('status' => is_array($data) && isset($data['status']) ? (int) $data['status'] : 502));
+        }
+        set_transient($cache_key, $ids, Settings::AI_MODELS_CACHE_TTL);
+        return rest_ensure_response(array('success' => true, 'models' => $ids, 'cached' => false, 'active' => Settings::ai_model()));
     }
 
     public function test_avalai_connection($request) {
