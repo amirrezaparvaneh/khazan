@@ -180,6 +180,7 @@ final class ContentTargetRepository {
             'order'          => 'DESC',
             'tax_query'      => array(array('taxonomy' => Settings::category_taxonomy(), 'field' => 'term_id', 'terms' => (int) $term_id, 'include_children' => true)),
         ));
+        if ($ids && function_exists('_prime_post_caches')) _prime_post_caches($ids, false, false);
         $out = array();
         foreach ($ids as $id) {
             $title = trim(html_entity_decode(get_the_title($id), ENT_QUOTES, 'UTF-8'));

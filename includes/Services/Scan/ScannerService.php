@@ -45,8 +45,11 @@ final class ScannerService {
             'post_type'      => array_values($post_types),
             'post_status'    => 'publish',
             'posts_per_page' => -1,
-            'fields'         => 'ids'
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
         ));
+        // one query for every post (and its terms are not needed) instead of one per get_post_type / get_permalink call
+        if ($posts && function_exists('_prime_post_caches')) _prime_post_caches($posts, false, false);
 
         foreach ($posts as $post_id) {
             $items[] = array(
