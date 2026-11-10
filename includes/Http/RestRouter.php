@@ -66,6 +66,7 @@ final class RestRouter {
         register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/opportunities', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'opportunities'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/redirects', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'redirects'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/analyze', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'analyze'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/analysis', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'analysis'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/update-draft', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'update_draft'), 'permission_callback' => $perm));

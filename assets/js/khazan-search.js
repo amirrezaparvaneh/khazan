@@ -19,6 +19,22 @@
   };
 
 
+  const pathKey = (u) => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+
+  /** What the site itself says about a card's address(es): redirected, gone, or fine. */
+  const redirectInfo = (c, redirects) => {
+    const pages = c.kind === 'cannibal' ? (c.competing || []).map(p => p.page) : [c.page];
+    for (const u of pages) {
+      const r = redirects[u];
+      if (r && r.state === 'redirect') return { type: 'redirect', from: u, to: r.to, permanent: !!r.permanent, status: r.status };
+    }
+    for (const u of pages) {
+      const r = redirects[u];
+      if (r && r.state === 'gone') return { type: 'gone', from: u, status: r.status };
+    }
+    return null;
+  };
+
   const methods = {
     loadSearch: async function () {
       const s = this.state.search;
@@ -30,6 +46,26 @@
         if (r.connected && r.synced_at) { const o = await this.apiFetch('/search/opportunities'); if (o.success) s.opps = o; }
       } catch (e) { s.error = e.message; }
       s.busy = ''; this.render();
+      this.checkRedirects();
+    },
+
+    checkRedirects: async function () {
+      const s = this.state.search;
+      const cards = (s.opps && s.opps.cards) || [];
+      const urls = [];
+      cards.forEach(c => { if (c.page) urls.push(c.page); (c.competing || []).forEach(p => urls.push(p.page)); });
+      const todo = Array.from(new Set(urls)).filter(u => !(u in s.redirects));
+      if (!todo.length || s.redirChecking) return;
+      s.redirChecking = true; this.render();
+      for (let i = 0; i < todo.length; i += 10) {
+        try {
+          const r = await this.apiFetch('/search/redirects', { method: 'POST', body: JSON.stringify({ pages: todo.slice(i, i + 10) }) });
+          if (r.success) Object.assign(s.redirects, r.results);
+        } catch (e) { /* the check is a bonus; cards stay as they are */ }
+        todo.slice(i, i + 10).forEach(u => { if (!(u in s.redirects)) s.redirects[u] = { state: 'error' }; });
+        this.render();
+      }
+      s.redirChecking = false; this.render();
     },
 
     connectSearch: async function () {
@@ -270,12 +306,25 @@
         merge: { label: 'ادغام', icon: '⇄' }
       };
       const filter = s.filter || 'all';
-      const cards = o ? o.cards.filter(c => filter === 'all' || c.kind === filter) : [];
+      const cards0 = o ? o.cards.filter(c => filter === 'all' || c.kind === filter) : [];
+      const resolvedCount = o ? o.cards.filter(c => redirectInfo(c, s.redirects || {}) && redirectInfo(c, s.redirects || {}).type === 'redirect').length : 0;
+      const cards = cards0.filter(c => !(redirectInfo(c, s.redirects || {}) && redirectInfo(c, s.redirects || {}).type === 'redirect')).concat(cards0.filter(c => redirectInfo(c, s.redirects || {}) && redirectInfo(c, s.redirects || {}).type === 'redirect'));
       const tile = (key, label, n) => `<button type="button" class="khz-opp-tile ${filter === key ? 'is-active' : ''}" data-opp-filter="${key}"><span class="khz-opp-tile-n">${fa(n)}</span><span class="khz-opp-tile-l">${label}</span></button>`;
+      const redirects = s.redirects || {};
+      const info = (c) => redirectInfo(c, redirects);
+      const isResolved = (c) => { const i = info(c); return !!(i && i.type === 'redirect'); };
+      const notice = (c) => {
+        const i = info(c);
+        if (!i) return '';
+        if (i.type === 'gone') return `<div class="khz-opp-note is-warn"><b>این آدرس دیگر وجود ندارد (کد ${fa(i.status)}).</b> اگر صفحه‌ی جایگزین دارد، با ریدایرکت ۳۰۱ به آن بفرستید.</div>`;
+        const same = c.kind === 'cannibal' && (c.competing || []).some(p => p.page !== i.from && pathKey(p.page) === pathKey(i.to));
+        return `<div class="khz-opp-note ${i.permanent ? 'is-ok' : 'is-warn'}"><b>${i.permanent ? 'این مورد حل‌شده است.' : 'ریدایرکت موقت است.'}</b> آدرس <span dir="ltr">${escapeHtml(short(i.from))}</span> با ریدایرکت ${fa(i.status)} به <span dir="ltr">${escapeHtml(short(i.to))}</span> می‌رود${same ? '، یعنی همان صفحه‌ی دیگر' : ''}. ${i.permanent ? 'سرچ کنسول هنوز آدرس قدیمی را گزارش می‌کند و بعد از چند هفته خودش حذفش می‌کند؛ کاری لازم نیست.' : 'برای گوگل بهتر است ریدایرکت دائمی (۳۰۱) باشد.'}</div>`;
+      };
       const card = (c) => {
         const k = KINDS[c.kind];
+        const done = isResolved(c);
         return `
-        <article class="khz-opp-card khz-tone-${k.tone}">
+        <article class="khz-opp-card khz-tone-${k.tone} ${done ? 'is-resolved' : ''}">
           <header class="khz-opp-head">
             <span class="khz-opp-badge" title="${escapeHtml(k.hint)}">${k.label}</span>
             ${c.potential ? `<span class="khz-opp-gain" title="برآورد کلیک اضافه در ۹۰ روز، اگر برنامه اجرا شود">+${fa(c.potential)} کلیک</span>` : ''}
@@ -291,10 +340,11 @@
           </div>
           <p class="khz-opp-diag">${escapeHtml(c.diagnosis)}</p>
           ${c.competing ? `<div class="khz-opp-compete">${c.competing.map(p => `<div><a class="khz-opp-link" href="${escapeHtml(p.page)}" target="_blank" rel="noopener" dir="ltr">${escapeHtml(short(p.page))}</a><i>جایگاه ${pos(p.position)}</i></div>`).join('')}</div>` : ''}
-          <ul class="khz-opp-actions">
+          ${notice(c)}
+          <ul class="khz-opp-actions" ${done ? 'hidden' : ''}>
             ${c.actions.map(a => `<li><span class="khz-opp-ico khz-act-${a.type}">${ACTIONS[a.type].icon}</span><div><b>${escapeHtml(a.label)}</b><span>${escapeHtml(a.detail)}</span></div></li>`).join('')}
           </ul>
-          ${c.page ? `<footer class="khz-opp-foot"><button type="button" class="khz-opp-ai ${c.analyzed ? 'is-done' : ''}" data-opp-ai="${escapeHtml(c.page)}">${c.analyzed ? 'دیدن تحلیل هوش مصنوعی' : 'تحلیل با هوش مصنوعی'}</button></footer>` : ''}
+          ${c.page && !done ? `<footer class="khz-opp-foot"><button type="button" class="khz-opp-ai ${c.analyzed ? 'is-done' : ''}" data-opp-ai="${escapeHtml(c.page)}">${c.analyzed ? 'دیدن تحلیل هوش مصنوعی' : 'تحلیل با هوش مصنوعی'}</button></footer>` : ''}
         </article>`;
       };
       const opps = o ? `
@@ -306,6 +356,7 @@
             ${Object.keys(KINDS).map(k => tile(k, KINDS[k].label, (o.counts || {})[k] || 0)).join('')}
           </div>
           <ul class="khz-opp-legend">${Object.keys(KINDS).map(k => `<li class="khz-tone-${KINDS[k].tone}"><b>${KINDS[k].label}:</b> ${KINDS[k].hint}</li>`).join('')}</ul>
+          ${s.redirChecking ? '<p class="khz-opp-check" role="status">در حال بررسی ریدایرکت آدرس‌ها…</p>' : (resolvedCount ? `<p class="khz-opp-check">${fa(resolvedCount)} مورد در واقع ریدایرکت‌شده است و حل‌شده حساب می‌شود؛ پایین فهرست آمده‌اند.</p>` : '')}
           ${o.potential ? `<div class="khz-opp-total">اگر همه‌ی برنامه‌ها اجرا شود، حدود <b>${fa(o.potential)}</b> کلیک اضافه در هر ۹۰ روز</div>` : ''}
           <div class="khz-opp-grid">${cards.length ? cards.map(card).join('') : '<p>موردی در این گروه نیست.</p>'}</div>
         </div>` : '';

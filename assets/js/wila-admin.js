@@ -22,7 +22,7 @@
       taxonomies: [],
       images: { overview: null, busy: '', log: [], dupes: null, error: '' },
       linking: { data: null, busy: '', error: '', open: {}, sub: 'orphans', filter: 'all', q: '' },
-      search: { data: null, opps: null, filter: 'all', busy: '', error: '', sites: [], message: '', keyDraft: '', drawer: null },
+      search: { data: null, opps: null, filter: 'all', busy: '', error: '', sites: [], message: '', keyDraft: '', drawer: null, redirects: {}, redirChecking: false },
       standards: { data: null, analysis: null, analysisBusy: false, saving: false, formError: '', error: '' },
       aiSettings: {
         provider: 'avalai',
