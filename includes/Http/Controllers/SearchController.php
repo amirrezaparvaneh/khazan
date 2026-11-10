@@ -54,7 +54,8 @@ final class SearchController extends BaseController {
     }
 
     public function opportunities() {
-        $opps = SearchConsole::opportunities(SearchConsole::data(), 30);
+        $host_name = preg_replace('/^www\./', '', (string) wp_parse_url(home_url(), PHP_URL_HOST));
+        $opps = SearchConsole::opportunities(SearchConsole::data(), 30, array(\Khazan\Core\Settings::brand_name(), (string) preg_replace('/\.[a-z.]+$/i', '', $host_name)));
         $cards = SearchConsole::plan($opps);
         $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
         $done = array_flip(PageAnalyzer::analyzed_keys());
