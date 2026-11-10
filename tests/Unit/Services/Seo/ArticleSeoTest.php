@@ -58,10 +58,10 @@ check(strpos(M::guard_article_title($focus . ' | راهنمای کامل 🧥', 
 $long = M::guard_article_title('جلوگیری از پوسته پوسته شدن کاپشن چرم مردانه و زنانه | راهنمای بسیار کامل و جامع نگهداری | آکا چرم', 'جلوگیری از پوسته پوسته شدن کاپشن چرم مردانه و زنانه', 'آکا چرم', '');
 check(mb_strpos($long, 'جلوگیری از پوسته پوسته شدن کاپشن چرم مردانه و زنانه') === 0 && emoji_count($long) === 1, 'long keyphrase: never cut, hook/brand shrink first: ' . $long);
 check(!G::emoji_position_ok('🧥 عنوان | x') && G::emoji_position_ok('عنوان 🧥 | x') && G::emoji_position_ok('عنوان | x 🧥') && !G::emoji_position_ok('عنوان 🧥 x | y'), 'emoji position validator');
-$cat = P::normalize_seo_title('🛍️ خرید کاپشن چرم | انواع کاپشن', 'product_cat');
-check(emoji_count($cat) === 1 && !preg_match('/^\x{1F300}-?/u', '') && mb_strpos($cat, '🛍️') !== 0, 'category title: emoji not first → ' . $cat);
+$cat = P::normalize_seo_title('🛍️ خرید کاپشن چرم | انواع کاپشن', 'product_cat', '', 'کاپشن چرم');
+check(!preg_match('/[\x{1F300}-\x{1FAFF}]/u', $cat) && mb_strpos($cat, 'کاپشن چرم') === 0, 'title: no emoji, focus first -> ' . $cat);
 $art = P::normalize_seo_title('🧥 ' . $focus . ' | راهنمای کامل', 'article', $topic, $focus);
-check(mb_strpos($art, $focus) === 0 && G::emoji_position_ok($art), 'ContentParser article title goes through the same guard');
+check(mb_strpos($art, $focus) === 0 && !preg_match('/[\x{1F300}-\x{1FAFF}]/u', $art), 'article title follows the project title rule (no emoji)');
 
 echo "density rule\n";
 check(strpos(R::article_keyword_rule(600), 'حداقل 4 بار') !== false, '600 words: at least 4');
@@ -69,8 +69,8 @@ check(strpos(R::article_keyword_rule(1500), 'حداقل 6 بار') !== false, '1
 check(strpos(R::article_keyword_rule(1000), 'حداقل 4 بار') !== false, '1000 words: 4');
 $rule = R::article_keyword_rule(1200);
 check(strpos($rule, 'Exact Match') !== false && strpos($rule, 'پاراگراف اول') !== false && strpos($rule, 'H2') !== false && strpos($rule, 'میانه') !== false && strpos($rule, 'نتیجه‌گیری') !== false, 'rule lists intro, H2, middle and conclusion');
-check(strpos(R::writing_rules('article', 1200), 'حداقل 5 بار') !== false && strpos(R::writing_rules('product'), 'بین ۳ تا حداکثر ۵ بار') !== false, 'article rule in writing rules; product rule unchanged');
-check(strpos(R::seo_title_rules('article', $focus), 'هرگز در ابتدای عنوان') !== false, 'prompt forbids a leading emoji');
+check(strpos(R::writing_rules('article', 1200), 'حداقل 5 بار') !== false && strpos(R::writing_rules('product'), 'چگالی کلیدواژه کانونی') !== false, 'article rule in writing rules; product uses the density standard');
+check(strpos(R::seo_title_rules('article', $focus), 'ایموجی در عنوان ممنوع') !== false, 'prompt forbids emoji in titles');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

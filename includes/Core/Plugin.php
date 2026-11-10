@@ -78,6 +78,8 @@ final class Plugin {
         (new AdminAssets())->register();
         (new SeoRepairPanel())->register();
         (new RestRouter())->register();
+        \Khazan\Modules\Images\ImageConverter::register();
+        \Khazan\Modules\Images\AltText::register();
 
         add_action('plugins_loaded', array($this, 'maybe_upgrade_database'));
 
