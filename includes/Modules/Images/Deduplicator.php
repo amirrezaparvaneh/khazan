@@ -64,7 +64,7 @@ final class Deduplicator {
     }
 
     /** Duplicate groups with usage and a keeper; dry-run, changes nothing. */
-    public static function report($max_groups = 100) {
+    public static function report($max_groups = 8) {
         global $wpdb;
         $hashes = $wpdb->get_col($wpdb->prepare(
             "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> 'missing' GROUP BY meta_value HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC LIMIT %d",
@@ -87,6 +87,28 @@ final class Deduplicator {
             $groups[] = array('hash' => $hash, 'keeper' => $keeper, 'members' => $members);
         }
         return $groups;
+    }
+
+    /**
+     * Cheap overview of all duplicate groups: counts and the space that the extra copies take
+     * (file sizes only, no usage lookups, so it stays fast on large libraries).
+     * @return array{groups:int,copies:int,bytes:int}
+     */
+    public static function summary() {
+        global $wpdb;
+        $hashes = $wpdb->get_col($wpdb->prepare(
+            "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> 'missing' GROUP BY meta_value HAVING COUNT(*) > 1 LIMIT 5000",
+            self::META_HASH
+        ));
+        $groups = 0; $copies = 0; $bytes = 0;
+        foreach ($hashes as $hash) {
+            $ids = array_map('intval', $wpdb->get_col($wpdb->prepare("SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value = %s", self::META_HASH, $hash)));
+            if (count($ids) < 2) continue;
+            $file = get_attached_file($ids[0]);
+            $size = $file && is_readable($file) ? (int) filesize($file) : 0;
+            $groups++; $copies += count($ids) - 1; $bytes += $size * (count($ids) - 1);
+        }
+        return array('groups' => $groups, 'copies' => $copies, 'bytes' => $bytes);
     }
 
     /** Number of places that reference the attachment (0 = unused). */

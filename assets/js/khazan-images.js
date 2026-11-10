@@ -68,7 +68,7 @@
       try {
         const r = await this.apiFetch('/images/dedupe/report');
         if (!r.success) throw new Error(r.message || 'گزارش دریافت نشد.');
-        im.dupes = r.groups; im.selected = {};
+        im.dupes = r.groups; im.dupeSummary = r.summary || null; im.selected = {};
         r.groups.forEach(g => g.members.forEach(m => { if (m.status === 'removable') im.selected[m.id] = true; }));
       } catch (e) { im.error = e.message; }
     },
@@ -126,7 +126,9 @@
 
       let dupes = '';
       if (im.dupes) {
-        dupes = im.dupes.length ? im.dupes.map(g => `
+        const sm = im.dupeSummary;
+        const head = sm && sm.groups ? `<p><b>${fa(sm.groups)}</b> گروه تکراری، <b>${fa(sm.copies)}</b> نسخه‌ی اضافه، حدود <b>${bytes(sm.bytes)}</b> قابل آزادسازی (بدون بررسی استفاده‌شدن). برای سرعت، هر بار فقط چند گروه اول نمایش داده می‌شود؛ بعد از حذف، گروه‌های بعدی می‌آیند.</p>` : '';
+        dupes = head + (im.dupes.length ? im.dupes.map(g => `
           <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin:8px 0">
             ${g.members.map(m => `<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:0.8rem">
               <input type="checkbox" class="khz-dup-check" data-id="${m.id}" ${m.status === 'removable' ? (im.selected[m.id] ? 'checked' : '') : 'disabled'} />
@@ -134,7 +136,7 @@
                 ${m.status === 'keep' ? '<b style="color:#047857">نگه‌داشته می‌شود</b>' : (m.status === 'used' ? '<b style="color:#b45309">در حال استفاده (حذف نمی‌شود)</b>' : '<b style="color:#991b1b">تکراری و بدون استفاده</b>')}
                 ${m.refs ? ` (${fa(m.refs)} ارجاع)` : ''}</span></label>`).join('')}
           </div>`).join('') + `<button class="wila-btn wila-btn-primary" id="khz-dup-remove" ${busy ? 'disabled' : ''}>حذف موارد انتخاب‌شده</button>`
-          : '<p style="color:#047857">تصویر تکراری پیدا نشد.</p>';
+          : '<p style="color:#047857">تصویر تکراری پیدا نشد.</p>');
       }
 
       return `

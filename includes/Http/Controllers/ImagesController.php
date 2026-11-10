@@ -107,7 +107,7 @@ final class ImagesController extends BaseController {
     }
 
     public function dedupe_report() {
-        return rest_ensure_response(array('success' => true, 'groups' => Deduplicator::report()));
+        return rest_ensure_response(array('success' => true, 'groups' => Deduplicator::report(), 'summary' => Deduplicator::summary()));
     }
 
     public function dedupe_remove($request) {
