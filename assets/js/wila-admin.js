@@ -21,7 +21,7 @@
       postTypes: [],
       taxonomies: [],
       images: { overview: null, busy: '', log: [], dupes: null, error: '' },
-      standards: { data: null, analysis: null, analysisBusy: false, error: '' },
+      standards: { data: null, analysis: null, analysisBusy: false, saving: false, formError: '', error: '' },
       aiSettings: {
         provider: 'avalai',
         hasAvalAIKey: false,
@@ -80,8 +80,12 @@
       const el = document.createElement('div');
       el.className = `wila-toast wila-toast-${kind}`;
       el.textContent = message;
+      el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+      const dismiss = () => { el.classList.add('wila-toast-hide'); setTimeout(() => el.remove(), 300); };
+      el.addEventListener('click', dismiss);
       box.appendChild(el);
-      setTimeout(() => { el.classList.add('wila-toast-hide'); setTimeout(() => el.remove(), 300); }, 3500);
+      // errors stay long enough to read; a click closes any message
+      setTimeout(dismiss, kind === 'error' ? 9000 : 3500);
     },
 
     init: function () {
