@@ -108,6 +108,7 @@
       const im = this.state.images;
       if (im.busy) return;
       im.busy = kind; im.stop = false; im.error = '';
+      if (kind === 'hash') im.autoDone = false;
       const endpoint = { convert: '/images/convert-batch', shrink: '/images/shrink-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch' }[kind];
       let guard = 0;
       const labels = { convert: 'تبدیل تصاویر', shrink: 'کاهش حجم تصاویر سنگین', alt: 'نوشتن متن جایگزین', hash: 'بررسی تصاویر برای یافتن تکراری‌ها' };
@@ -173,7 +174,7 @@
       const im = this.state.images;
       if (im.busy) return;
       if (!window.confirm('همه‌ی تصاویر «تکراری و بدون استفاده» به‌صورت خودکار حذف شوند؟ هر تصویر قبل از حذف دوباره بررسی می‌شود و نسخه‌ی پشتیبان در khazan-quarantine می‌ماند. با «توقف» می‌توانید هر لحظه متوقفش کنید.')) return;
-      im.busy = 'dedupe-auto'; im.stop = false; im.error = '';
+      im.busy = 'dedupe-auto'; im.stop = false; im.error = ''; im.autoDone = false;
       let offset = 0, total = 0, bytesTotal = 0, guard = 0, started = false;
       this.render();
       try {
@@ -198,6 +199,7 @@
         }
       } catch (e) { im.error = e.message; }
       const pr = im.progress;
+      im.autoDone = !im.stop && !im.error;
       this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'حذف خودکار تمام شد')}: ${fa(total)} تصویر تکراری حذف شد و ${bytes(bytesTotal)} آزاد شد (نسخه‌ی پشتیبان در quarantine است)، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}. موارد «در حال استفاده» دست نخورده‌اند.` : '');
       im.busy = '';
       await this.loadDuplicates();
@@ -240,7 +242,9 @@
       let dupes = '';
       if (im.dupes) {
         const sm = im.dupeSummary;
-        const head = sm && sm.groups ? `<p><b>${fa(sm.groups)}</b> گروه تکراری، <b>${fa(sm.copies)}</b> نسخه‌ی اضافه، حدود <b>${bytes(sm.bytes)}</b> قابل آزادسازی (بدون بررسی استفاده‌شدن). برای سرعت، هر بار فقط چند گروه اول نمایش داده می‌شود؛ بعد از حذف، گروه‌های بعدی می‌آیند.</p>` : '';
+        const note = im.autoDone && sm && sm.copies ? `<p style="color:#047857"><b>حذف خودکار انجام شده است:</b> هیچ تصویر «تکراری و بدون استفاده»ای باقی نمانده. ${fa(sm.copies)} نسخه‌ی باقی‌مانده در سایت (محتوا، گالری، دسته‌ها یا تنظیمات) استفاده شده‌اند و عمداً حذف نمی‌شوند.</p>` : '';
+        const head = note + (sm && sm.groups ? `<p><b>${fa(sm.groups)}</b> گروه فایل هم‌محتوا (<b>${fa(sm.copies)}</b> نسخه‌ی اضافه، حدود <b>${bytes(sm.bytes)}</b>). این عدد فقط هم‌محتوا بودن را می‌شمارد؛ نسخه‌ای که در سایت استفاده شده باشد حذف نمی‌شود و فقط موارد «تکراری و بدون استفاده» (دارای تیک) پاک می‌شوند. برای سرعت، هر بار چند گروه اول نمایش داده می‌شود.</p>` : '');
+        const removableCount = im.dupes.reduce((n, g) => n + g.members.filter(m => m.status === 'removable').length, 0);
         dupes = head + (im.dupes.length ? im.dupes.map(g => `
           <div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin:8px 0">
             ${g.members.map(m => `<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:0.8rem">
@@ -248,7 +252,7 @@
               <span>${escapeHtml(m.title || ('#' + m.id))} — ${bytes(m.bytes)} —
                 ${m.status === 'keep' ? '<b style="color:#047857">نگه‌داشته می‌شود</b>' : (m.status === 'used' ? '<b style="color:#b45309">در حال استفاده (حذف نمی‌شود)</b>' : '<b style="color:#991b1b">تکراری و بدون استفاده</b>')}
                 ${m.refs ? ` (${fa(m.refs)} ارجاع)` : ''}</span></label>`).join('')}
-          </div>`).join('') + `<button class="wila-btn wila-btn-primary" id="khz-dup-remove" ${busy ? 'disabled' : ''}>حذف موارد انتخاب‌شده</button>`
+          </div>`).join('') + (removableCount ? `<button class="wila-btn wila-btn-primary" id="khz-dup-remove" ${busy ? 'disabled' : ''}>حذف موارد انتخاب‌شده</button>` : '<p style="color:#047857">در گروه‌های نمایش‌داده‌شده هیچ مورد «تکراری و بدون استفاده»ای نیست؛ چیزی برای حذف باقی نمانده.</p>')
           : '<p style="color:#047857">تصویر تکراری پیدا نشد.</p>');
       }
 
