@@ -57,6 +57,7 @@ final class RestRouter {
         $search = new \Khazan\Http\Controllers\SearchController();
         register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/opportunities', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'opportunities'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/connect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'connect'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/disconnect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'disconnect'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/sync', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'sync'), 'permission_callback' => $perm));

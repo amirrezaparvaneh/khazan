@@ -21,7 +21,7 @@
       postTypes: [],
       taxonomies: [],
       images: { overview: null, busy: '', log: [], dupes: null, error: '' },
-      search: { data: null, busy: '', error: '', sites: [], message: '', keyDraft: '' },
+      search: { data: null, opps: null, busy: '', error: '', sites: [], message: '', keyDraft: '' },
       standards: { data: null, analysis: null, analysisBusy: false, saving: false, formError: '', error: '' },
       aiSettings: {
         provider: 'avalai',

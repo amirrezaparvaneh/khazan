@@ -48,4 +48,8 @@ final class SearchController extends BaseController {
             'pages' => array_slice(isset($d['pages']) ? $d['pages'] : array(), 0, 50),
         ) + SearchConsole::status());
     }
+
+    public function opportunities() {
+        return rest_ensure_response(array('success' => true) + SearchConsole::opportunities(SearchConsole::data()));
+    }
 }

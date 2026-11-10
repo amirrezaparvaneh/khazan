@@ -18,6 +18,7 @@
         const r = await this.apiFetch('/search/data');
         if (!r.success) throw new Error(r.message || 'اطلاعات دریافت نشد.');
         s.data = r; s.error = '';
+        if (r.connected && r.synced_at) { const o = await this.apiFetch('/search/opportunities'); if (o.success) s.opps = o; }
       } catch (e) { s.error = e.message; }
       s.busy = ''; this.render();
     },
@@ -69,6 +70,23 @@
       const sites = (s.sites || []).length && !d.connected ? `
         <label style="display:block;margin:10px 0 4px">سایت را انتخاب کنید</label>
         <select id="khz-gsc-site" class="wila-select" style="max-width:420px" dir="ltr">${s.sites.map(x => `<option value="${escapeHtml(x.url)}">${escapeHtml(x.url)}</option>`).join('')}</select>` : '';
+
+      const o = s.opps;
+      const short = (u) => String(u || '').replace(/^https?:\/\/[^/]+/, '') || '/';
+      const li = (txt) => `<li style="margin:3px 0">${txt}</li>`;
+      const list = (title, hint, items) => `
+        <h4 style="margin:16px 0 2px">${title} <span style="font-weight:400;color:#6b7280">(${fa(items.length)})</span></h4>
+        <p style="font-size:0.8rem;color:#6b7280;margin:0 0 6px">${hint}</p>
+        <ul style="font-size:0.82rem;margin:0;padding-inline-start:18px">${items.length ? items.join('') : '<li>موردی پیدا نشد.</li>'}</ul>`;
+      const opps = o ? `
+        <div class="wila-card">
+          <h3>فرصت‌ها</h3>
+          <p style="font-size:0.85rem">این فهرست‌ها خودکار از داده‌ی سرچ کنسول ساخته می‌شوند و نشان می‌دهند وقتتان را روی چه چیزی بگذارید.</p>
+          ${list('نزدیک صفحه‌ی اول', 'عبارت‌هایی با جایگاه ۵ تا ۲۰. با کمی تقویت صفحه به صفحه‌ی اول می‌رسند.', o.near_top.map(r => li(`<b>${escapeHtml(r.query)}</b> — جایگاه ${pos(r.position)}، نمایش ${fa(r.impressions)} ← <span dir="ltr">${escapeHtml(short(r.page))}</span>`)))}
+          ${list('CTR پایین نسبت به جایگاه', 'صفحه‌هایی که رتبه‌ی خوب دارند ولی کم کلیک می‌گیرند؛ عنوان سئو و توضیحات متا را بازنویسی کنید.', o.low_ctr.map(r => li(`<span dir="ltr">${escapeHtml(short(r.page))}</span> — جایگاه ${pos(r.position)}، CTR ${pct(r.ctr)} (انتظار ${pct(r.expected_ctr)})`)))}
+          ${list('نمایش بالا، رتبه‌ی عمیق', 'صفحه‌هایی با رتبه‌ی ۲۰ تا ۸۰ و نمایش زیاد؛ به محتوای قوی‌تر و لینک داخلی بیشتر نیاز دارند.', o.deep.map(r => li(`<span dir="ltr">${escapeHtml(short(r.page))}</span> — جایگاه ${pos(r.position)}، نمایش ${fa(r.impressions)}`)))}
+          ${list('رقابت صفحه‌ها با هم', 'یک عبارت که چند صفحه‌ی سایت برایش نمایش می‌گیرند؛ یکی را اصلی کنید و بقیه را به آن لینک دهید.', o.cannibal.map(r => li(`<b>${escapeHtml(r.query)}</b> — ${r.pages.map(p => `<span dir="ltr">${escapeHtml(short(p.page))}</span> (${pos(p.position)})`).join(' ، ')}`)))}
+        </div>` : '';
       return `
         ${s.error ? `<div class="wila-card" style="border-color:#fecaca;color:#991b1b">${escapeHtml(s.error)}</div>` : ''}
         <div class="wila-card">
@@ -91,6 +109,7 @@
           `}
           <p style="font-size:0.8rem;color:#6b7280;margin-top:10px">دسترسی فقط‌خواندنی است. کلید روی سرور خودِ سایت ذخیره می‌شود و برای هیچ سرویسی جز گوگل فرستاده نمی‌شود.</p>
         </div>
+        ${d.connected ? opps : ''}
         ${d.connected ? `<div class="wila-card">${table(d.queries, 'query', 'پرنمایش‌ترین عبارت‌ها')}${table(d.pages, 'page', 'پرنمایش‌ترین صفحه‌ها')}</div>` : ''}
       `;
     },
