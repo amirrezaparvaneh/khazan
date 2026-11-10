@@ -75,6 +75,50 @@ final class SearchConsole {
     }
 
 
+    /**
+     * Key that makes the spellings of one page equal: http/https, www, trailing slash, query string and fragment
+     * (Google reports each spelling as its own page).
+     */
+    public static function canonical_key($url) {
+        $u = parse_url((string) $url);
+        if (!$u || empty($u['host'])) return (string) $url;
+        $host = strtolower(preg_replace('/^www\./i', '', $u['host']));
+        $path = isset($u['path']) ? rawurldecode($u['path']) : '/';
+        $path = '/' . trim($path, '/');
+        return $host . ($path === '/' ? '/' : $path);
+    }
+
+    /** Merges stats of URL spellings that are the same page; the busiest spelling stays as the page's address. */
+    public static function regroup(array $d) {
+        $group = function (array $rows, $keyfn) {
+            $out = array();
+            foreach ($rows as $r) {
+                $r += array('clicks' => 0, 'impressions' => 0, 'position' => 0);
+                $k = $keyfn($r);
+                $imp = (float) $r['impressions'];
+                if (!isset($out[$k])) $out[$k] = array('row' => $r, 'clicks' => 0.0, 'imp' => 0.0, 'pos' => 0.0, 'top' => -1.0);
+                $out[$k]['clicks'] += (float) $r['clicks'];
+                $out[$k]['imp'] += $imp;
+                $out[$k]['pos'] += (float) $r['position'] * $imp;
+                if ($imp > $out[$k]['top']) { $out[$k]['top'] = $imp; $out[$k]['row']['page'] = $r['page']; }
+            }
+            $res = array();
+            foreach ($out as $g) {
+                $row = $g['row'];
+                $row['clicks'] = (int) round($g['clicks']);
+                $row['impressions'] = (int) round($g['imp']);
+                $row['ctr'] = $g['imp'] > 0 ? round($g['clicks'] / $g['imp'], 4) : 0;
+                $row['position'] = $g['imp'] > 0 ? round($g['pos'] / $g['imp'], 1) : 0;
+                $res[] = $row;
+            }
+            usort($res, function ($a, $b) { return $b['impressions'] <=> $a['impressions'] ?: $b['clicks'] <=> $a['clicks']; });
+            return $res;
+        };
+        if (!empty($d['pages'])) $d['pages'] = $group($d['pages'], function ($r) { return SearchConsole::canonical_key($r['page']); });
+        if (!empty($d['pairs'])) $d['pairs'] = $group($d['pairs'], function ($r) { return $r['query'] . "\x1f" . SearchConsole::canonical_key($r['page']); });
+        return $d;
+    }
+
     /** CTR a page should roughly get at a position; below it the title or description is the problem. */
     public static function expected_ctr($position) {
         if ($position <= 3) return 0.15;
@@ -91,6 +135,7 @@ final class SearchConsole {
      *  cannibal    queries where two or more pages split the impressions
      */
     public static function opportunities(array $d, $limit = 15) {
+        $d = self::regroup($d);
         $queries = isset($d['queries']) ? $d['queries'] : array();
         $pages = isset($d['pages']) ? $d['pages'] : array();
         $pairs = isset($d['pairs']) ? $d['pairs'] : array();
