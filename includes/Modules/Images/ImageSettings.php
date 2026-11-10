@@ -24,6 +24,8 @@ final class ImageSettings {
             'serve_next_gen'    => true,     // swap jpg/png for the converted sibling in rendered <img> tags
             'alt_on_upload'     => false,    // costs AI credit for every upload
             'alt_overwrite'     => false,    // never touch an alt text that already exists unless enabled
+            'shrink_quality'    => 80,       // in-place recompression of oversized images
+            'shrink_min_kb'     => 300,      // only files at least this heavy are touched
             'alt_model'         => '',       // vision-capable model; empty = the main model
         );
     }
@@ -46,6 +48,8 @@ final class ImageSettings {
         }
         if (isset($input['format'])) $out['format'] = $input['format'] === 'avif' ? 'avif' : 'webp';
         if (isset($input['quality'])) $out['quality'] = max(30, min(100, (int) $input['quality']));
+        if (isset($input['shrink_quality'])) $out['shrink_quality'] = max(50, min(95, (int) $input['shrink_quality']));
+        if (isset($input['shrink_min_kb'])) $out['shrink_min_kb'] = max(50, min(20000, (int) $input['shrink_min_kb']));
         if (isset($input['alt_model'])) {
             $model = trim((string) $input['alt_model']);
             $out['alt_model'] = preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\/-]{0,99}$/', $model) ? $model : '';

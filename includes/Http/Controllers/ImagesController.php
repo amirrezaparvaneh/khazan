@@ -9,6 +9,7 @@ use Khazan\Modules\Images\AltText;
 use Khazan\Modules\Images\Deduplicator;
 use Khazan\Modules\Images\ImageConverter;
 use Khazan\Modules\Images\ImageSettings;
+use Khazan\Modules\Images\ImageShrinker;
 use Khazan\Modules\Images\ImageStats;
 
 if (!defined('ABSPATH')) {
@@ -23,6 +24,7 @@ final class ImagesController extends BaseController {
 
     const CONVERT_BATCH = 3;
     const ALT_BATCH     = 2;
+    const SHRINK_BATCH  = 2;
     const HASH_BATCH    = 30;
 
     public function overview() {
@@ -33,6 +35,7 @@ final class ImagesController extends BaseController {
             'support'  => array('webp' => ImageConverter::supports('webp'), 'avif' => ImageConverter::supports('avif')),
             'pending'  => array(
                 'convert' => (int) ImageConverter::pending_query(1)->found_posts,
+                'shrink'  => (int) ImageShrinker::pending_query(1)->found_posts,
                 'alt'     => (int) AltText::missing_query(1)->found_posts,
                 'hash'    => (int) (new \WP_Query(array('post_type' => 'attachment', 'post_status' => 'inherit', 'post_mime_type' => 'image', 'posts_per_page' => 1, 'fields' => 'ids', 'meta_query' => array(array('key' => Deduplicator::META_HASH, 'compare' => 'NOT EXISTS')))))->found_posts,
             ),
@@ -64,6 +67,20 @@ final class ImagesController extends BaseController {
             $done++; $saved += $result['saved'];
         }
         return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'converted' => $done, 'saved_bytes' => $saved, 'failed' => $failed, 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
+    }
+
+    /** Recompresses oversized images in place; two attachments per request (each has several generated sizes). */
+    public function shrink_batch() {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        $query = ImageShrinker::pending_query(self::SHRINK_BATCH);
+        $done = 0; $saved = 0;
+        foreach ($query->posts as $id) {
+            $result = ImageShrinker::shrink_attachment($id);
+            if (is_wp_error($result)) { update_post_meta($id, ImageShrinker::META_DONE, 'failed'); continue; }
+            if ($result['files']) $done++;
+            $saved += $result['saved'];
+        }
+        return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'shrunk' => $done, 'saved_bytes' => $saved, 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
     }
 
     public function alt_batch() {
