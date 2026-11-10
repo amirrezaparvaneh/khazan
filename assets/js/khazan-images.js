@@ -119,7 +119,7 @@
           const r = await this.apiFetch(endpoint, { method: 'POST', body: '{}' });
           if (!r.success) throw new Error(r.message || 'خطا در پردازش.');
           if (kind === 'convert') this.imagesLog(`${fa(r.converted)} تصویر تبدیل شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + (Object.keys(r.failed || {}).length ? ` (${fa(Object.keys(r.failed).length)} خطا)` : ''));
-          if (kind === 'shrink') this.imagesLog(`${fa(r.shrunk)} تصویر فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی`);
+          if (kind === 'shrink') this.imagesLog(`${fa(r.processed)} تصویر بررسی شد، ${fa(r.shrunk)} تصویر فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + ((r.reasons || []).length ? ' — فایل‌های ردشده: ' + r.reasons.map(x => `${x.message} (${fa(x.count)})`).join('، ') : ''));
           if (kind === 'alt') (r.items || []).forEach(i => this.imagesLog(i.alt ? `متن جایگزین: ${i.alt}` : `ردشد: ${i.error}`));
           if (kind === 'hash') this.imagesLog(`${fa(r.done)} تصویر بررسی شد`);
           this.tickProgress(kind === 'hash' ? r.done : (kind === 'alt' ? (r.items || []).length : r.processed), (kind === 'convert' || kind === 'shrink') ? r.saved_bytes : 0);
