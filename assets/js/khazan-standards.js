@@ -48,12 +48,24 @@
         tabriz_keyword_slugs: v('#khz-fact-tabriz').value,
         verified_sources_text: v('#khz-fact-sources').value,
       };
+      const bad = this.validateStandards(seo);
+      st.formError = bad;
+      if (bad) { this.render(); return; }
+      st.saving = true; this.render();
       try {
         const r = await this.apiFetch('/standards', { method: 'POST', body: JSON.stringify({ facts: facts, seo: seo }) });
         if (!r.success) throw new Error(r.message || 'ذخیره نشد.');
         st.data = r; this.toast('تنظیمات ذخیره شد.');
-        this.render();
-      } catch (e) { this.toast('خطا: ' + e.message); }
+      } catch (e) { st.formError = 'ذخیره نشد: ' + e.message; }
+      st.saving = false; this.render();
+    },
+
+    // min must not exceed max; the server drops invalid pairs silently, so say it here
+    validateStandards: function (seo) {
+      const pairs = [['body_words_min', 'body_words_max', 'طول متن دسته‌بندی'], ['density_min', 'density_max', 'تراکم'], ['title_min', 'title_max', 'طول عنوان سئو'], ['meta_min', 'meta_max', 'طول متا']];
+      for (const [a, b, label] of pairs) if (seo[a] !== undefined && seo[b] !== undefined && seo[a] > seo[b]) return `حداقل ${label} نمی‌تواند از حداکثر بیشتر باشد.`;
+      for (const [k, label] of RANGES) if (seo[k] && seo[k][0] > seo[k][1]) return `در «${label}» حداقل نمی‌تواند از حداکثر بیشتر باشد.`;
+      return '';
     },
 
     resetSeoStandards: async function () {
@@ -91,14 +103,14 @@
       const a = this.state.standards.analysis;
       if (!a || !a.summary) return '';
       const s = a.summary;
-      const list = (rows, cols) => rows && rows.length ? `<table style="width:100%;font-size:0.78rem;border-collapse:collapse">${rows.map(r => `<tr>${cols.map(c => `<td style="padding:3px 6px;border-bottom:1px solid #e2e8f0">${c(r)}</td>`).join('')}</tr>`).join('')}</table>` : '<p style="color:#047857;font-size:0.8rem">مشکلی پیدا نشد.</p>';
+      const list = (rows, cols) => rows && rows.length ? `<div class="khz-table-wrap"><table>${rows.map(r => `<tr>${cols.map(c => `<td>${c(r)}</td>`).join('')}</tr>`).join('')}</table></div>` : '<p class="khz-ok khz-hint">مشکلی پیدا نشد.</p>';
       const link = (r) => `<a href="${escapeHtml(r.url || '#')}" target="_blank" rel="noopener">${escapeHtml(r.title || r.name || r.url || '')}</a>`;
       return `
         <div class="wila-card"><h3>خلاصه تحلیل</h3>
           <p>صفحه با لینک داخلی کمتر از حد استاندارد: <b>${fa(s.pages_with_too_few_links)}</b> — بیشتر از حد: <b>${fa(s.pages_with_too_many_links)}</b><br>
           استفاده از انکر عمومی (اینجا، کلیک کنید…): <b>${fa(s.generic_anchor_uses)}</b> — یک انکر برای چند مقصد: <b>${fa(s.cannibalizing_anchors)}</b> — مقصد با انکر تکراری: <b>${fa(s.flooded_targets)}</b><br>
           صفحه بدون هیچ لینک ورودی: <b>${fa(s.pages_without_inbound)}</b> — دسته‌بندی با متن کوتاه: <b>${fa(s.thin_categories)}</b></p>
-          <p style="font-size:0.75rem;color:#64748b">${a.cached ? 'نتیجه ذخیره‌شده' : 'تازه'} — ${escapeHtml(a.generated_at || '')}</p></div>
+          <p class="khz-hint">${a.cached ? 'نتیجه ذخیره‌شده' : 'تازه'} — ${escapeHtml(a.generated_at || '')}</p></div>
         <div class="wila-card"><h3>صفحه‌های با لینک داخلی کم</h3>${list(a.links_per_page.few, [link, r => `${fa(r.links)} از حداقل ${fa(r.min)}`])}</div>
         <div class="wila-card"><h3>صفحه‌های با لینک داخلی زیاد</h3>${list(a.links_per_page.many, [link, r => `${fa(r.links)} از حداکثر ${fa(r.max)}`])}</div>
         <div class="wila-card"><h3>انکرهای عمومی</h3>${list(a.anchors.generic, [r => escapeHtml(r.anchor), r => `${fa(r.uses)} بار`])}</div>
@@ -110,41 +122,45 @@
 
     viewStandards: function () {
       const st = this.state.standards;
-      if (!st.data) return `<div class="wila-card"><div class="wila-skeleton" style="height:14px;width:40%"></div>${st.error ? `<p style="color:#991b1b">${escapeHtml(st.error)}</p>` : ''}</div>`;
+      if (!st.data) return `<div class="wila-card"><div class="wila-skeleton" style="height:14px;width:40%"></div>${st.error ? `<p class="khz-inline-error">${escapeHtml(st.error)}</p>` : ''}</div>`;
       const seo = st.data.seo, f = st.data.facts;
-      const num = (k, label) => `<label style="display:inline-block;margin:4px 8px">${label}: <input type="number" step="any" id="khz-seo-${k}" value="${escapeHtml(String(seo[k]))}" style="width:80px"/></label>`;
-      const range = (k, label) => `<label style="display:inline-block;margin:4px 8px">${label}: <input type="number" id="khz-seo-${k}-min" value="${seo[k][0]}" style="width:64px"/> تا <input type="number" id="khz-seo-${k}-max" value="${seo[k][1]}" style="width:64px"/></label>`;
+      const num = (k, label) => `<label class="khz-field">${label}<input type="number" step="any" id="khz-seo-${k}" value="${escapeHtml(String(seo[k]))}"/></label>`;
+      const range = (k, label) => `<div class="khz-field"><span>${label}</span><span class="khz-range"><input type="number" id="khz-seo-${k}-min" value="${seo[k][0]}" aria-label="${label} - حداقل"/> تا <input type="number" id="khz-seo-${k}-max" value="${seo[k][1]}" aria-label="${label} - حداکثر"/></span></div>`;
       return `
         ${st.error ? `<div class="wila-card" style="border-color:#fecaca;color:#991b1b">${escapeHtml(st.error)}</div>` : ''}
         <div class="wila-card">
           <h3>واقعیت‌های تأییدشده فروشگاه</h3>
-          <p style="font-size:0.8rem;color:#64748b">نویسنده فقط همین‌ها را می‌تواند درباره فروشگاه بنویسد. هر چیز دیگری (قیمت، هدیه، گارانتی، نوع چرم و…) ممنوع است.</p>
-          <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-fact-shipping" ${f.free_shipping ? 'checked' : ''}/> ارسال برای همه خریدها رایگان است (در عنوان سئو نوشته نمی‌شود)</label>
-          <label style="display:block;margin:6px 0">ضمانت بازگشت کالا (روز): <input type="number" id="khz-fact-return" min="0" max="60" value="${f.return_days}" style="width:70px"/></label>
-          <label style="display:block;margin:6px 0">خرید اقساطی: <input type="text" id="khz-fact-installments" value="${escapeHtml(f.installments)}" style="width:100%"/></label>
-          <label style="display:block;margin:6px 0">یراق‌آلات: <input type="text" id="khz-fact-hardware" value="${escapeHtml(f.hardware)}" style="width:100%"/></label>
-          <label style="display:block;margin:6px 0">اسلاگ دسته‌هایی که فقط «چرم» نامیده می‌شوند (با فاصله یا ویرگول):<textarea id="khz-fact-plain" rows="2" style="width:100%;direction:ltr">${escapeHtml((f.plain_leather_slugs || []).join(' '))}</textarea></label>
-          <label style="display:block;margin:6px 0">اسلاگ دسته‌هایی که «تبریز» جزو کلمه کلیدی است:<textarea id="khz-fact-tabriz" rows="2" style="width:100%;direction:ltr">${escapeHtml((f.tabriz_keyword_slugs || []).join(' '))}</textarea></label>
-          <label style="display:block;margin:6px 0">منابع خارجی تأییدشده (هر خط: <span dir="ltr">https://… | عنوان</span>). تا منبعی ثبت نشود، لینک خارجی ساخته نمی‌شود:
-            <textarea id="khz-fact-sources" rows="4" style="width:100%;direction:ltr">${escapeHtml(f.verified_sources_text || '')}</textarea></label>
+          <p class="khz-hint">نویسنده فقط همین‌ها را می‌تواند درباره فروشگاه بنویسد. هر چیز دیگری (قیمت، هدیه، گارانتی، نوع چرم و…) ممنوع است.</p>
+          <label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" id="khz-fact-shipping" ${f.free_shipping ? 'checked' : ''}/> ارسال برای همه خریدها رایگان است (در عنوان سئو نوشته نمی‌شود)</label>
+          <label class="khz-field">ضمانت بازگشت کالا (روز): <input type="number" id="khz-fact-return" min="0" max="60" value="${f.return_days}" style="max-width:120px"/></label>
+          <label class="khz-field">خرید اقساطی: <input type="text" id="khz-fact-installments" value="${escapeHtml(f.installments)}" /></label>
+          <label class="khz-field">یراق‌آلات: <input type="text" id="khz-fact-hardware" value="${escapeHtml(f.hardware)}" /></label>
+          <label class="khz-field">اسلاگ دسته‌هایی که فقط «چرم» نامیده می‌شوند (با فاصله یا ویرگول):<textarea id="khz-fact-plain" rows="2" class="khz-ltr">${escapeHtml((f.plain_leather_slugs || []).join(' '))}</textarea></label>
+          <label class="khz-field">اسلاگ دسته‌هایی که «تبریز» جزو کلمه کلیدی است:<textarea id="khz-fact-tabriz" rows="2" class="khz-ltr">${escapeHtml((f.tabriz_keyword_slugs || []).join(' '))}</textarea></label>
+          <label class="khz-field">منابع خارجی تأییدشده (هر خط: <span dir="ltr">https://… | عنوان</span>). تا منبعی ثبت نشود، لینک خارجی ساخته نمی‌شود:
+            <textarea id="khz-fact-sources" rows="4" class="khz-ltr">${escapeHtml(f.verified_sources_text || '')}</textarea></label>
         </div>
         <div class="wila-card">
           <h3>استانداردهای سئو</h3>
-          <p style="font-size:0.8rem;color:#64748b">تعداد لینک‌ها و طول متن از همین‌جا خوانده می‌شود؛ عدد ثابتی در افزونه نیست.</p>
-          ${RANGES.map(([k, l]) => range(k, l)).join('')}<br>${NUMBERS.map(([k, l]) => num(k, l)).join('')}
-          <div style="margin-top:8px"><button class="wila-btn wila-btn-primary" id="khz-std-save">ذخیره</button> <button class="wila-btn wila-btn-outline" id="khz-std-reset">بازگشت استانداردهای سئو به پیش‌فرض</button></div>
+          <p class="khz-hint">تعداد لینک‌ها و طول متن از همین‌جا خوانده می‌شود؛ عدد ثابتی در افزونه نیست.</p>
+          <div class="khz-fields">${RANGES.map(([k, l]) => range(k, l)).join('')}${NUMBERS.map(([k, l]) => num(k, l)).join('')}</div>
+        </div>
+        <div class="khz-savebar">
+          <button class="wila-btn wila-btn-primary ${st.saving ? 'is-busy' : ''}" id="khz-std-save" ${st.saving ? 'disabled' : ''}>${st.saving ? 'در حال ذخیره…' : 'ذخیره واقعیت‌ها و استانداردها'}</button>
+          <button class="wila-btn wila-btn-outline" id="khz-std-reset" ${st.saving ? 'disabled' : ''}>بازگشت استانداردهای سئو به پیش‌فرض</button>
+          ${st.formError ? `<p class="khz-inline-error" role="alert">${escapeHtml(st.formError)}</p>` : ''}
         </div>
         <div class="wila-card">
           <h3>نقشه کلیدواژه‌ها</h3>
           <p>صفحه ثبت‌شده: <b>${fa(st.data.keyword_map.pages)}</b>. فایل <span dir="ltr">ownership.csv</span> را انتخاب کنید یا محتوایش را بچسبانید (ستون‌های <span dir="ltr">keyword_or_group, owner_url, owner_type</span>).</p>
           <input type="file" id="khz-map-file" accept=".csv,text/csv"/>
-          <textarea id="khz-map-csv" rows="4" style="width:100%;direction:ltr"></textarea>
+          <textarea id="khz-map-csv" rows="4" class="khz-ltr" style="width:100%" aria-label="محتوای ownership.csv"></textarea>
           <button class="wila-btn wila-btn-outline" id="khz-map-import">وارد کردن نقشه کلیدواژه</button>
         </div>
         <div class="wila-card">
           <h3>تحلیل لینک‌ها و محتوای موجود سایت</h3>
           <p>لینک‌های ساخته‌شده قبلی، انکرها، صفحه‌های بدون لینک ورودی و دسته‌بندی‌های کم‌محتوا را بر اساس همین استانداردها بررسی می‌کند. تغییری در سایت نمی‌دهد. (نیاز به اسکن سایت در پیشخوان)</p>
-          <button class="wila-btn wila-btn-primary" id="khz-analysis-run" ${st.analysisBusy ? 'disabled' : ''}>${st.analysisBusy ? 'در حال تحلیل…' : (st.analysis ? 'تحلیل دوباره' : 'شروع تحلیل')}</button>
+          <button class="wila-btn wila-btn-primary ${st.analysisBusy ? 'is-busy' : ''}" id="khz-analysis-run" ${st.analysisBusy ? 'disabled' : ''}>${st.analysisBusy ? 'در حال تحلیل…' : (st.analysis ? 'تحلیل دوباره' : 'شروع تحلیل')}</button>
         </div>
         ${this.analysisHtml()}`;
     },

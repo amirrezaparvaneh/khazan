@@ -117,7 +117,7 @@
       if (!o) return `<div class="wila-card"><div class="wila-skeleton" style="height:14px;width:40%"></div>${im.error ? `<p style="color:#991b1b">${escapeHtml(im.error)}</p>` : ''}</div>`;
       const s = o.settings, st = o.stats, p = o.pending;
       const busy = !!im.busy;
-      const btn = (id, label, kind) => `<button class="wila-btn wila-btn-primary" id="${id}" ${busy ? 'disabled' : ''}>${im.busy === kind ? 'در حال پردازش…' : label}</button>`;
+      const btn = (id, label, kind) => `<button class="wila-btn wila-btn-primary ${im.busy === kind ? 'is-busy' : ''}" id="${id}" ${busy ? 'disabled' : ''}>${im.busy === kind ? 'در حال پردازش…' : label}</button>`;
       const stop = busy && ['convert', 'alt', 'hash'].includes(im.busy) ? '<button class="wila-btn wila-btn-outline" id="khz-img-stop">توقف</button>' : '';
       const unsupported = !o.support[s.format] ? `<p style="color:#991b1b;margin:6px 0 0">سرور شما از ${s.format.toUpperCase()} پشتیبانی نمی‌کند.</p>` : '';
 
@@ -152,7 +152,7 @@
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-alt-upload" ${s.alt_on_upload ? 'checked' : ''}/> نوشتن خودکار متن جایگزین برای تصویر جدید (از اعتبار AvalAI هزینه دارد)</label>
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-alt-overwrite" ${s.alt_overwrite ? 'checked' : ''}/> بازنویسی متن جایگزین‌های موجود (پیشنهاد نمی‌شود)</label>
           <label style="display:block;margin:6px 0">مدل بینایی برای متن جایگزین (خالی = مدل اصلی):
-            <input type="text" id="khz-img-alt-model" value="${escapeHtml(s.alt_model)}" style="direction:ltr;text-align:left;width:260px"/></label>
+            <input type="text" id="khz-img-alt-model" value="${escapeHtml(s.alt_model)}" class="khz-ltr" style="max-width:320px"/></label>
           <button class="wila-btn wila-btn-outline" id="khz-img-save">ذخیره تنظیمات</button>
         </div>
 
