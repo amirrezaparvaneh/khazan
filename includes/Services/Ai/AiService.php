@@ -183,8 +183,20 @@ final class AiService {
      */
     public function generate_bulk_category_content($params) {
         $prompt = $this->prompts->bulk_category($params);
-        $max_tokens = (int) min(8000, max(3000, $params['word_count'] * 4.5));
+        // ~2.5-3 tokens per Persian word plus HTML markup; the long category text needs a larger ceiling than the old 8000
+        $max_tokens = (int) min(12000, max(4000, $params['word_count'] * 5));
         $raw = $this->send($prompt, false, false, $max_tokens);
+        if (is_wp_error($raw)) return $raw;
+        return CategoryContentParser::parse($raw, $params);
+    }
+
+    /**
+     * Single repair pass for a category text: the audit failures and the forgotten links are sent back to the model.
+     * Returns the parsed result (same shape as generate_bulk_category_content) or WP_Error.
+     */
+    public function repair_category_content($params, $content, array $failures, array $missing_links) {
+        $max_tokens = (int) min(12000, max(4000, $params['word_count'] * 5));
+        $raw = $this->send($this->prompts->category_repair($params, $content, $failures, $missing_links), false, false, $max_tokens);
         if (is_wp_error($raw)) return $raw;
         return CategoryContentParser::parse($raw, $params);
     }
