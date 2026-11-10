@@ -78,6 +78,8 @@ final class ProductMatcher {
             'post_status'    => array('publish', 'draft', 'pending', 'private'),
             'posts_per_page' => -1,
             'no_found_rows'  => true,
+            'update_post_term_cache' => false,
+            'update_post_meta_cache' => false,
         ));
         foreach ($posts as $post) {
             $entry = array('id' => (int) $post->ID, 'title' => get_the_title($post), 'url' => get_permalink($post), 'status' => $post->post_status);

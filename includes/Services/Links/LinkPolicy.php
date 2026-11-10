@@ -27,8 +27,8 @@ final class LinkPolicy {
      */
     public static function internal_target($kind, $word_count, $available = -1) {
         list($min, $max) = SeoStandards::internal_range($kind);
-        $floor = max(1, (int) SeoStandards::get('body_words_min'));
-        $span  = max(1, (int) SeoStandards::get('body_words_max') - $floor);
+        list($floor, $ceil) = SeoStandards::words_range($kind);
+        $span  = max(1, $ceil - $floor);
         $ratio = max(0.0, min(1.0, ((int) $word_count - $floor) / $span));
         $target = (int) round($min + ($max - $min) * $ratio);
         if ($available >= 0) $target = min($target, (int) $available);

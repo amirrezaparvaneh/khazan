@@ -96,4 +96,34 @@ final class LinkRepository {
             array('%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s')
         );
     }
+
+    /**
+     * Outgoing internal links per source page (distinct target URLs).
+     *
+     * @return array[] source_id, source_type, source_title, source_url, links
+     */
+    public function outgoing_totals() {
+        $table = $this->database->links_table();
+        return (array) $this->wpdb->get_results("SELECT source_id, source_type, MAX(source_title) AS source_title, MAX(source_url) AS source_url, COUNT(DISTINCT target_url) AS links FROM {$table} WHERE target_type <> 'unknown_internal' GROUP BY source_id, source_type", ARRAY_A);
+    }
+
+    /**
+     * Anchor usage: how many times an anchor text points at a target.
+     *
+     * @return array[] anchor_text, target_id, target_type, target_url, uses
+     */
+    public function anchor_groups($limit = 20000) {
+        $table = $this->database->links_table();
+        return (array) $this->wpdb->get_results($this->wpdb->prepare("SELECT anchor_text, target_id, target_type, MAX(target_url) AS target_url, COUNT(*) AS uses FROM {$table} WHERE anchor_text <> '' GROUP BY anchor_text, target_id, target_type ORDER BY uses DESC LIMIT %d", (int) $limit), ARRAY_A);
+    }
+
+    /**
+     * Inbound links per target page.
+     *
+     * @return array[] target_id, target_type, target_url, inbound
+     */
+    public function inbound_totals() {
+        $table = $this->database->links_table();
+        return (array) $this->wpdb->get_results("SELECT target_id, target_type, MAX(target_url) AS target_url, COUNT(DISTINCT source_id, source_type) AS inbound FROM {$table} WHERE target_id IS NOT NULL GROUP BY target_id, target_type", ARRAY_A);
+    }
 }

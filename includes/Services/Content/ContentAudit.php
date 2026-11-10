@@ -113,7 +113,9 @@ final class ContentAudit {
         }
 
         $f = array();
-        if ($words < $std['body_words_min']) $f['length_short'] = "متن {$words} کلمه است؛ حداقل {$std['body_words_min']} کلمه لازم است.";
+        list($wmin) = SeoStandards::words_range($kind);
+        if (isset($opts['words_min'])) $wmin = max(1, (int) $opts['words_min']);
+        if ($words < $wmin) $f['length_short'] = "متن {$words} کلمه است؛ حداقل {$wmin} کلمه لازم است.";
         if ($m['density'] < $std['density_min']) $f['density_low'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداقل {$std['density_min']}٪ لازم است.";
         if ($m['density'] > $std['density_max']) $f['density_high'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداکثر {$std['density_max']}٪ مجاز است.";
         if (!$m['keyword_in_first_words']) $f['keyword_not_in_first'] = "کلمه اصلی در {$std['keyword_in_first']} کلمه اول نیامده است.";
@@ -122,7 +124,7 @@ final class ContentAudit {
         if ($m['keyword_in_headings'] < 1) $f['keyword_not_in_heading'] = 'کلمه اصلی در هیچ زیرعنوانی نیست.';
         if ($m['keyword_in_h2'] > $std['h2_keyword_max']) $f['keyword_h2_many'] = "کلمه اصلی در {$m['keyword_in_h2']} عنوان H2 آمده؛ حداکثر {$std['h2_keyword_max']}.";
         if ($m['max_section_words'] > $std['section_words_max']) $f['section_long'] = "یک بخش {$m['max_section_words']} کلمه بدون زیرعنوان دارد؛ حداکثر {$std['section_words_max']}.";
-        if ($m['tables'] < 1) $f['table_missing'] = 'جدول مقایسه یا راهنمای انتخاب در متن نیست.';
+        if ($kind !== Settings::KIND_PRODUCT && $m['tables'] < 1) $f['table_missing'] = 'جدول مقایسه یا راهنمای انتخاب در متن نیست.';
         list($imin, $imax) = SeoStandards::internal_range($kind);
         if ($m['internal_links'] < $imin || $m['internal_links'] > $imax) $f['internal_links'] = "لینک داخلی {$m['internal_links']} است؛ بازه مجاز {$imin} تا {$imax}.";
         list($emin, $emax) = SeoStandards::external_range();

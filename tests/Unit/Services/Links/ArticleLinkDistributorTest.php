@@ -45,31 +45,33 @@ function types($links) { return array_count_values(array_map(function ($l) { ret
 function params($words) { return array('h1_title' => 'راهنمای انتخاب بوت چرم زنانه', 'focus_keyword' => 'بوت چرم زنانه', 'long_tail' => '', 'word_count' => $words, 'internal_links' => array()); }
 
 echo "budget\n";
-check(B::for_words(300) <= 3 && B::for_words(799) === 3 && B::for_words(100) >= 1, 'under 800 words: at most 3');
-foreach (array(800, 1000, 1200, 1500) as $w) check(B::for_words($w) >= 4 && B::for_words($w) <= 5, "$w words: 4-5 (" . B::for_words($w) . ')');
-check(B::for_words(1501) === 6 && B::for_words(4000) === 6, 'over 1500 words: 6');
-foreach (array(300, 700, 1000, 1500, 3000) as $w) check(B::for_words($w) <= max(3, ceil($w / 250)), "$w words: density within ~1 per 250 words");
+list($lmin, $lmax) = Khazan\Services\Content\SeoStandards::internal_range('post');
+check(B::for_words(300) === $lmin && B::for_words(1000) === $lmin, 'short articles get the rule minimum');
+check(B::for_words(1500) === $lmax && B::for_words(4000) === $lmax, 'long articles get the rule maximum');
+$prev = 0; $mono = true;
+foreach (array(300, 1000, 1200, 1400, 1500, 3000) as $w) { $n = B::for_words($w); if ($n < $prev || $n < $lmin || $n > $lmax) $mono = false; $prev = $n; }
+check($mono, 'budget grows with length and stays inside the rule range');
 
 echo "mix\n";
 $d = new ArticleLinkDistributor($src = new FakeSource(), new InMemoryAssignmentLedger());
 $r = $d->apply(params(600));
 check(count($r['internal_links']) === 3 && $r['link_budget'] === 3, '600 words -> 3 links');
 check(types($r['internal_links']) === array('category' => 1, 'product' => 1, 'article' => 1), 'mix = category + product + article');
-$r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1000));
-check(count($r['internal_links']) === 4 && isset(types($r['internal_links'])['page']), '1000 words -> 4 links incl. brand page');
+$r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1250));
+check(count($r['internal_links']) === $r['link_budget'] && isset(types($r['internal_links'])['page']), '1250 words -> budget filled incl. brand page');
 $r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1400));
 $t = types($r['internal_links']);
-check(count($r['internal_links']) === 5 && $t['category'] === 1 && $t['product'] === 2 && $t['article'] === 1 && $t['page'] === 1, '1400 words -> 5 (1 cat, 2 prod, 1 art, 1 page)');
+check(count($r['internal_links']) === $r['link_budget'] && $t['category'] === 1 && $t['product'] === 3 && $t['article'] === 2 && $t['page'] === 1, '1400 words -> budget filled (1 cat, 3 prod, 2 art, 1 page)');
 $r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(2500));
 $t = types($r['internal_links']);
-check(count($r['internal_links']) === 6 && $t['product'] === 2 && $t['article'] === 2 && $t['category'] === 1 && $t['page'] === 1, '2500 words -> 6, never above 1/2/2/1');
+check(count($r['internal_links']) === $lmax && $t['product'] === 3 && $t['article'] === 3 && $t['category'] === 1 && $t['page'] === 1, '2500 words -> rule maximum, never above 1/3/3/1');
 $urls = array_column($r['internal_links'], 'url');
 check(count($urls) === count(array_unique($urls)), 'no URL twice');
 $none = new FakeSource(); $none->brand = null;
-$r = (new ArticleLinkDistributor($none, new InMemoryAssignmentLedger()))->apply(params(1000));
-check(count($r['internal_links']) === 4 && !isset(types($r['internal_links'])['page']), 'no brand context: no page link, slot goes to another kind');
+$r = (new ArticleLinkDistributor($none, new InMemoryAssignmentLedger()))->apply(params(1250));
+check(count($r['internal_links']) === $r['link_budget'] && !isset(types($r['internal_links'])['page']), 'no brand context: no page link, slot goes to another kind');
 $empty = new FakeSource(); $empty->articles = []; $empty->brand = null;
-check(count((new ArticleLinkDistributor($empty, new InMemoryAssignmentLedger()))->apply(params(2500))['internal_links']) === 3, 'missing kinds: fewer links (category + 2 products), never padded');
+check(count((new ArticleLinkDistributor($empty, new InMemoryAssignmentLedger()))->apply(params(2500))['internal_links']) === 4, 'missing kinds: fewer links (category + 3 products), never padded');
 
 echo "balanced pool\n";
 $r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(600));
@@ -84,7 +86,7 @@ echo "anchors\n";
 check($by['product']['anchor'] === Khazan\Services\Seo\KeyphraseExtractor::cap('بوت چرم زنانه آلفردو') && Khazan\Services\Seo\KeyphraseExtractor::count_words($by['product']['anchor']) <= 4 && $by['product']['locked'], 'product: 4-word keyphrase, locked');
 check($by['article']['anchor'] === 'نگهداری چرم ب' && $by['article']['locked'], 'article: target focus keyword, locked');
 check(mb_strpos($by['category']['anchor'], 'بوت چرم زنانه') !== false && $by['category']['anchor'] !== 'بوت چرم زنانه' && $by['category']['url'] === 'https://aka.test/cat/boots/', 'category: prefix + name, matching category');
-$pg = array(); foreach ((new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1000))['internal_links'] as $l) $pg[$l['type']] = $l;
+$pg = array(); foreach ((new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1250))['internal_links'] as $l) $pg[$l['type']] = $l;
 check($pg['page']['anchor'] === 'چرم آکا' && $pg['page']['url'] === 'https://aka.test/', 'page: brand name, homepage');
 $manual = params(600); $manual['internal_links'] = array(array('anchor' => 'x', 'url' => 'https://aka.test/manual/'));
 $r = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply($manual);
@@ -111,7 +113,7 @@ class TierSource extends FakeSource {
         array('id' => 21, 'name' => 'بوت چرم', 'url' => 'https://aka.test/cat/boots/', 'parent' => 0),
         array('id' => 31, 'name' => 'کیف چرم', 'url' => 'https://aka.test/cat/bags/', 'parent' => 0)); }
 }
-$jacket = array('h1_title' => 'راهنمای خرید کاپشن چرم', 'focus_keyword' => 'کاپشن چرم', 'long_tail' => '', 'word_count' => 1400, 'internal_links' => array());
+$jacket = array('h1_title' => 'راهنمای خرید کاپشن چرم', 'focus_keyword' => 'کاپشن چرم', 'long_tail' => '', 'word_count' => 1000, 'internal_links' => array());
 $r = (new ArticleLinkDistributor(new TierSource(), new InMemoryAssignmentLedger()))->apply($jacket);
 $prod = array_values(array_filter($r['internal_links'], function ($l) { return $l['type'] === 'product'; }));
 $purls = array_column($prod, 'url');
@@ -136,7 +138,7 @@ $bt = array_values(array_filter((new ArticleLinkDistributor(new TierSource(), ne
 check($bt && strpos($bt[0]['url'], 'boot') !== false, 'boot article links to a boot (generic words such as چرم / نگهداری never decide relevance)');
 
 echo "LinkGuard\n";
-$links = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1000))['internal_links'];
+$links = (new ArticleLinkDistributor(new FakeSource(), new InMemoryAssignmentLedger()))->apply(params(1250))['internal_links'];
 $u = array(); foreach ($links as $l) $u[$l['type']] = $l;
 $html = '<p>یک <a href="' . $u['product']['url'] . '">کفش دیگر</a> و <a href="' . $u['article']['url'] . '">اینجا کلیک کنید</a> و <a href="' . $u['category']['url'] . '">فروشگاه</a>.</p>'
     . '<p>و <a href="https://aka.test/random/">لینک اضافه</a> و <a href="https://aka.test/random2/">دیگر</a> و <a href="https://aka.test/product/p3/">تکرار</a> و <a href="https://moz.com/x">منبع</a>.</p>';

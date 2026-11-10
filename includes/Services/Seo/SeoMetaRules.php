@@ -31,6 +31,9 @@ final class SeoMetaRules {
         'خرید اقساطی',
     );
 
+    const TITLE_TAILS_ARTICLE = array('راهنمای کامل و گام‌به‌گام', 'راهنمای کامل', 'آموزش کامل', 'راهنما');
+    const TITLE_TAILS_PRODUCT = array('خرید اینترنتی با اقساط', 'خرید اقساطی', 'خرید اینترنتی', 'خرید و قیمت', 'خرید');
+
     const EMOJI = '/[\x{1F000}-\x{1FFFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]/u';
 
     public static function clean($text) {
@@ -51,7 +54,7 @@ final class SeoMetaRules {
     }
 
     /** @return string title within the rules (the best effort when the focus keyword itself is very long) */
-    public static function fit_title($model_title, $focus, $brand) {
+    public static function fit_title($model_title, $focus, $brand, $kind = '') {
         $focus = self::clean($focus);
         $brand = self::clean($brand);
         if ($focus === '') return '';
@@ -61,7 +64,8 @@ final class SeoMetaRules {
         $std = SeoStandards::all();
         $suffix = $brand === '' ? '' : ' | ' . $brand;
         $best = '';
-        foreach (self::TITLE_TAILS as $tail) {
+        $tails = $kind === 'article' ? self::TITLE_TAILS_ARTICLE : ($kind === 'product' ? self::TITLE_TAILS_PRODUCT : self::TITLE_TAILS);
+        foreach ($tails as $tail) {
             $candidate = $focus . '؛ ' . $tail . $suffix;
             $len = mb_strlen($candidate);
             if ($len >= $std['title_min'] && $len <= $std['title_max']) return $candidate;

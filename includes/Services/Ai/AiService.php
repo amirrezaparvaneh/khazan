@@ -152,7 +152,8 @@ final class AiService {
     public function generate_full_content($params, $outline) {
         $raw = $this->send($this->prompts->full_content($params, $outline), false, false);
         if (is_wp_error($raw)) return $raw;
-        return ContentParser::full_content($raw, $params);
+        $result = ContentParser::full_content($raw, $params);
+        return is_wp_error($result) ? $result : $this->repair_once($params, $result);
     }
 
     /**
@@ -175,7 +176,26 @@ final class AiService {
         $max_tokens = (int) min(8000, max(3000, $params['word_count'] * 4.5));
         $raw = $this->send($prompt, false, false, $max_tokens);
         if (is_wp_error($raw)) return $raw;
-        return ContentParser::bulk_product_result($raw, $params, empty($row['seo_title']));
+        $result = ContentParser::bulk_product_result($raw, $params, empty($row['seo_title']));
+        return is_wp_error($result) ? $result : $this->repair_once($params, $result);
+    }
+
+    /**
+     * One repair pass for a product / article result: the audit failures and forgotten planned links go back to the model;
+     * the repaired text is used only when it has strictly fewer failures. Title, meta and synonyms stay as generated.
+     */
+    private function repair_once($params, array $result) {
+        $result['repaired'] = false;
+        if (empty($result['audit']) || $result['audit']['ok']) return $result;
+        $max_tokens = (int) min(8000, max(3000, $params['word_count'] * 4.5));
+        $raw = $this->send($this->prompts->content_repair($params, \Khazan\Services\Content\Guard\WrapperGuard::unwrap($result['content']), $result['audit']['failures'], $result['missing_links']), false, false, $max_tokens);
+        if (is_wp_error($raw)) return $result;
+        $fixed = ContentParser::parse_full_content_payload($raw, $params);
+        if (is_wp_error($fixed) || count($fixed['audit']['failures']) >= count($result['audit']['failures'])) return $result;
+        foreach (array('content', 'internal_link_count', 'external_link_count', 'external_links', 'audit', 'missing_links') as $key) $result[$key] = $fixed[$key];
+        $result['notes'] = $fixed['notes'] !== '' ? $fixed['notes'] : $result['notes'];
+        $result['repaired'] = true;
+        return $result;
     }
 
     /**

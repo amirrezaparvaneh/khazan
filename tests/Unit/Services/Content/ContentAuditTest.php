@@ -25,7 +25,14 @@ check('category min at 1300 words', LinkPolicy::internal_target(Settings::KIND_C
 check('category max at the max body length', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 1500) === 8);
 check('category mid at 1400 words', in_array(LinkPolicy::internal_target(Settings::KIND_CATEGORY, 1400), array(6, 7), true));
 check('short text clamps to min', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 400) === 5);
-check('product range 3..6', LinkPolicy::internal_target(Settings::KIND_PRODUCT, 1300) === 3 && LinkPolicy::internal_target(Settings::KIND_PRODUCT, 3000) === 6);
+check('product range 3..6', LinkPolicy::internal_target(Settings::KIND_PRODUCT, 700) === 3 && LinkPolicy::internal_target(Settings::KIND_PRODUCT, 1000) === 6);
+list($pmin, $pmax) = Khazan\Services\Content\SeoStandards::words_range(Settings::KIND_PRODUCT);
+check('product has its own length range', $pmin < 1300 && $pmax >= $pmin);
+$prodHtml = '<h2>کیف چرم</h2><p>' . str_repeat('کیف چرم مدل ', 2) . str_repeat('متن ', $pmin) . '</p>';
+$pr = ContentAudit::analyze($prodHtml, 'کیف چرم', array('kind' => Settings::KIND_PRODUCT));
+check('product audit: length follows the product range and no table is required', !isset($pr['failures']['length_short']) && !isset($pr['failures']['table_missing']));
+$pr = ContentAudit::analyze($prodHtml, 'کیف چرم', array('kind' => Settings::KIND_ARTICLE, 'words_min' => $pmin + 100));
+check('article audit: table required, custom words_min honoured', isset($pr['failures']['table_missing']) && isset($pr['failures']['length_short']));
 check('never more than real candidates', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 2000, 4) === 4);
 check('no candidates, no links', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 1500, 0) === 0);
 check('external capped at 2', LinkPolicy::external_target(5) === 2);

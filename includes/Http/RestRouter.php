@@ -15,6 +15,7 @@ use Khazan\Http\Controllers\QueueController;
 use Khazan\Http\Controllers\ReportController;
 use Khazan\Http\Controllers\SeoRepairController;
 use Khazan\Http\Controllers\SettingsController;
+use Khazan\Http\Controllers\StandardsController;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -38,6 +39,7 @@ final class RestRouter {
         $seo      = new SeoRepairController();
         $specs    = new ProductSpecsController();
         $images   = new ImagesController();
+        $standards = new StandardsController();
 
         register_rest_route($this->namespace, '/queue', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($queue, 'get_scan_queue'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/scan-item', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'scan_single_item'), 'permission_callback' => array($this, 'check_permission')));
@@ -59,6 +61,12 @@ final class RestRouter {
         register_rest_route($this->namespace, '/images/dedupe/hash-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'hash_batch'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/dedupe/report', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'dedupe_report'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/dedupe/remove', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'dedupe_remove'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/standards', array(
+            array('methods' => \WP_REST_Server::READABLE, 'callback' => array($standards, 'get_standards'), 'permission_callback' => array($this, 'check_permission')),
+            array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($standards, 'save_standards'), 'permission_callback' => array($this, 'check_permission')),
+        ));
+        register_rest_route($this->namespace, '/standards/keyword-map', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($standards, 'import_keyword_map'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/report/link-analysis', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($standards, 'link_analysis'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/settings/ai-models', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_ai_models'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/settings/ai-balance', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_ai_balance'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/post-types', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_available_post_types'), 'permission_callback' => array($this, 'check_permission')));

@@ -4,7 +4,7 @@
  *
  * The budget follows the word count (ArticleLinkBudget) and is filled in this order: 1 category, 1 product,
  * 1 article, brand page (max 1), 2nd product, 2nd article - unavailable kinds are skipped, so the result is at
- * most 1 category + 2 products + 2 articles + 1 page. Products and articles come from a GLOBAL pool: the targets
+ * most 1 category + 3 products + 3 articles + 1 page. Products and articles come from a GLOBAL pool: the targets
  * with the fewest inbound links (database + links assigned in earlier generations) win; topical fit only ranks
  * equal counts. Anchors are fixed here: product = 4-word keyphrase, article = target's exact focus keyword,
  * category = prefix + category name, page = brand name. LinkGuard locks them afterwards.
@@ -25,7 +25,7 @@ final class ArticleLinkDistributor {
 
     const RUN_ID = 'article-pool';
 
-    const SLOT_ORDER = array('category', 'product', 'article', 'page', 'product', 'article');
+    const SLOT_ORDER = array('category', 'product', 'article', 'page', 'product', 'article', 'product', 'article');
 
     /** @var ArticleLinkSource */
     private $source;

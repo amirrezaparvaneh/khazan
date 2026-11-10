@@ -30,6 +30,8 @@ final class SeoStandards {
             // main body text (HTML below the product list)
             'body_words_min'      => 1300,
             'body_words_max'      => 1500,   // soft ceiling: longer is fine only with real content
+            'product_words'       => array(700, 1000),
+            'article_words'       => array(1000, 1500),
             'top_words_min'       => 150,    // text above the product list
             'top_words_max'       => 250,
             'keyword_in_first'    => 100,    // the focus keyword must appear within the first N words
@@ -82,6 +84,18 @@ final class SeoStandards {
         $range = self::get($key);
         $min = max(0, (int) $range[0]);
         return array($min, max($min, (int) $range[1]));
+    }
+
+    /**
+     * Body length range of a content kind. Category pages follow body_words_min/max; products and articles have their own range.
+     * @return int[] [min, max]
+     */
+    public static function words_range($kind) {
+        if ($kind === Settings::KIND_PRODUCT || $kind === Settings::KIND_ARTICLE) {
+            $range = self::get($kind === Settings::KIND_PRODUCT ? 'product_words' : 'article_words');
+            if (is_array($range) && isset($range[0], $range[1])) return array(max(1, (int) $range[0]), max((int) $range[0], (int) $range[1]));
+        }
+        return array(max(1, (int) self::get('body_words_min')), max((int) self::get('body_words_min'), (int) self::get('body_words_max')));
     }
 
     /** @return int[] [min, max] verified external links */
