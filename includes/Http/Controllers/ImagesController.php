@@ -1,0 +1,102 @@
+<?php
+/**
+ * @package WP_Internal_Link_Analyzer
+ */
+
+namespace Khazan\Http\Controllers;
+
+use Khazan\Modules\Images\AltText;
+use Khazan\Modules\Images\Deduplicator;
+use Khazan\Modules\Images\ImageConverter;
+use Khazan\Modules\Images\ImageSettings;
+use Khazan\Modules\Images\ImageStats;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/**
+ * Image modules: next-gen conversion, AI alt text and duplicate cleanup. Every batch is small (a few items per request)
+ * so a slow host or a slow AI answer never hits the PHP time limit.
+ */
+final class ImagesController extends BaseController {
+
+    const CONVERT_BATCH = 3;
+    const ALT_BATCH     = 2;
+    const HASH_BATCH    = 30;
+
+    public function overview() {
+        return rest_ensure_response(array(
+            'success'  => true,
+            'settings' => ImageSettings::all(),
+            'stats'    => ImageStats::all(),
+            'support'  => array('webp' => ImageConverter::supports('webp'), 'avif' => ImageConverter::supports('avif')),
+            'pending'  => array(
+                'convert' => (int) ImageConverter::pending_query(1)->found_posts,
+                'alt'     => (int) AltText::missing_query(1)->found_posts,
+                'hash'    => (int) (new \WP_Query(array('post_type' => 'attachment', 'post_status' => 'inherit', 'post_mime_type' => 'image', 'posts_per_page' => 1, 'fields' => 'ids', 'meta_query' => array(array('key' => Deduplicator::META_HASH, 'compare' => 'NOT EXISTS')))))->found_posts,
+            ),
+        ));
+    }
+
+    public function save_settings($request) {
+        $params = $request->get_json_params();
+        return rest_ensure_response(array('success' => true, 'settings' => ImageSettings::save(is_array($params) ? $params : array())));
+    }
+
+    public function convert_batch() {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        if (!ImageConverter::supports(\Khazan\Modules\Images\ImageSettings::get('format'))) {
+            return new \WP_Error('unsupported', 'سرور از این فرمت پشتیبانی نمی‌کند؛ فرمت دیگری را انتخاب کنید.', array('status' => 400));
+        }
+        $query = ImageConverter::pending_query(self::CONVERT_BATCH);
+        $done = 0; $failed = array(); $saved = 0;
+        foreach ($query->posts as $id) {
+            $result = ImageConverter::convert_attachment($id);
+            if (is_wp_error($result)) {
+                // not_smaller is a normal outcome (marked as skipped); other errors are reported and the item is marked so the batch can finish
+                if ($result->get_error_code() !== 'not_smaller') {
+                    $failed[$id] = $result->get_error_message();
+                    update_post_meta($id, ImageConverter::META_DONE, 'failed');
+                }
+                continue;
+            }
+            $done++; $saved += $result['saved'];
+        }
+        return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'converted' => $done, 'saved_bytes' => $saved, 'failed' => $failed, 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
+    }
+
+    public function alt_batch() {
+        if (function_exists('set_time_limit')) @set_time_limit(180);
+        $query = AltText::missing_query(self::ALT_BATCH);
+        $items = array(); $stop = '';
+        foreach ($query->posts as $id) {
+            $alt = AltText::generate_and_save($id);
+            if (is_wp_error($alt)) {
+                $code = $alt->get_error_code();
+                if ($code === 'ai_rate_limited' || $code === 'missing_api_key' || $code === 'ai_error') { $stop = $alt->get_error_message(); break; }
+                // an image the model cannot use is marked so the batch does not loop on it forever
+                update_post_meta($id, AltText::META_DONE, 'skipped:' . $code);
+                $items[] = array('id' => $id, 'error' => $alt->get_error_message());
+                continue;
+            }
+            $items[] = array('id' => $id, 'alt' => $alt, 'thumb' => wp_get_attachment_image_url($id, 'thumbnail'));
+        }
+        return rest_ensure_response(array('success' => true, 'items' => $items, 'stopped' => $stop, 'remaining' => max(0, (int) $query->found_posts - count($items))));
+    }
+
+    public function hash_batch() {
+        return rest_ensure_response(array_merge(array('success' => true), Deduplicator::hash_batch(self::HASH_BATCH)));
+    }
+
+    public function dedupe_report() {
+        return rest_ensure_response(array('success' => true, 'groups' => Deduplicator::report()));
+    }
+
+    public function dedupe_remove($request) {
+        $params = $request->get_json_params();
+        $ids = isset($params['ids']) && is_array($params['ids']) ? $params['ids'] : array();
+        if (!$ids) return new \WP_Error('no_ids', 'هیچ تصویری انتخاب نشده است.', array('status' => 400));
+        return rest_ensure_response(array_merge(array('success' => true), Deduplicator::remove($ids)));
+    }
+}

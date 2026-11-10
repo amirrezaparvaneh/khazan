@@ -9,6 +9,7 @@
 namespace Khazan\Http;
 
 use Khazan\Http\Controllers\ContentController;
+use Khazan\Http\Controllers\ImagesController;
 use Khazan\Http\Controllers\ProductSpecsController;
 use Khazan\Http\Controllers\QueueController;
 use Khazan\Http\Controllers\ReportController;
@@ -36,6 +37,7 @@ final class RestRouter {
         $settings = new SettingsController();
         $seo      = new SeoRepairController();
         $specs    = new ProductSpecsController();
+        $images   = new ImagesController();
 
         register_rest_route($this->namespace, '/queue', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($queue, 'get_scan_queue'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/scan-item', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($queue, 'scan_single_item'), 'permission_callback' => array($this, 'check_permission')));
@@ -49,6 +51,14 @@ final class RestRouter {
             array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_settings'), 'permission_callback' => array($this, 'check_permission')),
             array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'save_settings'), 'permission_callback' => array($this, 'check_permission'))
         ));
+        $perm = array($this, 'check_permission');
+        register_rest_route($this->namespace, '/images/overview', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'overview'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/settings', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'save_settings'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/convert-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'convert_batch'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/alt-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'alt_batch'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/dedupe/hash-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'hash_batch'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/dedupe/report', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'dedupe_report'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/dedupe/remove', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'dedupe_remove'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/settings/ai-models', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_ai_models'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/settings/ai-balance', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_ai_balance'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/post-types', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($settings, 'get_available_post_types'), 'permission_callback' => array($this, 'check_permission')));
