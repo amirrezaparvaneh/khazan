@@ -32,6 +32,7 @@
     { key: 'generator', tab: 'generator', icon: 'edit', label: 'تولید محتوای تکی', title: 'تولید محتوای تکی' },
     { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه محتوا', title: 'تولید انبوه محتوا' },
     { key: 'specs', tab: 'specs', icon: 'tag', label: 'ویژگی‌های محصولات', title: 'مدیریت ویژگی‌های محصولات' },
+    { key: 'images', tab: 'images', icon: 'chart', label: 'بهینه‌سازی تصاویر', title: 'بهینه‌سازی تصاویر' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
     { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
     { key: 'archive', tab: 'archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
@@ -44,7 +45,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -781,6 +782,7 @@ ${siteExpanded ? `
         if (this.state.activeTab === 'items') this.fetchItems();
         if (this.state.activeTab === 'orphans') this.fetchOrphans();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
+        if (this.state.activeTab === 'images' && !this.state.images.overview && !this.state.images.busy) this.loadImages();
         if (this.state.activeTab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
       }));
