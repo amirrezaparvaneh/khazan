@@ -23,7 +23,8 @@ if (!defined('ABSPATH')) {
 final class ImageShrinker {
 
     const MIMES     = array('image/jpeg', 'image/png', 'image/webp');
-    const META_DONE = '_khazan_shrunk';
+    const META_DONE = '_khazan_shrunk2';
+    const META_OLD  = '_khazan_shrunk';  // first version: images it recorded as 0/failed are looked at again, successful ones are not
     const MIN_GAIN  = 0.10;   // keep the result only when it is at least 10% smaller
 
     /** Pure: does a file of this size deserve a recompression pass? */
@@ -97,14 +98,20 @@ final class ImageShrinker {
                 if (!empty($size['file'])) $files[] = $dir . '/' . $size['file'];
             }
         }
-        $saved = 0; $done = 0;
+        $saved = 0; $done = 0; $reasons = array();
         foreach (array_unique($files) as $file) {
             $result = self::shrink_file($file, $mime, $s['shrink_quality'], $s['shrink_min_kb']);
-            if (!is_wp_error($result)) { $saved += $result; $done++; }
+            if (is_wp_error($result)) {
+                $code = $result->get_error_code();
+                if (!isset($reasons[$code])) $reasons[$code] = array('code' => $code, 'message' => $result->get_error_message(), 'count' => 0);
+                $reasons[$code]['count']++;
+                continue;
+            }
+            $saved += $result; $done++;
         }
-        update_post_meta($attachment_id, self::META_DONE, $done ? (string) $saved : '0');
+        update_post_meta($attachment_id, self::META_DONE, $done ? (string) $saved : ('skipped:' . implode(',', array_keys($reasons))));
         if ($done) ImageStats::add_shrink($saved);
-        return array('saved' => $saved, 'files' => $done);
+        return array('saved' => $saved, 'files' => $done, 'reasons' => array_values($reasons));
     }
 
     /** Attachments not processed yet (single source of truth for the count AND the batch). */
@@ -116,7 +123,14 @@ final class ImageShrinker {
             'posts_per_page' => (int) $limit,
             'fields'         => 'ids',
             'no_found_rows'  => false,
-            'meta_query'     => array(array('key' => self::META_DONE, 'compare' => 'NOT EXISTS')),
+            'meta_query'     => array(
+                'relation' => 'AND',
+                array('key' => self::META_DONE, 'compare' => 'NOT EXISTS'),
+                array('relation' => 'OR',
+                    array('key' => self::META_OLD, 'compare' => 'NOT EXISTS'),
+                    array('key' => self::META_OLD, 'value' => array('0', 'failed'), 'compare' => 'IN'),
+                ),
+            ),
             'orderby'        => 'ID',
             'order'          => 'ASC',
         ));

@@ -73,14 +73,24 @@ final class ImagesController extends BaseController {
     public function shrink_batch() {
         if (function_exists('set_time_limit')) @set_time_limit(120);
         $query = ImageShrinker::pending_query(self::SHRINK_BATCH);
-        $done = 0; $saved = 0;
+        $done = 0; $saved = 0; $reasons = array();
         foreach ($query->posts as $id) {
             $result = ImageShrinker::shrink_attachment($id);
-            if (is_wp_error($result)) { update_post_meta($id, ImageShrinker::META_DONE, 'failed'); continue; }
+            if (is_wp_error($result)) {
+                update_post_meta($id, ImageShrinker::META_DONE, 'failed:' . $result->get_error_code());
+                $code = $result->get_error_code();
+                if (!isset($reasons[$code])) $reasons[$code] = array('code' => $code, 'message' => $result->get_error_message(), 'count' => 0);
+                $reasons[$code]['count']++;
+                continue;
+            }
             if ($result['files']) $done++;
             $saved += $result['saved'];
+            foreach ($result['reasons'] as $r) {
+                if (!isset($reasons[$r['code']])) $reasons[$r['code']] = array('code' => $r['code'], 'message' => $r['message'], 'count' => 0);
+                $reasons[$r['code']]['count'] += $r['count'];
+            }
         }
-        return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'shrunk' => $done, 'saved_bytes' => $saved, 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
+        return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'shrunk' => $done, 'saved_bytes' => $saved, 'reasons' => array_values($reasons), 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
     }
 
     public function alt_batch() {
