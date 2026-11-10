@@ -24,7 +24,8 @@ final class ImagesController extends BaseController {
 
     const CONVERT_BATCH = 3;
     const ALT_BATCH     = 2;
-    const SHRINK_BATCH  = 2;
+    const SHRINK_BATCH  = 40;
+    const SHRINK_SECONDS = 8;
     const HASH_BATCH    = 30;
 
     public function overview() {
@@ -36,6 +37,7 @@ final class ImagesController extends BaseController {
             'pending'  => array(
                 'convert' => (int) ImageConverter::pending_query(1)->found_posts,
                 'shrink'  => (int) ImageShrinker::pending_query(1)->found_posts,
+                'shrink_crashed' => (int) (new \WP_Query(array('post_type' => 'attachment', 'post_status' => 'inherit', 'posts_per_page' => 1, 'fields' => 'ids', 'meta_query' => array(array('key' => ImageShrinker::META_DONE, 'value' => 'started')))))->found_posts,
                 'alt'     => (int) AltText::missing_query(1)->found_posts,
                 'hash'    => (int) (new \WP_Query(array('post_type' => 'attachment', 'post_status' => 'inherit', 'post_mime_type' => 'image', 'posts_per_page' => 1, 'fields' => 'ids', 'meta_query' => array(array('key' => Deduplicator::META_HASH, 'compare' => 'NOT EXISTS')))))->found_posts,
             ),
@@ -73,8 +75,10 @@ final class ImagesController extends BaseController {
     public function shrink_batch() {
         if (function_exists('set_time_limit')) @set_time_limit(120);
         $query = ImageShrinker::pending_query(self::SHRINK_BATCH);
-        $done = 0; $saved = 0; $reasons = array();
+        $done = 0; $saved = 0; $reasons = array(); $handled = 0; $started = microtime(true);
         foreach ($query->posts as $id) {
+            if ($handled > 0 && (microtime(true) - $started) > self::SHRINK_SECONDS) break;   // many small images are fast, heavy ones take a while
+            $handled++;
             $result = ImageShrinker::shrink_attachment($id);
             if (is_wp_error($result)) {
                 update_post_meta($id, ImageShrinker::META_DONE, 'failed:' . $result->get_error_code());
@@ -90,7 +94,7 @@ final class ImagesController extends BaseController {
                 $reasons[$r['code']]['count'] += $r['count'];
             }
         }
-        return rest_ensure_response(array('success' => true, 'processed' => count($query->posts), 'shrunk' => $done, 'saved_bytes' => $saved, 'reasons' => array_values($reasons), 'remaining' => max(0, (int) $query->found_posts - count($query->posts))));
+        return rest_ensure_response(array('success' => true, 'processed' => $handled, 'shrunk' => $done, 'saved_bytes' => $saved, 'reasons' => array_values($reasons), 'remaining' => max(0, (int) $query->found_posts - $handled)));
     }
 
     public function alt_batch() {

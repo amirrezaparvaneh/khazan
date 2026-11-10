@@ -40,6 +40,20 @@ final class ImageShrinker {
     }
 
     /** Animated WebP (VP8X header with the animation flag) must never be re-encoded: the editor would flatten it. */
+    /** Pure: can an image of this size be decoded and re-encoded with the memory that is left? (about 5 bytes per pixel) */
+    public static function fits_memory($width, $height, $limit_bytes, $used_bytes) {
+        if ((int) $limit_bytes <= 0) return true;                       // -1 = unlimited
+        $need = (int) $width * (int) $height * 5;
+        return $need <= max(0, (int) $limit_bytes - (int) $used_bytes) * 0.85;
+    }
+
+    private static function memory_allows($width, $height) {
+        if (function_exists('wp_raise_memory_limit')) @wp_raise_memory_limit('image');
+        $raw = (string) ini_get('memory_limit');
+        $limit = function_exists('wp_convert_hr_to_bytes') ? (int) wp_convert_hr_to_bytes($raw) : (int) $raw;
+        return self::fits_memory($width, $height, $limit, memory_get_usage(true));
+    }
+
     public static function is_animated_webp($path) {
         $head = @file_get_contents($path, false, null, 0, 32);
         return is_string($head) && strlen($head) >= 21 && substr($head, 0, 4) === 'RIFF' && substr($head, 8, 4) === 'WEBP' && substr($head, 12, 4) === 'VP8X' && (ord($head[20]) & 0x02) === 0x02;
@@ -58,6 +72,7 @@ final class ImageShrinker {
         if (!self::worth_shrinking($old_bytes, $min_kb)) return new \WP_Error('small_enough', 'حجم فایل از حد تعیین‌شده کمتر است.');
         $old_size = @getimagesize($path);
         if (!$old_size) return new \WP_Error('not_an_image', 'فایل تصویر معتبر نیست.');
+        if (!self::memory_allows($old_size[0], $old_size[1])) return new \WP_Error('too_big', 'ابعاد تصویر برای حافظه‌ی هاست زیاد است.');
 
         $editor = wp_get_image_editor($path);
         if (is_wp_error($editor)) return $editor;
@@ -89,6 +104,14 @@ final class ImageShrinker {
         $mime = get_post_mime_type($attachment_id);
         if (!$path || !in_array($mime, self::MIMES, true)) return new \WP_Error('not_shrinkable', 'این پیوست قابل فشرده‌سازی نیست.');
         $s = ImageSettings::all();
+
+        // a main file under the limit means all its (smaller) generated sizes are too: skip without opening anything
+        if (is_readable($path) && !self::worth_shrinking((int) filesize($path), $s['shrink_min_kb'])) {
+            update_post_meta($attachment_id, self::META_DONE, 'skipped:small_enough');
+            return array('saved' => 0, 'files' => 0, 'reasons' => array(array('code' => 'small_enough', 'message' => 'حجم فایل از حد تعیین‌شده کمتر است.', 'count' => 1)));
+        }
+        // marker: if PHP dies on this image (memory), it is not tried again and again
+        update_post_meta($attachment_id, self::META_DONE, 'started');
 
         $files = array($path);
         $meta = wp_get_attachment_metadata($attachment_id);

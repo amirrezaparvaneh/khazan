@@ -67,6 +67,10 @@ check('below the threshold nothing happens', S::shrink_file($tmp . '/big.jpg', '
 check('missing file is an error, not a crash', is_wp_error(S::shrink_file($tmp . '/nope.jpg', 'image/jpeg', 70, 50)));
 check('unsupported type is refused', S::shrink_file($tmp . '/big.jpg', 'image/gif', 70, 50)->get_error_code() === 'unsupported_mime');
 
+check('memory: unlimited always fits', S::fits_memory(9000, 9000, -1, 0));
+check('memory: small image fits in 128M', S::fits_memory(1500, 2000, 128 * 1048576, 20 * 1048576));
+check('memory: huge image does not fit', !S::fits_memory(8000, 8000, 128 * 1048576, 20 * 1048576));
+
 array_map('unlink', glob($tmp . '/*')); rmdir($tmp);
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
