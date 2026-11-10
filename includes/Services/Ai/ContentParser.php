@@ -191,16 +191,10 @@ final class ContentParser {
     public static function normalize_seo_title($title, $kind, $hint = '', $focus = '') {
         $title = trim(sanitize_text_field((string) $title));
         if ($title === '') return '';
-        if ($kind === Settings::KIND_PRODUCT) return \Khazan\Services\Seo\SeoMetaService::guard_title($title, $focus, null, $hint);
-        if ($kind === Settings::KIND_ARTICLE) {
-            return \Khazan\Services\Seo\SeoMetaService::guard_article_title($title, $focus, null, $hint);
-        }
-        $emoji = '/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B50}\x{2B55}]\x{FE0F}?/u';
-        // دسته: دقیقاً یک ایموجی و هرگز در ابتدای عنوان؛ در انتها می‌نشیند
-        preg_match($emoji, $title, $first);
-        $title = trim(preg_replace('/\s{2,}/u', ' ', preg_replace($emoji, '', $title)));
-        $title .= ' ' . ($first ? $first[0] : '🛍️');
-        return $title;
+        // project rule: focus keyword first, « | brand » last, no emoji, 50-60 characters
+        $focus = trim((string) $focus) !== '' ? $focus : $hint;
+        $fitted = \Khazan\Services\Seo\SeoMetaRules::fit_title($title, $focus, Settings::brand_name());
+        return $fitted !== '' ? $fitted : $title;
     }
 
     /**
@@ -238,8 +232,7 @@ final class ContentParser {
             if (!in_array($field, array('title', 'desc'), true) || isset($out[$field])) continue;
             $after = trim(sanitize_text_field($patch['after']));
             if ($field === 'title' && $after !== '') {
-                if ($kind === 'product') $after = \Khazan\Services\Seo\SeoMetaService::guard_title($after, $focus);
-                elseif ($focus !== '') $after = \Khazan\Services\Seo\SeoMetaService::guard_article_title($after, $focus);
+                if ($focus !== '') $after = \Khazan\Services\Seo\SeoMetaRules::fit_title($after, $focus, Settings::brand_name());
             }
             $before = (string) ($meta[$field] ?? '');
             if ($after === '' || $after === $before) continue;

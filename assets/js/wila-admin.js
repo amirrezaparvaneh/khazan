@@ -20,6 +20,7 @@
       scanCurrent: 0,
       postTypes: [],
       taxonomies: [],
+      images: { overview: null, busy: '', log: [], dupes: null, error: '' },
       aiSettings: {
         provider: 'avalai',
         hasAvalAIKey: false,
@@ -165,6 +166,7 @@
       this.bindQueueEvents();
       this.bindCategoryEvents();
       this.bindProductSpecsEvents();
+      this.bindImagesEvents();
       this.bindFormEvents();
 
       const closeBtn = this.root.querySelector('#wila-close-modal-btn');
@@ -173,7 +175,7 @@
   };
 
   // ماژول‌های API، فرم‌ها، صف و تب‌ها روی app سوار می‌شوند (متدها با this === app اجرا می‌شوند)
-  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanProductSpecs.methods, window.KhazanTabs.methods);
+  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanProductSpecs.methods, window.KhazanImages.methods, window.KhazanTabs.methods);
 
   document.addEventListener('DOMContentLoaded', () => app.init());
 })();

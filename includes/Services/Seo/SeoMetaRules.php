@@ -84,6 +84,6 @@ final class SeoMetaRules {
         $cut = mb_substr($meta, 0, $std['meta_max']);
         $space = mb_strrpos($cut, ' ');
         $cut = $space !== false && $space > $std['meta_min'] ? mb_substr($cut, 0, $space) : $cut;
-        return rtrim($cut, " ،,؛;:-") . '.';
+        return preg_replace('/[\s،,؛;:\-]+$/u', '', $cut) . '.';
     }
 }

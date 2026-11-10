@@ -293,12 +293,12 @@ final class ContentTargetRepository {
             $category = $this->primary_category_name($id);
             $focus = KeyphraseExtractor::optimal(isset($seo['focuskw']) ? $seo['focuskw'] : '', (string) get_the_title($id), $category);
             $seo['focuskw'] = $focus;
-            $seo['title'] = SeoMetaService::guard_title($seo['title'], $focus, null, get_the_title($id) . ' ' . $category);
+            $seo['title'] = \Khazan\Services\Seo\SeoMetaRules::fit_title($seo['title'], $focus !== '' ? $focus : get_the_title($id), \Khazan\Core\Settings::brand_name());
         }
         elseif (get_post_type($id) === Settings::blog_post_type() && !empty($seo['title']) && !empty($seo['focuskw'])) {
             // مقاله: همان رشته‌ای که به‌عنوان کلیدواژه کانونی ذخیره می‌شود، عیناً ابتدای عنوان سئو می‌نشیند
             $seo['focuskw'] = trim($seo['focuskw']);
-            $seo['title'] = SeoMetaService::guard_article_title($seo['title'], $seo['focuskw'], null, get_the_title($id));
+            $seo['title'] = \Khazan\Services\Seo\SeoMetaRules::fit_title($seo['title'], $seo['focuskw'] !== '' ? $seo['focuskw'] : get_the_title($id), \Khazan\Core\Settings::brand_name());
         }
         $this->seo->write_post_seo($id, $seo);
     }

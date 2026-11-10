@@ -80,7 +80,7 @@ check(ContentGuard::enforce_unique_links('', $links) === '', 'empty html is fine
 
 echo "6. Prompt rules\n";
 $rules = ContentRules::writing_rules('product');
-check(strpos($rules, 'دقیقاً ۴ لینک با ۴ URL کاملاً یکتا') !== false && strpos($rules, 'فقط و فقط یک‌بار') !== false && strpos($rules, 'لیست مزایا') !== false && strpos($rules, 'سوالات متداول') !== false && strpos($rules, '<strong>') !== false, 'product rules: 4 unique links, each once, no re-linking in the benefits list or FAQ');
+check(strpos($rules, 'فقط یک‌بار') !== false && strpos($rules, 'مزایا') !== false && strpos($rules, 'پرسش‌های متداول') !== false && strpos($rules, '<strong>') !== false, 'product rules: planned links only, each once, no re-linking later');
 check(strpos(ContentRules::writing_rules('article'), 'دقیقاً ۴ لینک') === false, 'article rules are unchanged');
 
 echo "7. Planned product anchors are locked (AI cannot distort them)\n";

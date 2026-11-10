@@ -84,9 +84,9 @@ check($term['wpseo_title'] === $ref, 'Yoast term title holds the final title');
 
 echo "6. Prompt\n";
 $rules = ContentRules::seo_title_rules('product');
-check(strpos($rules, '[دقیقاً همان focus_keyword] | [مزیت') !== false && strpos($rules, '۶۰ کاراکتر') !== false, 'product rules dictate the 3-part formula and the 60-char cap');
-check(strpos($rules, '👢') !== false && strpos($rules, '👠') !== false && strpos($rules, '👞') !== false && strpos($rules, '👟') !== false && strpos($rules, '👜') !== false && strpos($rules, '🎒') !== false && strpos($rules, '👝') !== false, 'all allowed emojis are listed');
-check(strpos(ContentRules::seo_title_rules('article'), 'ایموجی هرگز در ابتدای عنوان نباشد') !== false && strpos(ContentRules::seo_title_rules('article'), 'درست قبل از جداکننده') !== false, 'article rules: emoji only before | or at the end, never first');
+check(strpos($rules, '[دقیقاً همان focus_keyword]') !== false && strpos($rules, '۶۰ کاراکتر') !== false, 'product rules dictate focus-first title and the 60-char cap');
+check(strpos($rules, 'ایموجی') !== false && strpos($rules, '👢') === false, 'emoji are forbidden, none listed');
+check(strpos(ContentRules::seo_title_rules('article'), 'ایموجی در عنوان ممنوع') !== false, 'article rules forbid emoji');
 
 echo "7. Rebuild guard: wrong AI output is forced into the 3-part formula\n";
 $focus = 'نیم‌بوت زنانه آلفردو';
@@ -146,7 +146,7 @@ $GLOBALS['opt_brand'] = 'آکا چرم';
 echo "10. Prompt demands the exact formula\n";
 $r = ContentRules::seo_title_rules('product', $focus);
 check(strpos($r, 'بین ۲ تا ۴ کلمه') !== false && strpos($r, 'دسته‌بندی/نوع کالا و هم نام مدل') !== false && strpos($r, $focus) !== false, 'focus_keyword: 2-4 words, category + model, and the product focus is injected');
-check(strpos($r, 'هیچ ایموجی') !== false && strpos($r, 'شعار سایت') !== false && strpos($r, 'فقط در انتهای همین بخش') !== false, 'no emoji in part 1, no slogan in part 3, one emoji at the end of part 2');
+check(strpos($r, 'شعار سایت') !== false && strpos($r, 'ایموجی') !== false, 'no emoji, no slogan in part 3');
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

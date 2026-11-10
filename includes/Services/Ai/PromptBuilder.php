@@ -124,7 +124,8 @@ final class PromptBuilder {
         $need_syn = empty($row['related_keywords']);
 
         $prompt = "نویسنده سئوی فارسی هستی. برای محصول زیر توضیحات HTML بنویس.\n" .
-            "قواعد: فقط از داده‌ها استفاده کن؛ مشخصات، گارانتی، تخفیف، آمار و تجربه شخصی نساز. H1، لینک صفحه اول، باکس تصویر و پرامپت تصویر ننویس. جمله‌ها کوتاه و معلوم؛ هر بخش حداکثر ۲۲۰ واژه بدون H2/H3. کلیدواژه کانونی همان عبارت ۲ تا ۴ کلمه‌ای داده‌شده است (نه کل نام محصول) و تمام لینک‌های داخلی با انکر حداکثر ۴ کلمه‌ای باشند. کلیدواژه کانونی را طبیعی در ۱۰۰ واژه نخست بیاور و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها.\n" .
+            "قواعد: فقط از داده‌ها و واقعیت‌های تأییدشده استفاده کن؛ مشخصات، گارانتی، تخفیف، آمار و تجربه شخصی نساز. H1، لینک صفحه اول، باکس تصویر و پرامپت تصویر ننویس. جمله‌ها کوتاه و معلوم؛ هر بخش حداکثر ۲۲۰ واژه بدون H2/H3. کلیدواژه کانونی همان عبارت ۲ تا ۴ کلمه‌ای داده‌شده است (نه کل نام محصول) و تمام لینک‌های داخلی با انکر حداکثر ۴ کلمه‌ای باشند. کلیدواژه کانونی را طبیعی در ۱۰۰ واژه نخست بیاور و فقط در ۳۰٪ تا ۵۰٪ زیرعنوان‌ها.\n" .
+ \Khazan\Services\Content\BusinessFacts::prompt_block(isset($params['target']['category_slug']) ? $params['target']['category_slug'] : '') .
             \Khazan\Services\Content\ContentRules::product_blueprint() . "حدود " . (int) $params['word_count'] . " واژه.\n" .
             \Khazan\Services\Content\ContentRules::writing_rules($kind) .
             ($links ? "لینک داخلی اجباری با <a href=\"URL\">:\n" . implode("\n", $links) . "\n" : '') . $this->locked_links_block($params['internal_links']) .
@@ -132,8 +133,8 @@ final class PromptBuilder {
             "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
         if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
-        if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا با یک ایموجی]\n===WILA_SEO_TITLE_END===";
-        if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۶۰ کاراکتر]\n===WILA_META_DESCRIPTION_END===";
+        if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا، بدون ایموجی]\n===WILA_SEO_TITLE_END===";
+        if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۵۵ کاراکتر، بدون ایموجی]\n===WILA_META_DESCRIPTION_END===";
         if ($need_syn) $prompt .= "\n===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
 
         return $prompt;
