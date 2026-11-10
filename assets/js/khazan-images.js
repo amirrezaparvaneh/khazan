@@ -37,17 +37,18 @@
       const im = this.state.images;
       if (im.busy) return;
       im.busy = kind; im.stop = false; im.error = '';
-      const endpoint = { convert: '/images/convert-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch' }[kind];
+      const endpoint = { convert: '/images/convert-batch', shrink: '/images/shrink-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch' }[kind];
       let guard = 0;
       try {
         while (!im.stop && guard++ < 5000) {
           const r = await this.apiFetch(endpoint, { method: 'POST', body: '{}' });
           if (!r.success) throw new Error(r.message || 'خطا در پردازش.');
           if (kind === 'convert') this.imagesLog(`${fa(r.converted)} تصویر تبدیل شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + (Object.keys(r.failed || {}).length ? ` (${fa(Object.keys(r.failed).length)} خطا)` : ''));
+          if (kind === 'shrink') this.imagesLog(`${fa(r.shrunk)} تصویر فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی`);
           if (kind === 'alt') (r.items || []).forEach(i => this.imagesLog(i.alt ? `متن جایگزین: ${i.alt}` : `ردشد: ${i.error}`));
           if (kind === 'hash') this.imagesLog(`${fa(r.done)} تصویر بررسی شد`);
           if (r.stopped) { im.error = r.stopped; break; }
-          const empty = kind === 'hash' ? r.done === 0 : (kind === 'convert' ? r.processed === 0 : (r.items || []).length === 0);
+          const empty = kind === 'hash' ? r.done === 0 : (kind === 'convert' || kind === 'shrink' ? r.processed === 0 : (r.items || []).length === 0);
           await this.loadImagesQuiet();
           this.render();
           if (empty || r.remaining === 0) break;
@@ -99,6 +100,8 @@
         quality: Number(val('#khz-img-quality').value),
         delete_original: val('#khz-img-delete').checked,
         serve_next_gen: val('#khz-img-serve').checked,
+        shrink_quality: Number(val('#khz-img-shrink-quality').value),
+        shrink_min_kb: Number(val('#khz-img-shrink-min').value),
         alt_on_upload: val('#khz-img-alt-upload').checked,
         alt_overwrite: val('#khz-img-alt-overwrite').checked,
         alt_model: val('#khz-img-alt-model').value.trim(),
@@ -118,7 +121,7 @@
       const s = o.settings, st = o.stats, p = o.pending;
       const busy = !!im.busy;
       const btn = (id, label, kind) => `<button class="wila-btn wila-btn-primary ${im.busy === kind ? 'is-busy' : ''}" id="${id}" ${busy ? 'disabled' : ''}>${im.busy === kind ? 'در حال پردازش…' : label}</button>`;
-      const stop = busy && ['convert', 'alt', 'hash'].includes(im.busy) ? '<button class="wila-btn wila-btn-outline" id="khz-img-stop">توقف</button>' : '';
+      const stop = busy && ['convert', 'shrink', 'alt', 'hash'].includes(im.busy) ? '<button class="wila-btn wila-btn-outline" id="khz-img-stop">توقف</button>' : '';
       const unsupported = !o.support[s.format] ? `<p style="color:#991b1b;margin:6px 0 0">سرور شما از ${s.format.toUpperCase()} پشتیبانی نمی‌کند.</p>` : '';
 
       let dupes = '';
@@ -138,7 +141,7 @@
         ${im.error ? `<div class="wila-card" style="border-color:#fecaca;color:#991b1b">${escapeHtml(im.error)}</div>` : ''}
         <div class="wila-card">
           <h3>گزارش</h3>
-          <p>تبدیل‌شده: <b>${fa(st.converted)}</b> — صرفه‌جویی: <b>${bytes(st.saved_bytes)}</b> — متن جایگزین نوشته‌شده: <b>${fa(st.alt_written)}</b> — تکراری حذف‌شده: <b>${fa(st.duplicates_removed)}</b> (${bytes(st.duplicate_bytes)})</p>
+          <p>تبدیل‌شده: <b>${fa(st.converted)}</b> — صرفه‌جویی: <b>${bytes(st.saved_bytes)}</b> — متن جایگزین نوشته‌شده: <b>${fa(st.alt_written)}</b> — تکراری حذف‌شده: <b>${fa(st.duplicates_removed)}</b> (${bytes(st.duplicate_bytes)}) — فشرده‌شده: <b>${fa(st.shrunk)}</b> (${bytes(st.shrunk_bytes)} صرفه‌جویی)</p>
         </div>
 
         <div class="wila-card">
@@ -149,6 +152,10 @@
           ${unsupported}
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-delete" ${s.delete_original ? 'checked' : ''}/> حذف فایل اصلی (فقط برای تصاویر جدید؛ تصاویر قدیمی هیچ‌وقت حذف نمی‌شوند)</label>
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-serve" ${s.serve_next_gen ? 'checked' : ''}/> نمایش نسخه WebP/AVIF در صفحه‌ها وقتی فایلش وجود دارد</label>
+          <div class="khz-fields">
+            <label class="khz-field">کیفیت فشرده‌سازی تصاویر سنگین (۵۰ تا ۹۵)<input type="number" id="khz-img-shrink-quality" min="50" max="95" value="${s.shrink_quality}"/></label>
+            <label class="khz-field">فقط فایل‌های سنگین‌تر از (کیلوبایت)<input type="number" id="khz-img-shrink-min" min="50" max="20000" value="${s.shrink_min_kb}"/></label>
+          </div>
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-alt-upload" ${s.alt_on_upload ? 'checked' : ''}/> نوشتن خودکار متن جایگزین برای تصویر جدید (از اعتبار AvalAI هزینه دارد)</label>
           <label style="display:block;margin:6px 0"><input type="checkbox" id="khz-img-alt-overwrite" ${s.alt_overwrite ? 'checked' : ''}/> بازنویسی متن جایگزین‌های موجود (پیشنهاد نمی‌شود)</label>
           <label style="display:block;margin:6px 0">مدل بینایی برای متن جایگزین (خالی = مدل اصلی):
@@ -160,6 +167,12 @@
           <h3>تبدیل تصاویر قبلی</h3>
           <p>در انتظار تبدیل: <b>${fa(p.convert)}</b> تصویر. فایل‌های اصلی دست‌نخورده می‌مانند و ظاهر سایت خراب نمی‌شود.</p>
           ${btn('khz-img-convert', 'شروع تبدیل', 'convert')} ${stop}
+        </div>
+
+        <div class="wila-card">
+          <h3>کاهش حجم تصاویر سنگین</h3>
+          <p>در انتظار بررسی: <b>${fa(p.shrink)}</b> تصویر. هر تصویر سنگین (و همه‌ی اندازه‌های ساخته‌شده‌اش) با همان نام، همان فرمت و همان ابعاد دوباره فشرده می‌شود، پس هیچ لینکی خراب نمی‌شود. فقط وقتی نتیجه حداقل ۱۰٪ کوچک‌تر باشد جایگزین می‌شود. <b>نسخه‌ی اصلی نگه داشته نمی‌شود</b> (برای همین فضا آزاد می‌شود). هر تصویر فقط یک بار فشرده می‌شود. ابتدا روی چند تصویر امتحان کنید و با «توقف» متوقفش کنید.</p>
+          ${btn('khz-img-shrink', 'شروع کاهش حجم', 'shrink')} ${stop}
         </div>
 
         <div class="wila-card">
@@ -184,6 +197,7 @@
       const on = (s, fn) => { const el = q(s); if (el) el.addEventListener('click', fn); };
       on('#khz-img-save', () => this.saveImageSettings());
       on('#khz-img-convert', () => this.runImagesLoop('convert'));
+      on('#khz-img-shrink', () => { if (window.confirm('تصاویر سنگین دوباره فشرده می‌شوند و نسخه‌ی اصلی نگه داشته نمی‌شود. ادامه می‌دهید؟')) this.runImagesLoop('shrink'); });
       on('#khz-img-alt', () => this.runImagesLoop('alt'));
       on('#khz-img-hash', () => this.runImagesLoop('hash'));
       on('#khz-img-stop', () => { this.state.images.stop = true; });
