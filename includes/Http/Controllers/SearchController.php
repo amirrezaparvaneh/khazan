@@ -50,6 +50,10 @@ final class SearchController extends BaseController {
     }
 
     public function opportunities() {
-        return rest_ensure_response(array('success' => true) + SearchConsole::opportunities(SearchConsole::data()));
+        $opps = SearchConsole::opportunities(SearchConsole::data(), 30);
+        $cards = SearchConsole::plan($opps);
+        $counts = array();
+        foreach ($cards as $c) $counts[$c['kind']] = (isset($counts[$c['kind']]) ? $counts[$c['kind']] : 0) + 1;
+        return rest_ensure_response(array('success' => true, 'cards' => $cards, 'counts' => $counts, 'potential' => array_sum(array_column($cards, 'potential'))));
     }
 }

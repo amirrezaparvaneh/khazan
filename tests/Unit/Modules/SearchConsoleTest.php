@@ -72,5 +72,17 @@ check('cannibalisation finds belt with two pages', count($o['cannibal']) === 1 &
 check('no data gives empty lists', S::opportunities(array()) === array('near_top' => array(), 'low_ctr' => array(), 'deep' => array(), 'cannibal' => array()));
 check('expected ctr falls with position', S::expected_ctr(2) > S::expected_ctr(8) && S::expected_ctr(8) > S::expected_ctr(30));
 
+$cards = S::plan($o);
+$kinds = array_column($cards, 'kind');
+check('plan has one card per opportunity', count($cards) === 4 && in_array('near_top', $kinds) && in_array('low_ctr', $kinds) && in_array('deep', $kinds) && in_array('cannibal', $kinds));
+$byKind = array(); foreach ($cards as $c) $byKind[$c['kind']] = $c;
+check('deep page below 30 gets a backlink action', in_array('backlink', array_column($byKind['deep']['actions'], 'type')));
+check('near top at position 7 has no backlink action', !in_array('backlink', array_column($byKind['near_top']['actions'], 'type')));
+check('low ctr is a meta job only', array_unique(array_column($byKind['low_ctr']['actions'], 'type')) === array('meta'));
+check('cannibal suggests merging', in_array('merge', array_column($byKind['cannibal']['actions'], 'type')) && count($byKind['cannibal']['competing']) === 2);
+check('cards sorted by potential', $cards[0]['potential'] >= $cards[count($cards) - 1]['potential']);
+check('page kinds', S::page_kind('https://x.com/category/hats/') === 'category' && S::page_kind('https://x.com/') === 'home' && S::page_kind('https://x.com/blog/a') === 'page');
+check('plan of nothing', S::plan(array('near_top' => array(), 'low_ctr' => array(), 'deep' => array(), 'cannibal' => array())) === array());
+
 echo "$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

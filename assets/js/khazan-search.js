@@ -73,19 +73,54 @@
 
       const o = s.opps;
       const short = (u) => String(u || '').replace(/^https?:\/\/[^/]+/, '') || '/';
-      const li = (txt) => `<li style="margin:3px 0">${txt}</li>`;
-      const list = (title, hint, items) => `
-        <h4 style="margin:16px 0 2px">${title} <span style="font-weight:400;color:#6b7280">(${fa(items.length)})</span></h4>
-        <p style="font-size:0.8rem;color:#6b7280;margin:0 0 6px">${hint}</p>
-        <ul style="font-size:0.82rem;margin:0;padding-inline-start:18px">${items.length ? items.join('') : '<li>موردی پیدا نشد.</li>'}</ul>`;
+      const KINDS = {
+        near_top: { label: 'نزدیک صفحه‌ی اول', tone: 'green', hint: 'با کمی تقویت به صفحه‌ی اول می‌رسند' },
+        low_ctr: { label: 'کلیک کم', tone: 'amber', hint: 'رتبه خوب، کلیک کم؛ مشکل عنوان و توضیحات' },
+        deep: { label: 'رتبه‌ی عمیق', tone: 'blue', hint: 'تقاضا هست ولی صفحه پایین است' },
+        cannibal: { label: 'رقابت صفحه‌ها', tone: 'red', hint: 'چند صفحه برای یک عبارت با هم رقابت می‌کنند' }
+      };
+      const ACTIONS = {
+        content: { label: 'محتوا', icon: '✎' },
+        links: { label: 'لینک‌سازی', icon: '↔' },
+        meta: { label: 'عنوان و متا', icon: '⌘' },
+        backlink: { label: 'ریپورتاژ و بک‌لینک', icon: '↗' },
+        merge: { label: 'ادغام', icon: '⇄' }
+      };
+      const filter = s.filter || 'all';
+      const cards = o ? o.cards.filter(c => filter === 'all' || c.kind === filter) : [];
+      const tile = (key, label, n) => `<button type="button" class="khz-opp-tile ${filter === key ? 'is-active' : ''}" data-opp-filter="${key}"><span class="khz-opp-tile-n">${fa(n)}</span><span class="khz-opp-tile-l">${label}</span></button>`;
+      const card = (c) => {
+        const k = KINDS[c.kind];
+        return `
+        <article class="khz-opp-card khz-tone-${k.tone}">
+          <header class="khz-opp-head">
+            <span class="khz-opp-badge">${k.label}</span>
+            ${c.potential ? `<span class="khz-opp-gain" title="برآورد کلیک اضافه در ۹۰ روز، اگر برنامه اجرا شود">+${fa(c.potential)} کلیک</span>` : ''}
+          </header>
+          <h4 class="khz-opp-title" ${c.kind === 'cannibal' || c.kind === 'near_top' ? '' : 'dir="ltr"'}>${escapeHtml(c.kind === 'low_ctr' || c.kind === 'deep' ? short(c.title) : c.title)}</h4>
+          ${c.kind !== 'low_ctr' && c.kind !== 'deep' && c.page ? `<div class="khz-opp-url" dir="ltr">${escapeHtml(short(c.page))}</div>` : ''}
+          <div class="khz-opp-metrics">
+            <span><b>${pos(c.position)}</b> جایگاه</span>
+            <span><b>${fa(c.impressions)}</b> نمایش</span>
+            ${c.kind !== 'cannibal' ? `<span><b>${fa(c.clicks)}</b> کلیک</span><span><b>${pct(c.ctr)}</b> CTR</span>` : ''}
+          </div>
+          <p class="khz-opp-diag">${escapeHtml(c.diagnosis)}</p>
+          ${c.competing ? `<div class="khz-opp-compete">${c.competing.map(p => `<div><span dir="ltr">${escapeHtml(short(p.page))}</span><i>جایگاه ${pos(p.position)}</i></div>`).join('')}</div>` : ''}
+          <ul class="khz-opp-actions">
+            ${c.actions.map(a => `<li><span class="khz-opp-ico khz-act-${a.type}">${ACTIONS[a.type].icon}</span><div><b>${escapeHtml(a.label)}</b><span>${escapeHtml(a.detail)}</span></div></li>`).join('')}
+          </ul>
+        </article>`;
+      };
       const opps = o ? `
         <div class="wila-card">
-          <h3>فرصت‌ها</h3>
-          <p style="font-size:0.85rem">این فهرست‌ها خودکار از داده‌ی سرچ کنسول ساخته می‌شوند و نشان می‌دهند وقتتان را روی چه چیزی بگذارید.</p>
-          ${list('نزدیک صفحه‌ی اول', 'عبارت‌هایی با جایگاه ۵ تا ۲۰. با کمی تقویت صفحه به صفحه‌ی اول می‌رسند.', o.near_top.map(r => li(`<b>${escapeHtml(r.query)}</b> — جایگاه ${pos(r.position)}، نمایش ${fa(r.impressions)} ← <span dir="ltr">${escapeHtml(short(r.page))}</span>`)))}
-          ${list('CTR پایین نسبت به جایگاه', 'صفحه‌هایی که رتبه‌ی خوب دارند ولی کم کلیک می‌گیرند؛ عنوان سئو و توضیحات متا را بازنویسی کنید.', o.low_ctr.map(r => li(`<span dir="ltr">${escapeHtml(short(r.page))}</span> — جایگاه ${pos(r.position)}، CTR ${pct(r.ctr)} (انتظار ${pct(r.expected_ctr)})`)))}
-          ${list('نمایش بالا، رتبه‌ی عمیق', 'صفحه‌هایی با رتبه‌ی ۲۰ تا ۸۰ و نمایش زیاد؛ به محتوای قوی‌تر و لینک داخلی بیشتر نیاز دارند.', o.deep.map(r => li(`<span dir="ltr">${escapeHtml(short(r.page))}</span> — جایگاه ${pos(r.position)}، نمایش ${fa(r.impressions)}`)))}
-          ${list('رقابت صفحه‌ها با هم', 'یک عبارت که چند صفحه‌ی سایت برایش نمایش می‌گیرند؛ یکی را اصلی کنید و بقیه را به آن لینک دهید.', o.cannibal.map(r => li(`<b>${escapeHtml(r.query)}</b> — ${r.pages.map(p => `<span dir="ltr">${escapeHtml(short(p.page))}</span> (${pos(p.position)})`).join(' ، ')}`)))}
+          <h3>فرصت‌ها و کارهای پیشنهادی</h3>
+          <p class="khz-opp-sub">فرصت‌ها بر اساس بیشترین کلیک قابل‌کسب مرتب شده‌اند. برآورد کلیک تقریبی است و فقط برای اولویت‌بندی به کار می‌آید.</p>
+          <div class="khz-opp-tiles">
+            ${tile('all', 'همه', o.cards.length)}
+            ${Object.keys(KINDS).map(k => tile(k, KINDS[k].label, (o.counts || {})[k] || 0)).join('')}
+          </div>
+          ${o.potential ? `<div class="khz-opp-total">اگر همه‌ی برنامه‌ها اجرا شود، حدود <b>${fa(o.potential)}</b> کلیک اضافه در هر ۹۰ روز</div>` : ''}
+          <div class="khz-opp-grid">${cards.length ? cards.map(card).join('') : '<p>موردی در این گروه نیست.</p>'}</div>
         </div>` : '';
       return `
         ${s.error ? `<div class="wila-card" style="border-color:#fecaca;color:#991b1b">${escapeHtml(s.error)}</div>` : ''}
@@ -119,6 +154,7 @@
       on('#khz-gsc-connect', () => this.connectSearch());
       on('#khz-gsc-sync', () => this.syncSearch());
       on('#khz-gsc-disconnect', () => this.disconnectSearch());
+      this.root.querySelectorAll('[data-opp-filter]').forEach(b => b.addEventListener('click', () => { this.state.search.filter = b.getAttribute('data-opp-filter'); this.render(); }));
       const ta = this.root.querySelector('#khz-gsc-key');
       if (ta) ta.addEventListener('input', e => { this.state.search.keyDraft = e.target.value; });
     },

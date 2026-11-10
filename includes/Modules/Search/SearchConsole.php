@@ -145,6 +145,100 @@ final class SearchConsole {
         );
     }
 
+
+    /** Page-type hint from the URL: a category archive, a product or an article/other page. */
+    public static function page_kind($url) {
+        $path = (string) parse_url((string) $url, PHP_URL_PATH);
+        if (preg_match('#/(category|product-category|cat)/#', $path)) return 'category';
+        if (preg_match('#/(product|shop)/#', $path)) return 'product';
+        if (trim($path, '/') === '') return 'home';
+        return 'page';
+    }
+
+    private static function action($type, $label, $detail) {
+        return array('type' => $type, 'label' => $label, 'detail' => $detail);
+    }
+
+    /**
+     * Turns the opportunity lists into one prioritised list of cards. Each card names the problem and the
+     * concrete work to do (rule based: no AI cost, same answer every time). potential = estimated extra clicks
+     * over the synced period if the plan works.
+     */
+    public static function plan(array $opps, $limit = 40) {
+        $cards = array();
+
+        foreach ($opps['near_top'] as $q) {
+            $pos = (float) $q['position'];
+            $gain = max(0, (int) round($q['impressions'] * (self::expected_ctr(5) - $q['ctr'])));
+            $actions = array(
+                self::action('meta', 'عنوان و توضیحات متا', 'عبارت «' . $q['query'] . '» را در ابتدای عنوان سئو و در توضیحات متا بیاورید.'),
+                self::action('content', 'تقویت محتوا', 'بخشی (یا چند پرسش‌وپاسخ) بنویسید که مستقیم به همین عبارت جواب بدهد و ۲۰۰ تا ۳۰۰ کلمه به صفحه اضافه کنید.'),
+                self::action('links', 'لینک داخلی', 'از ۳ تا ۵ صفحه‌ی مرتبط با متن لنگر «' . $q['query'] . '» به این صفحه لینک بدهید.'),
+            );
+            if ($pos > 9) $actions[] = self::action('backlink', 'ریپورتاژ یا بک‌لینک', 'یک ریپورتاژ یا بک‌لینک با لنگر مرتبط، آخرین فشار برای ورود به صفحه‌ی اول است.');
+            $cards[] = array(
+                'kind' => 'near_top', 'title' => $q['query'], 'page' => isset($q['page']) ? $q['page'] : '',
+                'position' => $q['position'], 'impressions' => $q['impressions'], 'clicks' => $q['clicks'], 'ctr' => $q['ctr'],
+                'diagnosis' => 'جایگاه ' . $q['position'] . ' است؛ با کمی تقویت به صفحه‌ی اول می‌رسد.',
+                'potential' => $gain, 'actions' => $actions,
+            );
+        }
+
+        foreach ($opps['low_ctr'] as $p) {
+            $gain = max(0, (int) round($p['impressions'] * ($p['expected_ctr'] * 0.7 - $p['ctr'])));
+            $cards[] = array(
+                'kind' => 'low_ctr', 'title' => $p['page'], 'page' => $p['page'],
+                'position' => $p['position'], 'impressions' => $p['impressions'], 'clicks' => $p['clicks'], 'ctr' => $p['ctr'],
+                'diagnosis' => 'رتبه خوب است ولی کلیک کم می‌گیرد؛ مشکل از ظاهر نتیجه در گوگل است، نه رتبه.',
+                'potential' => $gain,
+                'actions' => array(
+                    self::action('meta', 'بازنویسی عنوان سئو', 'عنوان را جذاب‌تر و دقیق‌تر کنید: عبارت اصلی، یک مزیت (مثلاً چرم طبیعی یا ارسال سریع) و نام برند.'),
+                    self::action('meta', 'بازنویسی توضیحات متا', 'در ۱۴۰ تا ۱۶۰ کاراکتر مزیت اصلی را بگویید و دعوت به اقدام اضافه کنید.'),
+                ),
+            );
+        }
+
+        foreach ($opps['deep'] as $p) {
+            $kind = self::page_kind($p['page']);
+            $gain = (int) round($p['impressions'] * self::expected_ctr(15));
+            $actions = array(
+                self::action('content', $kind === 'category' ? 'متن توضیحی دسته' : 'گسترش محتوا', $kind === 'category'
+                    ? 'برای این دسته متن راهنمای خرید و پرسش‌های متداول بنویسید؛ دسته‌هایی که فقط لیست محصول دارند معمولاً رتبه نمی‌گیرند.'
+                    : 'محتوا را کامل‌تر و منحصربه‌فردتر کنید و به پرسش‌های واقعی کاربران جواب بدهید.'),
+                self::action('links', 'لینک داخلی', 'از مقاله‌ها و دسته‌های نزدیک به این صفحه، لینک با لنگر مرتبط بدهید.'),
+            );
+            if ($p['position'] > 30) $actions[] = self::action('backlink', 'ریپورتاژ یا بک‌لینک', 'رتبه‌ی عمیق با محتوا و لینک داخلی به‌تنهایی جابه‌جا نمی‌شود؛ چند ریپورتاژ با لنگر مرتبط لازم است.');
+            $cards[] = array(
+                'kind' => 'deep', 'title' => $p['page'], 'page' => $p['page'],
+                'position' => $p['position'], 'impressions' => $p['impressions'], 'clicks' => $p['clicks'], 'ctr' => $p['ctr'],
+                'diagnosis' => 'تقاضا هست (نمایش بالا) ولی صفحه خیلی پایین است.',
+                'potential' => $gain, 'actions' => $actions,
+            );
+        }
+
+        foreach ($opps['cannibal'] as $c) {
+            $main = $c['pages'][0]['page'];
+            $cards[] = array(
+                'kind' => 'cannibal', 'title' => $c['query'], 'page' => $main,
+                'position' => $c['pages'][0]['position'], 'impressions' => $c['impressions'], 'clicks' => 0, 'ctr' => 0,
+                'diagnosis' => count($c['pages']) . ' صفحه‌ی سایت برای این عبارت با هم رقابت می‌کنند و قدرت هر دو تقسیم می‌شود.',
+                'potential' => 0, 'competing' => $c['pages'],
+                'actions' => array(
+                    self::action('merge', 'انتخاب صفحه‌ی اصلی', 'صفحه‌ی ' . self::path($main) . ' را اصلی کنید و محتوای ارزشمند بقیه را به آن منتقل کنید.'),
+                    self::action('links', 'لینک به صفحه‌ی اصلی', 'از صفحه‌های رقیب با همین لنگر به صفحه‌ی اصلی لینک بدهید، یا آن‌ها را با ریدایرکت ۳۰۱ به آن ببرید.'),
+                ),
+            );
+        }
+
+        usort($cards, function ($a, $b) { return $b['potential'] <=> $a['potential'] ?: $b['impressions'] <=> $a['impressions']; });
+        return array_slice($cards, 0, $limit);
+    }
+
+    private static function path($url) {
+        $p = (string) parse_url((string) $url, PHP_URL_PATH);
+        return $p === '' ? '/' : $p;
+    }
+
     /** The service-account email, safe to show. */
     public static function email() {
         $key = GoogleServiceAuth::parse_key(get_option(self::OPT_KEY, ''));
