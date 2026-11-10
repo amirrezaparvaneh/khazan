@@ -62,6 +62,21 @@
       this.render();
     },
 
+    suggestAi: async function (type, id) {
+      const l = this.state.linking;
+      const key = type + '_' + id;
+      l.open[key] = { loading: true, ai: true };
+      this.render();
+      try {
+        const r = await this.apiFetch('/linking/suggest-ai', { method: 'POST', body: JSON.stringify({ type, id }) });
+        if (!r.success) throw new Error(r.message || 'هوش مصنوعی پیشنهادی نداد.');
+        const sel = {};
+        r.suggestions.forEach(s => { sel[s.source_id] = true; });
+        l.open[key] = { result: r, sel, ai: true };
+      } catch (e) { l.open[key] = { error: e.message, ai: true }; }
+      this.render();
+    },
+
     applySuggest: async function (type, id) {
       const l = this.state.linking;
       const key = type + '_' + id;
@@ -108,8 +123,9 @@
     suggestPanelHtml: function (type, id) {
       const box = this.state.linking.open[type + '_' + id];
       if (!box) return '';
-      if (box.loading) return `<div class="khz-ln-panel"><div class="khz-ln-skeleton"></div><div class="khz-ln-skeleton"></div><p class="khz-ln-muted">متن مقاله‌های مرتبط در حال خواندن است…</p></div>`;
-      if (box.error) return `<div class="khz-ln-panel"><p class="khz-ln-error">${escapeHtml(box.error)}</p></div>`;
+      const aiBtn = `<button type="button" class="wila-btn wila-btn-primary wila-btn-sm" data-ln-ai="${escapeHtml(type)}" data-id="${id}">پیشنهاد جای لینک با هوش مصنوعی</button>`;
+      if (box.loading) return `<div class="khz-ln-panel" aria-busy="true"><div class="khz-ln-skeleton"></div><div class="khz-ln-skeleton"></div><p class="khz-ln-muted" role="status">${box.ai ? 'هوش مصنوعی متن کامل مقاله‌های مرتبط را می‌خواند و جای مناسب را انتخاب می‌کند؛ ممکن است تا یک دقیقه طول بکشد…' : 'متن مقاله‌های مرتبط در حال خواندن است…'}</p></div>`;
+      if (box.error) return `<div class="khz-ln-panel"><p class="khz-ln-error" role="alert">${escapeHtml(box.error)}</p>${box.ai ? `<div class="khz-ln-actions">${aiBtn.replace('پیشنهاد جای لینک با هوش مصنوعی', 'تلاش دوباره')}</div>` : ''}</div>`;
       const r = box.result;
       const done = {};
       (box.done || []).forEach(d => { done[d.source_id] = d; });
@@ -120,12 +136,14 @@
             <b>جای طبیعی برای لینک پیدا نشد.</b>
             <p>${r.target.phrases.length ? `${fa(r.checked)} مقاله با عبارت‌های «${r.target.phrases.slice(0, 3).map(escapeHtml).join('»، «')}» بررسی شد.` : 'برای این صفحه کلیدواژه‌ی کانونی یا عبارت جست‌وجوی مشخصی ثبت نشده است؛ ابتدا کلیدواژه‌ی کانونی آن را در Yoast یا Rank Math تعیین کنید.'}</p>
             ${skipped ? `<ul>${skipped}</ul>` : ''}
-            <p class="khz-ln-muted">راه بعدی: یک مقاله‌ی تازه درباره‌ی همین موضوع بنویسید یا در یکی از مقاله‌های مرتبط جمله‌ای با این عبارت اضافه کنید. پیشنهاد جمله با هوش مصنوعی در مرحله‌ی بعد اضافه می‌شود.</p>
+            ${box.ai
+              ? '<p class="khz-ln-muted">هوش مصنوعی هم در مقاله‌های مرتبط جای طبیعی‌ای پیدا نکرد. بهتر است یک مقاله‌ی تازه درباره‌ی همین موضوع بنویسید و از آن به این صفحه لینک بدهید.</p>'
+              : `<p class="khz-ln-muted">هیچ مقاله‌ای عبارت‌های این صفحه را عیناً ندارد. هوش مصنوعی می‌تواند متن کامل مقاله‌های هم‌موضوع را بخواند و پاراگراف و انکرتکست مناسب را از دل متن خودشان پیشنهاد بدهد (از اعتبار AvalAI استفاده می‌کند).</p><div class="khz-ln-actions">${aiBtn}</div>`}
           </div></div>`;
       }
       const selected = r.suggestions.filter(s => box.sel[s.source_id] && !(done[s.source_id] && done[s.source_id].ok)).length;
       return `<div class="khz-ln-panel">
-        <p class="khz-ln-muted">${fa(r.checked)} مقاله‌ی مرتبط خوانده شد. این‌ها طبیعی‌ترین جاها برای لینک به «${escapeHtml(r.target.title)}» هستند؛ متن مقاله‌ها تغییر نمی‌کند و فقط همان عبارت لینک می‌شود.</p>
+        <p class="khz-ln-muted">${box.ai ? '<span class="khz-ln-chip tone-ai">پیشنهاد هوش مصنوعی</span> ' : ''}${fa(r.checked)} مقاله‌ی مرتبط خوانده شد. این‌ها طبیعی‌ترین جاها برای لینک به «${escapeHtml(r.target.title)}» هستند؛ متن مقاله‌ها تغییر نمی‌کند و فقط همان عبارت لینک می‌شود.</p>
         <ul class="khz-ln-sugs">
           ${r.suggestions.map(s => {
             const d = done[s.source_id];
@@ -252,6 +270,7 @@
       root.querySelectorAll('[data-ln-sub]').forEach(b => b.addEventListener('click', () => { l.sub = b.getAttribute('data-ln-sub'); this.render(); }));
       root.querySelectorAll('[data-ln-filter]').forEach(b => b.addEventListener('click', () => { l.filter = b.getAttribute('data-ln-filter'); this.render(); }));
       root.querySelectorAll('[data-ln-find]').forEach(b => b.addEventListener('click', () => this.toggleSuggest(b.getAttribute('data-ln-find'), Number(b.getAttribute('data-id')))));
+      root.querySelectorAll('[data-ln-ai]').forEach(b => b.addEventListener('click', () => this.suggestAi(b.getAttribute('data-ln-ai'), Number(b.getAttribute('data-id')))));
       root.querySelectorAll('[data-ln-apply]').forEach(b => b.addEventListener('click', () => this.applySuggest(b.getAttribute('data-ln-apply'), Number(b.getAttribute('data-id')))));
       root.querySelectorAll('[data-ln-undo]').forEach(b => b.addEventListener('click', () => this.undoLink(b.getAttribute('data-ln-undo'))));
       root.querySelectorAll('.khz-ln-sel').forEach(c => c.addEventListener('change', () => {

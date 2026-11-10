@@ -46,6 +46,16 @@ final class LinkingController extends BaseController {
         return rest_ensure_response(array('success' => true) + $r);
     }
 
+    public function suggest_ai($request) {
+        $p = $request->get_json_params();
+        $type = sanitize_key(isset($p['type']) ? (string) $p['type'] : '');
+        $id = isset($p['id']) ? (int) $p['id'] : 0;
+        if ($type === '' || $id <= 0) return new \WP_Error('khazan_params', 'صفحه مشخص نیست.', array('status' => 400));
+        $r = LinkSuggester::suggest_ai($type, $id);
+        if (is_wp_error($r)) return $r;
+        return rest_ensure_response(array('success' => true) + $r);
+    }
+
     public function apply($request) {
         $p = $request->get_json_params();
         $type = sanitize_key(isset($p['type']) ? (string) $p['type'] : '');

@@ -5,7 +5,10 @@
 
 namespace Khazan\Http\Controllers;
 
+use Khazan\Modules\Search\ContentUpdater;
+use Khazan\Modules\Search\PageAnalyzer;
 use Khazan\Modules\Search\SearchConsole;
+use Khazan\Services\Links\HtmlLinkText;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -52,8 +55,46 @@ final class SearchController extends BaseController {
     public function opportunities() {
         $opps = SearchConsole::opportunities(SearchConsole::data(), 30);
         $cards = SearchConsole::plan($opps);
+        $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+        $done = array_flip(PageAnalyzer::analyzed_keys());
+        foreach ($cards as $i => $c) $cards[$i]['analyzed'] = isset($done[(string) HtmlLinkText::url_key($c['page'], $host)]);
         $counts = array();
         foreach ($cards as $c) $counts[$c['kind']] = (isset($counts[$c['kind']]) ? $counts[$c['kind']] : 0) + 1;
         return rest_ensure_response(array('success' => true, 'cards' => $cards, 'counts' => $counts, 'potential' => array_sum(array_column($cards, 'potential'))));
+    }
+
+    private static function param($request, $key) {
+        $p = $request->get_json_params();
+        $v = is_array($p) && isset($p[$key]) ? $p[$key] : $request->get_param($key);
+        return is_scalar($v) ? (string) $v : '';
+    }
+
+    public function analyze($request) {
+        $r = PageAnalyzer::analyze(esc_url_raw(self::param($request, 'page')), sanitize_text_field(self::param($request, 'opportunity')), sanitize_text_field(self::param($request, 'diagnosis')));
+        if (is_wp_error($r)) return $r;
+        return rest_ensure_response(array('success' => true, 'result' => $r, 'backup' => ContentUpdater::has_backup($r['kind'], $r['id'])));
+    }
+
+    public function analysis($request) {
+        $r = PageAnalyzer::cached(esc_url_raw(self::param($request, 'page')));
+        return rest_ensure_response(array('success' => true, 'result' => $r, 'backup' => $r ? ContentUpdater::has_backup($r['kind'], $r['id']) : ''));
+    }
+
+    public function update_draft($request) {
+        $r = ContentUpdater::draft(esc_url_raw(self::param($request, 'page')));
+        if (is_wp_error($r)) return $r;
+        return rest_ensure_response(array('success' => true, 'draft' => $r));
+    }
+
+    public function update_apply($request) {
+        $r = ContentUpdater::apply(self::param($request, 'draft_id'), self::param($request, 'with_meta') === '1' || self::param($request, 'with_meta') === 'true');
+        if (is_wp_error($r)) return $r;
+        return rest_ensure_response(array('success' => true) + $r);
+    }
+
+    public function update_restore($request) {
+        $r = ContentUpdater::restore(self::param($request, 'kind') === 'term' ? 'term' : 'post', self::param($request, 'type'), (int) self::param($request, 'id'));
+        if (is_wp_error($r)) return $r;
+        return rest_ensure_response(array('success' => true) + $r);
     }
 }

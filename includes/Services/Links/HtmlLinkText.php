@@ -273,6 +273,45 @@ final class HtmlLinkText {
         return $out;
     }
 
+
+    /**
+     * Paragraph-like text pieces that could take a link (for a model to choose from): list of array(token, text).
+     * Pieces in a paragraph that already has a link, and very short pieces, are left out.
+     */
+    public static function candidates(string $html, $min_chars = 40, $max = 25) {
+        $doc = self::tokenize($html);
+        $out = array();
+        foreach ($doc['tokens'] as $ti => $t) {
+            if ($t['t'] !== 'text' || $t['ctx'] !== 'ok' || $t['flow']) continue;
+            if (!empty($doc['links'][$t['block']])) continue;
+            $text = trim(preg_replace('/\s+/u', ' ', html_entity_decode($t['raw'], ENT_QUOTES, 'UTF-8')));
+            if (mb_strlen($text, 'UTF-8') < $min_chars) continue;
+            $out[] = array('token' => $ti, 'text' => mb_substr($text, 0, 400, 'UTF-8'));
+            if (count($out) >= $max) break;
+        }
+        return $out;
+    }
+
+    /**
+     * Validates a spot chosen by someone else (a model): the anchor must be 2-6 whole words found word for word in
+     * that text piece, with the same rules as find(). Returns the spot or null.
+     */
+    public static function spot_at(string $html, $token, $anchor, array $opts) {
+        $anchor = trim((string) $anchor);
+        $words = count(preg_split('/\s+/u', $anchor));
+        if ($anchor === '' || $words < 2 || $words > 6) return null;
+        $doc = self::tokenize($html);
+        if (!isset($doc['tokens'][$token])) return null;
+        $t = $doc['tokens'][$token];
+        if ($t['t'] !== 'text' || $t['ctx'] !== 'ok') return null;
+        // run the normal search on this one phrase and keep the hit inside the chosen piece
+        $r = self::find($html, array($anchor), $opts + array('limit' => 50));
+        foreach ($r['spots'] as $spot) {
+            if ($spot['token'] === (int) $token) return $spot;
+        }
+        return null;
+    }
+
     /** Internal links in a document (count). */
     public static function internal_count($html, $home_host) {
         $n = 0;

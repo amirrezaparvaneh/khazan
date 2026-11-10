@@ -58,6 +58,7 @@ final class RestRouter {
         register_rest_route($this->namespace, '/linking/overview', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($linking, 'overview'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/audit', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'audit'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/suggest', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($linking, 'suggest'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/suggest-ai', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'suggest_ai'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'apply'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/undo', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'undo'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/settings', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'settings'), 'permission_callback' => $perm));
@@ -65,6 +66,11 @@ final class RestRouter {
         register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/opportunities', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'opportunities'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/analyze', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'analyze'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/analysis', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'analysis'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/update-draft', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'update_draft'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/update-apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'update_apply'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/update-restore', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'update_restore'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/connect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'connect'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/disconnect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'disconnect'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/sync', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'sync'), 'permission_callback' => $perm));

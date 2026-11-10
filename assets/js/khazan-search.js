@@ -10,6 +10,14 @@
   const pct = (n) => toPersianDigits((Number(n) * 100).toFixed(1)) + '٪';
   const pos = (n) => toPersianDigits(Number(n).toFixed(1));
 
+  const short = (u) => { const p = String(u || '').replace(/^https?:\/\/[^/]+/, '') || '/'; try { return decodeURI(p); } catch (e) { return p; } };
+  const KINDS = {
+    near_top: { label: 'نزدیک صفحه‌ی اول', tone: 'green', hint: 'با کمی تقویت به صفحه‌ی اول می‌رسند' },
+    low_ctr: { label: 'کلیک کم', tone: 'amber', hint: 'رتبه خوب، کلیک کم؛ مشکل عنوان و توضیحات' },
+    deep: { label: 'رتبه‌ی عمیق', tone: 'blue', hint: 'تقاضا هست ولی صفحه پایین است' },
+    cannibal: { label: 'رقابت صفحه‌ها', tone: 'red', hint: 'چند صفحه برای یک عبارت با هم رقابت می‌کنند' }
+  };
+
   const methods = {
     loadSearch: async function () {
       const s = this.state.search;
@@ -57,6 +65,187 @@
       await this.loadSearch();
     },
 
+
+    // ---- AI analysis and content update (side drawer) ----
+
+    openAnalysis: async function (card) {
+      const s = this.state.search;
+      s.drawer = { page: card.page, title: card.title, kind: card.kind, diagnosis: card.diagnosis, analyzed: !!card.analyzed, loading: !!card.analyzed, result: null, backup: '', error: '', draft: null, busy: '', withMeta: true, focus: true, scroll: 0 };
+      this.render();
+      if (!card.analyzed) return;
+      try {
+        const r = await this.apiFetch('/search/analysis?page=' + encodeURIComponent(card.page));
+        if (!r.success) throw new Error(r.message || 'تحلیل ذخیره‌شده خوانده نشد.');
+        if (s.drawer && s.drawer.page === card.page) { s.drawer.result = r.result; s.drawer.backup = r.backup || ''; }
+      } catch (e) { if (s.drawer) s.drawer.error = e.message; }
+      if (s.drawer) s.drawer.loading = false;
+      this.render();
+    },
+
+    closeAnalysis: function () {
+      const s = this.state.search;
+      if (!s.drawer || s.drawer.busy) return;
+      const page = s.drawer.page;
+      s.drawer = null;
+      document.body.classList.remove('khz-drawer-lock');
+      this.render();
+      const back = this.root.querySelector(`[data-opp-ai="${CSS.escape(page)}"]`);
+      if (back) back.focus();
+    },
+
+    runAnalysis: async function () {
+      const s = this.state.search; const d = s.drawer;
+      if (!d || d.busy) return;
+      d.busy = 'analyze'; d.error = ''; d.draft = null; d.scroll = 0; this.render();
+      try {
+        const r = await this.apiFetch('/search/analyze', { method: 'POST', body: JSON.stringify({ page: d.page, opportunity: (KINDS[d.kind] || {}).label || '', diagnosis: d.diagnosis || '' }) });
+        if (!r.success) throw new Error(r.message || 'تحلیل انجام نشد.');
+        d.result = r.result; d.backup = r.backup || ''; d.analyzed = true;
+        ((s.opps && s.opps.cards) || []).forEach(c => { if (c.page === d.page) c.analyzed = true; });
+        this.toast('تحلیل صفحه آماده شد.');
+      } catch (e) { d.error = e.message; }
+      d.busy = ''; this.render();
+    },
+
+    buildUpdateDraft: async function () {
+      const d = this.state.search.drawer;
+      if (!d || d.busy) return;
+      d.busy = 'draft'; d.error = ''; this.render();
+      try {
+        const r = await this.apiFetch('/search/update-draft', { method: 'POST', body: JSON.stringify({ page: d.page }) });
+        if (!r.success) throw new Error(r.message || 'پیش‌نویس ساخته نشد.');
+        d.draft = r.draft; d.withMeta = !!(r.draft.meta && r.draft.meta.title); d.scroll = 0;
+      } catch (e) { d.error = e.message; }
+      d.busy = ''; this.render();
+    },
+
+    applyUpdateDraft: async function () {
+      const d = this.state.search.drawer;
+      if (!d || d.busy || !d.draft) return;
+      if (!window.confirm('محتوای پیشنهادی به صفحه اضافه شود؟ متن فعلی دست نمی‌خورد و یک نسخه‌ی پشتیبان هم ذخیره می‌شود.')) return;
+      d.busy = 'apply'; d.error = ''; this.render();
+      try {
+        const r = await this.apiFetch('/search/update-apply', { method: 'POST', body: JSON.stringify({ draft_id: d.draft.draft_id, with_meta: d.withMeta ? '1' : '0' }) });
+        if (!r.success) throw new Error(r.message || 'به‌روزرسانی انجام نشد.');
+        d.applied = { words: r.words_after }; d.backup = 'now'; d.draft = null; d.scroll = 0;
+        this.toast('صفحه به‌روز شد. نسخه‌ی قبلی برای بازگرداندن ذخیره شده است.');
+      } catch (e) { d.error = e.message; }
+      d.busy = ''; this.render();
+    },
+
+    restoreUpdate: async function () {
+      const d = this.state.search.drawer;
+      if (!d || d.busy || !d.result) return;
+      if (!window.confirm('محتوای صفحه به نسخه‌ی قبل از آخرین به‌روزرسانی برگردد؟')) return;
+      d.busy = 'restore'; d.error = ''; this.render();
+      try {
+        const r = await this.apiFetch('/search/update-restore', { method: 'POST', body: JSON.stringify({ kind: d.result.kind, type: d.result.type, id: d.result.id }) });
+        if (!r.success) throw new Error(r.message || 'بازگرداندن انجام نشد.');
+        d.backup = ''; d.applied = null;
+        this.toast('نسخه‌ی قبلی صفحه برگردانده شد.');
+      } catch (e) { d.error = e.message; }
+      d.busy = ''; this.render();
+    },
+
+    drawerHtml: function () {
+      const d = this.state.search.drawer;
+      if (!d) return '';
+      const a = d.result && d.result.analysis;
+      const busyText = { analyze: 'هوش مصنوعی متن صفحه، ساختار و جست‌وجوهای واقعی گوگل را بررسی می‌کند؛ معمولاً کمتر از یک دقیقه…', draft: 'متن بخش‌های تازه طبق قواعد محتوای افزونه نوشته می‌شود؛ ممکن است یک تا دو دقیقه طول بکشد…', apply: 'در حال ذخیره روی صفحه…', restore: 'در حال بازگرداندن نسخه‌ی قبل…' };
+      const list = (arr, fn) => arr && arr.length ? `<ul class="khz-dr-list">${arr.map(fn).join('')}</ul>` : '';
+      const sec = (title, body, count) => body ? `<section class="khz-dr-sec"><h4>${title}${count ? ` <span class="khz-dr-count">${fa(count)}</span>` : ''}</h4>${body}</section>` : '';
+      let body = '';
+      let foot = '';
+
+      if (d.loading) {
+        body = '<div class="khz-dr-skel" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p class="khz-dr-muted" role="status">تحلیل ذخیره‌شده خوانده می‌شود…</p>';
+      } else if (d.busy && busyText[d.busy]) {
+        body = `<div class="khz-dr-busy" role="status"><span class="khz-dr-spin" aria-hidden="true"></span><p>${busyText[d.busy]}</p></div>`;
+      } else if (d.draft) {
+        const r = d.draft; const m = r.meta || {};
+        body = `
+          <div class="khz-dr-stats">
+            <div><b>${fa(r.words_before)}</b><span>کلمه‌ی فعلی</span></div>
+            <div><b>${fa(r.words_after)}</b><span>بعد از به‌روزرسانی</span></div>
+            <div><b>+${fa(Math.max(0, r.words_after - r.words_before))}</b><span>کلمه‌ی تازه</span></div>
+          </div>
+          <p class="khz-dr-note">متن فعلی صفحه دست نمی‌خورد. فقط بخش‌های زیر در جای مشخص‌شده اضافه می‌شوند و قبل از ذخیره، یک نسخه‌ی پشتیبان گرفته می‌شود.</p>
+          ${sec('بخش‌هایی که اضافه می‌شود', (r.placements || []).map(p => `<article class="khz-dr-place"><div class="khz-dr-where">${escapeHtml(p.where)}</div><div class="khz-dr-preview">${p.html}</div></article>`).join(''), (r.placements || []).length)}
+          ${m.title ? sec('عنوان و توضیحات متا', `
+            <div class="khz-dr-meta">
+              <div><span class="khz-dr-lbl">فعلی</span><b>${escapeHtml(m.current_title || '—')}</b><p>${escapeHtml(m.current_description || '—')}</p></div>
+              <div class="is-new"><span class="khz-dr-lbl">پیشنهادی</span><b>${escapeHtml(m.title)}</b><p>${escapeHtml(m.description)}</p></div>
+            </div>
+            <label class="khz-dr-check"><input type="checkbox" id="khz-dr-meta" ${d.withMeta ? 'checked' : ''}> عنوان و توضیحات متا هم عوض شود</label>`) : ''}`;
+        foot = `<button type="button" class="wila-btn wila-btn-primary" id="khz-dr-apply">اعمال روی صفحه</button><button type="button" class="wila-btn wila-btn-outline" id="khz-dr-back">بازگشت به تحلیل</button>`;
+      } else if (!a) {
+        body = `
+          <div class="khz-dr-intro">
+            <p>هوش مصنوعی متن کامل این صفحه، ساختار آن (تیترها، تصویر، ویدئو، جدول، پرسش‌های متداول و لینک‌ها) و عبارت‌هایی را که واقعاً در گوگل با آن دیده می‌شود بررسی می‌کند و می‌گوید:</p>
+            <ul class="khz-dr-bullets">
+              <li>کدام بخش‌ها خوب است و باید بماند</li>
+              <li>چه بخش‌ها و پرسش‌هایی کم است و باید اضافه شود</li>
+              <li>کجا تصویر، ویدئو، صوت، جدول یا اینفوگرافیک لازم است</li>
+              <li>عنوان و توضیحات متا، لینک داخلی و نیاز به بک‌لینک</li>
+            </ul>
+            <p class="khz-dr-muted">هر تحلیل یک درخواست به AvalAI است و از اعتبار شما کم می‌کند. چیزی روی صفحه ذخیره نمی‌شود.</p>
+          </div>`;
+        foot = `<button type="button" class="wila-btn wila-btn-primary" id="khz-dr-analyze">شروع تحلیل</button>`;
+      } else {
+        const f = d.result.facts || {};
+        const STATE = { empty: ['بدون محتوا', 'red'], thin: ['محتوای کم', 'amber'], good: ['محتوای خوب', 'green'] };
+        const st = STATE[a.content_state] || STATE.thin;
+        const MEDIA = { image: 'تصویر', video: 'ویدئو', audio: 'صوت', table: 'جدول', infographic: 'اینفوگرافیک', gallery: 'گالری', comparison: 'مقایسه' };
+        const chip = (n, label) => `<span class="khz-dr-fact"><b>${fa(n)}</b> ${label}</span>`;
+        body = `
+          ${d.applied ? `<div class="khz-dr-ok" role="status">صفحه به‌روز شد و حالا ${fa(d.applied.words)} کلمه دارد. برای نتیجه‌ی دقیق، چند هفته بعد داده‌های سرچ کنسول را دوباره دریافت و صفحه را دوباره تحلیل کنید.</div>` : ''}
+          <div class="khz-dr-summary">
+            <span class="khz-dr-state tone-${st[1]}">${st[0]}</span>
+            <p>${escapeHtml(a.summary)}</p>
+          </div>
+          <div class="khz-dr-facts">
+            ${chip(f.words, 'کلمه')}${chip(f.h2, 'تیتر H2')}${chip(f.images, 'تصویر')}${chip(f.videos, 'ویدئو')}${chip(f.tables, 'جدول')}${chip(f.faq, 'پرسش')}${chip(f.links_internal, 'لینک داخلی')}
+          </div>
+          ${a.steps.length ? sec('برنامه‌ی کار به ترتیب', `<ol class="khz-dr-steps">${a.steps.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ol>`) : ''}
+          ${sec('بخش‌هایی که باید اضافه شود', list(a.add_sections, x => `<li><b>${escapeHtml(x.heading)}</b><span>${escapeHtml(x.purpose)} · حدود ${fa(x.words)} کلمه</span>${x.covers_queries.length ? `<div class="khz-dr-qs">${x.covers_queries.map(q => `<i>${escapeHtml(q)}</i>`).join('')}</div>` : ''}</li>`), a.add_sections.length)}
+          ${sec('پرسش‌های متداول پیشنهادی', list(a.faq, x => `<li><b>${escapeHtml(x.question)}</b>${x.why ? `<span>${escapeHtml(x.why)}</span>` : ''}</li>`), a.faq.length)}
+          ${sec('تصویر، ویدئو و رسانه', list(a.media, x => `<li><span class="khz-dr-mtype">${MEDIA[x.type] || escapeHtml(x.type)}</span><b>${escapeHtml(x.what)}</b><span>${escapeHtml(x.where)}${x.alt ? ` · متن جایگزین: «${escapeHtml(x.alt)}»` : ''}</span></li>`), a.media.length)}
+          ${sec('بهبود متن فعلی', list(a.improve, x => `<li><b>${escapeHtml(x.where)}</b><span>${escapeHtml(x.what)}</span></li>`), a.improve.length)}
+          ${a.meta.title ? sec('عنوان و توضیحات متا', `
+            <div class="khz-dr-meta">
+              <div><span class="khz-dr-lbl">فعلی</span><b>${escapeHtml(d.result.seo.title || '—')}</b><p>${escapeHtml(d.result.seo.description || '—')}</p></div>
+              <div class="is-new"><span class="khz-dr-lbl">پیشنهادی</span><b>${escapeHtml(a.meta.title)}</b><p>${escapeHtml(a.meta.description)}</p></div>
+            </div>`) : ''}
+          ${sec('لینک داخلی', list(a.internal_links, x => `<li><b>«${escapeHtml(x.anchor)}»</b><span>${escapeHtml(x.to)}</span></li>`), a.internal_links.length)}
+          ${a.offpage.needed ? sec('بک‌لینک و رپورتاژ', `<p class="khz-dr-p">${escapeHtml(a.offpage.why)}</p>${a.offpage.anchors.length ? `<div class="khz-dr-qs">${a.offpage.anchors.map(q => `<i>${escapeHtml(q)}</i>`).join('')}</div>` : ''}`) : ''}
+          ${sec('بخش‌هایی که باید بماند', list(a.keep, x => `<li><span>${escapeHtml(x)}</span></li>`))}
+          <p class="khz-dr-muted">تحلیل در ${toPersianDigits(escapeHtml(d.result.at))} با مدل <span dir="ltr">${escapeHtml(d.result.model)}</span>.</p>`;
+        const empty = a.content_state === 'empty';
+        foot = `
+          <button type="button" class="wila-btn wila-btn-primary" id="khz-dr-draft">${empty ? 'نوشتن محتوای کامل' : 'ساخت پیش‌نویس به‌روزرسانی'}</button>
+          <button type="button" class="wila-btn wila-btn-outline" id="khz-dr-analyze">تحلیل دوباره</button>
+          ${d.backup ? `<button type="button" class="wila-btn wila-btn-outline khz-dr-restore" id="khz-dr-restore">بازگرداندن نسخه‌ی قبل</button>` : ''}`;
+      }
+      if (d.busy) foot = foot.replace(/<button /g, '<button disabled ');
+      return `
+        <div class="khz-dr-backdrop" id="khz-dr-backdrop"></div>
+        <aside class="khz-drawer" role="dialog" aria-modal="true" aria-labelledby="khz-dr-title">
+          <header class="khz-dr-head">
+            <div>
+              <span class="khz-dr-kicker">${d.draft ? 'پیش‌نمایش به‌روزرسانی' : 'تحلیل با هوش مصنوعی'}</span>
+              <h3 id="khz-dr-title">${escapeHtml((d.result && d.result.title) || d.title)}</h3>
+              <a class="khz-dr-url" dir="ltr" href="${escapeHtml(d.page)}" target="_blank" rel="noopener">${escapeHtml(short(d.page))}</a>
+            </div>
+            <button type="button" class="khz-dr-close" id="khz-dr-close" aria-label="بستن" ${d.busy ? 'disabled' : ''}>✕</button>
+          </header>
+          <div class="khz-dr-body" id="khz-dr-body">
+            ${d.error ? `<div class="khz-dr-err" role="alert">${escapeHtml(d.error)}</div>` : ''}
+            ${body}
+          </div>
+          ${foot ? `<footer class="khz-dr-foot">${foot}</footer>` : ''}
+        </aside>`;
+    },
+
     viewSearch: function () {
       const s = this.state.search;
       const d = s.data || {};
@@ -72,13 +261,6 @@
         <select id="khz-gsc-site" class="wila-select" style="max-width:420px" dir="ltr">${s.sites.map(x => `<option value="${escapeHtml(x.url)}">${escapeHtml(x.url)}</option>`).join('')}</select>` : '';
 
       const o = s.opps;
-      const short = (u) => String(u || '').replace(/^https?:\/\/[^/]+/, '') || '/';
-      const KINDS = {
-        near_top: { label: 'نزدیک صفحه‌ی اول', tone: 'green', hint: 'با کمی تقویت به صفحه‌ی اول می‌رسند' },
-        low_ctr: { label: 'کلیک کم', tone: 'amber', hint: 'رتبه خوب، کلیک کم؛ مشکل عنوان و توضیحات' },
-        deep: { label: 'رتبه‌ی عمیق', tone: 'blue', hint: 'تقاضا هست ولی صفحه پایین است' },
-        cannibal: { label: 'رقابت صفحه‌ها', tone: 'red', hint: 'چند صفحه برای یک عبارت با هم رقابت می‌کنند' }
-      };
       const ACTIONS = {
         content: { label: 'محتوا', icon: '✎' },
         links: { label: 'لینک‌سازی', icon: '↔' },
@@ -109,6 +291,7 @@
           <ul class="khz-opp-actions">
             ${c.actions.map(a => `<li><span class="khz-opp-ico khz-act-${a.type}">${ACTIONS[a.type].icon}</span><div><b>${escapeHtml(a.label)}</b><span>${escapeHtml(a.detail)}</span></div></li>`).join('')}
           </ul>
+          ${c.page ? `<footer class="khz-opp-foot"><button type="button" class="khz-opp-ai ${c.analyzed ? 'is-done' : ''}" data-opp-ai="${escapeHtml(c.page)}">${c.analyzed ? 'دیدن تحلیل هوش مصنوعی' : 'تحلیل با هوش مصنوعی'}</button></footer>` : ''}
         </article>`;
       };
       const opps = o ? `
@@ -146,6 +329,7 @@
         </div>
         ${d.connected ? opps : ''}
         ${d.connected ? `<div class="wila-card">${table(d.queries, 'query', 'پرنمایش‌ترین عبارت‌ها')}${table(d.pages, 'page', 'پرنمایش‌ترین صفحه‌ها')}</div>` : ''}
+        ${this.drawerHtml()}
       `;
     },
 
@@ -155,6 +339,40 @@
       on('#khz-gsc-sync', () => this.syncSearch());
       on('#khz-gsc-disconnect', () => this.disconnectSearch());
       this.root.querySelectorAll('[data-opp-filter]').forEach(b => b.addEventListener('click', () => { this.state.search.filter = b.getAttribute('data-opp-filter'); this.render(); }));
+      this.root.querySelectorAll('[data-opp-ai]').forEach(b => b.addEventListener('click', () => {
+        const page = b.getAttribute('data-opp-ai');
+        const card = ((this.state.search.opps && this.state.search.opps.cards) || []).find(c => c.page === page);
+        if (card) this.openAnalysis(card);
+      }));
+      const dr = this.state.search.drawer;
+      document.body.classList.toggle('khz-drawer-lock', !!dr);
+      if (dr) {
+        on('#khz-dr-close', () => this.closeAnalysis());
+        on('#khz-dr-backdrop', () => this.closeAnalysis());
+        on('#khz-dr-analyze', () => this.runAnalysis());
+        on('#khz-dr-draft', () => this.buildUpdateDraft());
+        on('#khz-dr-apply', () => this.applyUpdateDraft());
+        on('#khz-dr-restore', () => this.restoreUpdate());
+        on('#khz-dr-back', () => { dr.draft = null; dr.scroll = 0; this.render(); });
+        const meta = this.root.querySelector('#khz-dr-meta');
+        if (meta) meta.addEventListener('change', e => { dr.withMeta = e.target.checked; });
+        const bodyEl = this.root.querySelector('#khz-dr-body');
+        if (bodyEl) { bodyEl.scrollTop = dr.scroll || 0; bodyEl.addEventListener('scroll', () => { dr.scroll = bodyEl.scrollTop; }, { passive: true }); }
+        const drawer = this.root.querySelector('.khz-drawer');
+        if (dr.focus) { dr.focus = false; const c = this.root.querySelector('#khz-dr-close'); if (c) c.focus(); }
+        // keep Tab inside the drawer while it is open
+        drawer.addEventListener('keydown', e => {
+          if (e.key !== 'Tab') return;
+          const f = Array.from(drawer.querySelectorAll('button:not([disabled]), a[href], input:not([disabled])'));
+          if (!f.length) return;
+          if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+          else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+        });
+      }
+      if (!this._khzEsc) {
+        this._khzEsc = true;
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && this.state.search.drawer) this.closeAnalysis(); });
+      }
       const ta = this.root.querySelector('#khz-gsc-key');
       if (ta) ta.addEventListener('input', e => { this.state.search.keyDraft = e.target.value; });
     },
