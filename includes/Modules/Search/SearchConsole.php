@@ -7,6 +7,8 @@
 
 namespace Khazan\Modules\Search;
 
+use Khazan\Services\Links\HtmlLinkText;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -134,7 +136,7 @@ final class SearchConsole {
      *  deep        pages ranked 20-80 with high impressions: need content and internal links
      *  cannibal    queries where two or more pages split the impressions
      */
-    public static function opportunities(array $d, $limit = 15) {
+    public static function opportunities(array $d, $limit = 15, array $brand_words = array()) {
         $d = self::regroup($d);
         $queries = isset($d['queries']) ? $d['queries'] : array();
         $pages = isset($d['pages']) ? $d['pages'] : array();
@@ -171,8 +173,16 @@ final class SearchConsole {
         }
         usort($deep, function ($a, $b) { return $b['impressions'] <=> $a['impressions']; });
 
+        $brands = array();
+        foreach ($brand_words as $b) {
+            $b = HtmlLinkText::norm_phrase((string) $b);
+            if (mb_strlen($b, 'UTF-8') >= 3) $brands[] = $b;
+        }
         $cannibal = array();
         foreach ($by_query as $query => $list) {
+            // a search for the shop's own name is answered by the home page and others on purpose
+            $nq = HtmlLinkText::norm_phrase((string) $query);
+            foreach ($brands as $b) { if (mb_strpos($nq, $b, 0, 'UTF-8') !== false) continue 2; }
             $total = array_sum(array_column($list, 'impressions'));
             if ($total < 30) continue;
             $big = array_values(array_filter($list, function ($p) use ($total) { return $p['impressions'] >= 0.2 * $total; }));

@@ -105,5 +105,21 @@ $r = S::regroup(array('pages' => array(
 )));
 check('regroup sums stats and weights position', count($r['pages']) === 1 && $r['pages'][0]['impressions'] === 400 && $r['pages'][0]['clicks'] === 3 && $r['pages'][0]['position'] === 17.5 && $r['pages'][0]['page'] === 'https://www.x.com/a');
 
+// a search for the shop's own name is not cannibalisation
+$brandData = array(
+    'queries' => array(array('query' => 'آکا چرم', 'clicks' => 5, 'impressions' => 125, 'ctr' => 0.04, 'position' => 1)),
+    'pages' => array(
+        array('page' => 'https://x.com/', 'clicks' => 4, 'impressions' => 70, 'ctr' => 0.05, 'position' => 1),
+        array('page' => 'https://x.com/category/bags/', 'clicks' => 1, 'impressions' => 55, 'ctr' => 0.02, 'position' => 1.1),
+    ),
+    'pairs' => array(
+        array('query' => 'آکا چرم', 'page' => 'https://x.com/', 'clicks' => 4, 'impressions' => 70, 'ctr' => 0.05, 'position' => 1),
+        array('query' => 'آکا چرم', 'page' => 'https://x.com/category/bags/', 'clicks' => 1, 'impressions' => 55, 'ctr' => 0.02, 'position' => 1.1),
+    ),
+);
+check('brand query is cannibalisation without brand words', count(S::opportunities($brandData)['cannibal']) === 1);
+check('brand query is skipped with brand words', S::opportunities($brandData, 15, array('آکا چرم'))['cannibal'] === array());
+check('short brand words are ignored', count(S::opportunities($brandData, 15, array('آ'))['cannibal']) === 1);
+
 echo "$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

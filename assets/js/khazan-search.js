@@ -19,6 +19,7 @@
   };
 
 
+  const isHome = (u) => pathKey(u).replace(/^[^/]*/, '').replace(/\//g, '') === '';
   const pathKey = (u) => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
 
   /** What the site itself says about a card's address(es): redirected, gone, or fine. */
@@ -344,7 +345,7 @@
           <ul class="khz-opp-actions" ${done ? 'hidden' : ''}>
             ${c.actions.map(a => `<li><span class="khz-opp-ico khz-act-${a.type}">${ACTIONS[a.type].icon}</span><div><b>${escapeHtml(a.label)}</b><span>${escapeHtml(a.detail)}</span></div></li>`).join('')}
           </ul>
-          ${c.page && !done ? `<footer class="khz-opp-foot"><button type="button" class="khz-opp-ai ${c.analyzed ? 'is-done' : ''}" data-opp-ai="${escapeHtml(c.page)}">${c.analyzed ? 'دیدن تحلیل هوش مصنوعی' : 'تحلیل با هوش مصنوعی'}</button></footer>` : ''}
+          ${c.page && !done && !isHome(c.page) ? `<footer class="khz-opp-foot"><button type="button" class="khz-opp-ai ${c.analyzed ? 'is-done' : ''}" data-opp-ai="${escapeHtml(c.page)}">${c.analyzed ? 'دیدن تحلیل هوش مصنوعی' : 'تحلیل با هوش مصنوعی'}</button></footer>` : ''}
         </article>`;
       };
       const opps = o ? `
