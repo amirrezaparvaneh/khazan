@@ -54,6 +54,12 @@ final class RestRouter {
             array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'save_settings'), 'permission_callback' => array($this, 'check_permission'))
         ));
         $perm = array($this, 'check_permission');
+        $search = new \Khazan\Http\Controllers\SearchController();
+        register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/connect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'connect'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/disconnect', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'disconnect'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/search/sync', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($search, 'sync'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/overview', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'overview'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/settings', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'save_settings'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/convert-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'convert_batch'), 'permission_callback' => $perm));

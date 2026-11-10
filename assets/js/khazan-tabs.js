@@ -33,6 +33,7 @@
     { key: 'bulk', tab: 'bulk', icon: 'sheet', label: 'تولید انبوه محتوا', title: 'تولید انبوه محتوا' },
     { key: 'specs', tab: 'specs', icon: 'tag', label: 'ویژگی‌های محصولات', title: 'مدیریت ویژگی‌های محصولات' },
     { key: 'images', tab: 'images', icon: 'chart', label: 'بهینه‌سازی تصاویر', title: 'بهینه‌سازی تصاویر' },
+    { key: 'search', tab: 'search', icon: 'compass', label: 'سرچ کنسول', title: 'سرچ کنسول گوگل' },
     { key: 'standards', tab: 'standards', icon: 'target', label: 'استانداردها و تحلیل سایت', title: 'استانداردها و تحلیل سایت' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
     { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
@@ -46,7 +47,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', search: 'viewSearch', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -785,6 +786,7 @@ ${siteExpanded ? `
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         if (this.state.activeTab === 'standards' && !this.state.standards.data) this.loadStandards();
         if (this.state.activeTab === 'images' && !this.state.images.overview && !this.state.images.busy) this.loadImages();
+        if (this.state.activeTab === 'search' && !this.state.search.data && !this.state.search.busy) this.loadSearch();
         if (this.state.activeTab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
       }));
