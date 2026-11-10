@@ -48,7 +48,7 @@
       const now = pr.end || Date.now();
       const elapsed = (now - pr.start) / 1000;
       const total = Math.max(pr.total, pr.done, 1);
-      const pct = pr.finished ? 100 : Math.min(99, Math.round(pr.done / total * 100));
+      const pct = pr.finished && pr.ok ? 100 : Math.min(pr.finished ? 99 : 99, Math.round(pr.done / total * 100));
       let text = `${fa(pr.done)} از ${fa(pr.total)}` + (pr.bytes ? ` — ${bytes(pr.bytes)} آزاد/صرفه‌جویی شد` : '') + ` — زمان سپری‌شده: ${this.fmtDuration(elapsed)}`;
       if (!pr.finished && pr.done > 0 && elapsed >= 3 && pr.total > pr.done) {
         const rate = pr.done / elapsed;
@@ -72,11 +72,11 @@
       this.updateProgressDom();
     },
 
-    finishProgress: function (summary) {
+    finishProgress: function (summary, ok) {
       const pr = this.state.images.progress;
       if (this._khzTimer) { clearInterval(this._khzTimer); this._khzTimer = null; }
       if (!pr) return;
-      pr.finished = true; pr.end = Date.now(); pr.summary = summary;
+      pr.finished = true; pr.ok = ok !== false; pr.end = Date.now(); pr.summary = summary;
     },
 
     updateProgressDom: function () {
@@ -110,13 +110,26 @@
       im.busy = kind; im.stop = false; im.error = '';
       if (kind === 'hash') im.autoDone = false;
       const endpoint = { convert: '/images/convert-batch', shrink: '/images/shrink-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch' }[kind];
-      let guard = 0;
+      let guard = 0, interruptions = 0;
       const labels = { convert: 'تبدیل تصاویر', shrink: 'کاهش حجم تصاویر سنگین', alt: 'نوشتن متن جایگزین', hash: 'بررسی تصاویر برای یافتن تکراری‌ها' };
       this.startProgress(kind, labels[kind], (im.overview && im.overview.pending && im.overview.pending[kind]) || 0);
       this.render();
       try {
         while (!im.stop && guard++ < 5000) {
-          const r = await this.apiFetch(endpoint, { method: 'POST', body: '{}' });
+          let r;
+          try {
+            r = await this.apiFetch(endpoint, { method: 'POST', body: '{}' });
+          } catch (e) {
+            // a heavy image can kill the PHP request; it is marked server-side and skipped next time, so just carry on
+            if ((kind === 'shrink' || kind === 'convert') && /fetch|network/i.test(e.message || '') && interruptions < 10) {
+              interruptions++;
+              this.imagesLog(`درخواست قطع شد (احتمالاً یک تصویر سنگین یا کمبود حافظه‌ی هاست)؛ آن تصویر رد می‌شود و ادامه می‌دهم (${fa(interruptions)})`);
+              this.render();
+              await new Promise(res => setTimeout(res, 1500));
+              continue;
+            }
+            throw e;
+          }
           if (!r.success) throw new Error(r.message || 'خطا در پردازش.');
           if (kind === 'convert') this.imagesLog(`${fa(r.converted)} تصویر تبدیل شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + (Object.keys(r.failed || {}).length ? ` (${fa(Object.keys(r.failed).length)} خطا)` : ''));
           if (kind === 'shrink') this.imagesLog(`${fa(r.processed)} تصویر بررسی شد، ${fa(r.shrunk)} تصویر فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + ((r.reasons || []).length ? ' — فایل‌های ردشده: ' + r.reasons.map(x => `${x.message} (${fa(x.count)})`).join('، ') : ''));
@@ -131,7 +144,7 @@
         }
       } catch (e) { im.error = e.message; }
       const pr = im.progress;
-      this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'تمام شد')}: ${fa(pr.done)} تصویر پردازش شد` + (pr.bytes ? `، ${bytes(pr.bytes)} صرفه‌جویی` : '') + `، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}.` : '');
+      this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'تمام شد')}: ${fa(pr.done)} تصویر پردازش شد` + (pr.bytes ? `، ${bytes(pr.bytes)} صرفه‌جویی` : '') + (interruptions ? `، ${fa(interruptions)} بار درخواست به‌خاطر تصویر سنگین قطع شد و آن تصویر رد شد` : '') + `، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}.` : '', !im.stop && !im.error);
       im.busy = '';
       if (kind === 'hash') await this.loadDuplicates();
       await this.loadImages();
@@ -200,7 +213,7 @@
       } catch (e) { im.error = e.message; }
       const pr = im.progress;
       im.autoDone = !im.stop && !im.error;
-      this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'حذف خودکار تمام شد')}: ${fa(total)} تصویر تکراری حذف شد و ${bytes(bytesTotal)} آزاد شد (نسخه‌ی پشتیبان در quarantine است)، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}. موارد «در حال استفاده» دست نخورده‌اند.` : '');
+      this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'حذف خودکار تمام شد')}: ${fa(total)} تصویر تکراری حذف شد و ${bytes(bytesTotal)} آزاد شد (نسخه‌ی پشتیبان در quarantine است)، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}. موارد «در حال استفاده» دست نخورده‌اند.` : '', !im.stop && !im.error);
       im.busy = '';
       await this.loadDuplicates();
       await this.loadImages();
