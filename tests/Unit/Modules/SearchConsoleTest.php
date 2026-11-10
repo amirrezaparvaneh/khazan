@@ -47,5 +47,30 @@ check('pages aggregated', count($g['pages']) === 2 && $g['pages'][0]['page'] ===
 check('pairs keep query and page', count($g['pairs']) === 3 && $g['pairs'][0]['query'] === 'چرم' && $g['pairs'][0]['page'] === '/b');
 check('empty input', S::aggregate(array()) === array('pages' => array(), 'queries' => array(), 'pairs' => array()));
 
+$d = array(
+    'queries' => array(
+        array('query' => 'belt', 'clicks' => 5, 'impressions' => 100, 'ctr' => 0.05, 'position' => 7),
+        array('query' => 'hat', 'clicks' => 0, 'impressions' => 200, 'ctr' => 0, 'position' => 45),
+        array('query' => 'tiny', 'clicks' => 0, 'impressions' => 5, 'ctr' => 0, 'position' => 9),
+    ),
+    'pages' => array(
+        array('page' => '/jacket', 'clicks' => 0, 'impressions' => 40, 'ctr' => 0, 'position' => 8),
+        array('page' => '/belts', 'clicks' => 20, 'impressions' => 200, 'ctr' => 0.1, 'position' => 9),
+        array('page' => '/hats', 'clicks' => 3, 'impressions' => 570, 'ctr' => 0.005, 'position' => 51),
+    ),
+    'pairs' => array(
+        array('query' => 'belt', 'page' => '/belts', 'impressions' => 60, 'position' => 6),
+        array('query' => 'belt', 'page' => '/belts-old', 'impressions' => 40, 'position' => 9),
+        array('query' => 'hat', 'page' => '/hats', 'impressions' => 200, 'position' => 45),
+    ),
+);
+$o = S::opportunities($d);
+check('near top lists belt with its page, not hat or tiny', count($o['near_top']) === 1 && $o['near_top'][0]['query'] === 'belt' && $o['near_top'][0]['page'] === '/belts');
+check('low ctr finds the jacket page only', count($o['low_ctr']) === 1 && $o['low_ctr'][0]['page'] === '/jacket');
+check('deep finds the hats page', count($o['deep']) === 1 && $o['deep'][0]['page'] === '/hats');
+check('cannibalisation finds belt with two pages', count($o['cannibal']) === 1 && $o['cannibal'][0]['query'] === 'belt' && count($o['cannibal'][0]['pages']) === 2);
+check('no data gives empty lists', S::opportunities(array()) === array('near_top' => array(), 'low_ctr' => array(), 'deep' => array(), 'cannibal' => array()));
+check('expected ctr falls with position', S::expected_ctr(2) > S::expected_ctr(8) && S::expected_ctr(8) > S::expected_ctr(30));
+
 echo "$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
