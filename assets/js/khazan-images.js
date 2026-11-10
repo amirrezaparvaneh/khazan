@@ -91,6 +91,38 @@
       await this.loadImages();
     },
 
+    // حذف خودکار: دسته‌دسته گزارش می‌گیرد و فقط «تکراری و بدون استفاده» را حذف می‌کند (بررسی کامل سمت سرور برای هر تصویر)
+    removeAllDuplicates: async function () {
+      const im = this.state.images;
+      if (im.busy) return;
+      if (!window.confirm('همه‌ی تصاویر «تکراری و بدون استفاده» به‌صورت خودکار حذف شوند؟ هر تصویر قبل از حذف دوباره بررسی می‌شود و نسخه‌ی پشتیبان در khazan-quarantine می‌ماند. با «توقف» می‌توانید هر لحظه متوقفش کنید.')) return;
+      im.busy = 'dedupe-auto'; im.stop = false; im.error = '';
+      let offset = 0, total = 0, bytesTotal = 0, guard = 0;
+      this.render();
+      try {
+        while (!im.stop && guard++ < 2000) {
+          const r = await this.apiFetch('/images/dedupe/report?summary=0&offset=' + offset);
+          if (!r.success) throw new Error(r.message || 'گزارش دریافت نشد.');
+          if (!r.groups.length) break;
+          const ids = [];
+          r.groups.forEach(g => g.members.forEach(m => { if (m.status === 'removable') ids.push(m.id); }));
+          if (!ids.length) { offset += r.groups.length; continue; }
+          let removedNow = 0;
+          for (let i = 0; i < ids.length && !im.stop; i += 10) {
+            const d = await this.apiFetch('/images/dedupe/remove', { method: 'POST', body: JSON.stringify({ ids: ids.slice(i, i + 10) }) });
+            if (!d.success) throw new Error(d.message || 'حذف انجام نشد.');
+            removedNow += d.removed.length; total += d.removed.length; bytesTotal += d.bytes || 0;
+          }
+          this.imagesLog(`تا الان ${fa(total)} تصویر حذف شد، ${bytes(bytesTotal)} آزاد شد`);
+          if (!removedNow) offset += r.groups.length;
+          this.render();
+        }
+      } catch (e) { im.error = e.message; }
+      im.busy = '';
+      await this.loadDuplicates();
+      await this.loadImages();
+    },
+
     saveImageSettings: async function () {
       const root = this.root;
       const val = (id) => root.querySelector(id);
@@ -121,7 +153,7 @@
       const s = o.settings, st = o.stats, p = o.pending;
       const busy = !!im.busy;
       const btn = (id, label, kind) => `<button class="wila-btn wila-btn-primary ${im.busy === kind ? 'is-busy' : ''}" id="${id}" ${busy ? 'disabled' : ''}>${im.busy === kind ? 'در حال پردازش…' : label}</button>`;
-      const stop = busy && ['convert', 'shrink', 'alt', 'hash'].includes(im.busy) ? '<button class="wila-btn wila-btn-outline" id="khz-img-stop">توقف</button>' : '';
+      const stop = busy && ['convert', 'shrink', 'alt', 'hash', 'dedupe-auto'].includes(im.busy) ? '<button class="wila-btn wila-btn-outline" id="khz-img-stop">توقف</button>' : '';
       const unsupported = !o.support[s.format] ? `<p style="color:#991b1b;margin:6px 0 0">سرور شما از ${s.format.toUpperCase()} پشتیبانی نمی‌کند.</p>` : '';
 
       let dupes = '';
@@ -186,7 +218,7 @@
         <div class="wila-card">
           <h3>تصاویر تکراری</h3>
           <p>ابتدا همه تصاویر بررسی می‌شوند (${fa(p.hash)} مورد مانده)، سپس گزارش نمایش داده می‌شود. هیچ تصویری که در محتوا، گالری، دسته‌ها یا تنظیمات استفاده شده باشد حذف نمی‌شود.</p>
-          ${btn('khz-img-hash', 'بررسی و ساخت گزارش', 'hash')} ${stop}
+          ${btn('khz-img-hash', 'بررسی و ساخت گزارش', 'hash')} ${btn('khz-dup-auto', 'حذف خودکار همه تکراری‌های بدون استفاده', 'dedupe-auto')} ${stop}
           ${dupes}
         </div>
 
@@ -204,6 +236,7 @@
       on('#khz-img-hash', () => this.runImagesLoop('hash'));
       on('#khz-img-stop', () => { this.state.images.stop = true; });
       on('#khz-dup-remove', () => this.removeDuplicates());
+      on('#khz-dup-auto', () => this.removeAllDuplicates());
       this.root.querySelectorAll('.khz-dup-check').forEach(c => c.addEventListener('change', e => { this.state.images.selected[e.target.getAttribute('data-id')] = e.target.checked; }));
     },
   };
