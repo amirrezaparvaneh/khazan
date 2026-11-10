@@ -54,6 +54,13 @@ final class RestRouter {
             array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'save_settings'), 'permission_callback' => array($this, 'check_permission'))
         ));
         $perm = array($this, 'check_permission');
+        $linking = new \Khazan\Http\Controllers\LinkingController();
+        register_rest_route($this->namespace, '/linking/overview', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($linking, 'overview'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/audit', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'audit'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/suggest', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($linking, 'suggest'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'apply'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/undo', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'undo'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/linking/settings', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'settings'), 'permission_callback' => $perm));
         $search = new \Khazan\Http\Controllers\SearchController();
         register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));

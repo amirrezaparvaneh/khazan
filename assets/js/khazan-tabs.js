@@ -47,7 +47,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', search: 'viewSearch', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewOrphans', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', search: 'viewSearch', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewLinking', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -782,7 +782,7 @@ ${siteExpanded ? `
         if (this.state.activeTab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (this.state.activeTab === 'home' && !this.state.siteStats && !this.state.siteStatsLoading) this.fetchSiteStats();
         if (this.state.activeTab === 'items') this.fetchItems();
-        if (this.state.activeTab === 'orphans') this.fetchOrphans();
+        if (this.state.activeTab === 'orphans' && !this.state.linking.busy) this.loadLinking();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         if (this.state.activeTab === 'standards' && !this.state.standards.data) this.loadStandards();
         if (this.state.activeTab === 'images' && !this.state.images.overview && !this.state.images.busy) this.loadImages();
@@ -800,7 +800,7 @@ ${siteExpanded ? `
         this.state.pendingScroll = target.scroll || '';
         if (target.tab === 'bulk') this.enterBulkTab();
         if (target.tab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
-        if (target.tab === 'orphans') this.fetchOrphans();
+        if (target.tab === 'orphans' && !this.state.linking.busy) this.loadLinking();
         if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         if (target.tab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
