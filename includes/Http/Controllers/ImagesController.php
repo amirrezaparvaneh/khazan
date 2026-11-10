@@ -11,6 +11,7 @@ use Khazan\Modules\Images\ImageConverter;
 use Khazan\Modules\Images\ImageSettings;
 use Khazan\Modules\Images\ImageShrinker;
 use Khazan\Modules\Images\ImageStats;
+use Khazan\Modules\Images\OrphanFiles;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -125,6 +126,33 @@ final class ImagesController extends BaseController {
         $out = array('success' => true, 'groups' => Deduplicator::report(5, $offset));
         if ($offset === 0 && !($request && $request->get_param('summary') === '0')) $out['summary'] = Deduplicator::summary();
         return rest_ensure_response($out);
+    }
+
+    public function orphan_scan() {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        return rest_ensure_response(array('success' => true, 'summary' => OrphanFiles::scan()));
+    }
+
+    public function orphan_analyze() {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        return rest_ensure_response(array_merge(array('success' => true), OrphanFiles::analyze_batch(8, 60)));
+    }
+
+    public function orphan_report() {
+        return rest_ensure_response(array('success' => true, 'summary' => OrphanFiles::summary(), 'items' => OrphanFiles::items(20)));
+    }
+
+    public function orphan_remove($request) {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        $params = $request->get_json_params();
+        $rels = isset($params['rels']) && is_array($params['rels']) ? $params['rels'] : array();
+        if (!$rels) return new \WP_Error('no_files', 'هیچ فایلی انتخاب نشده است.', array('status' => 400));
+        return rest_ensure_response(array_merge(array('success' => true), OrphanFiles::remove($rels, !empty($params['manual']))));
+    }
+
+    public function orphan_shrink() {
+        if (function_exists('set_time_limit')) @set_time_limit(120);
+        return rest_ensure_response(array_merge(array('success' => true), OrphanFiles::shrink_batch(self::SHRINK_SECONDS, self::SHRINK_BATCH)));
     }
 
     public function dedupe_remove($request) {

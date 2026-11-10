@@ -62,6 +62,11 @@ final class RestRouter {
         register_rest_route($this->namespace, '/images/dedupe/hash-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'hash_batch'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/dedupe/report', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'dedupe_report'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/images/dedupe/remove', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'dedupe_remove'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/orphans/scan', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'orphan_scan'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/orphans/analyze-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'orphan_analyze'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/orphans/report', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($images, 'orphan_report'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/orphans/remove', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'orphan_remove'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/images/orphans/shrink-batch', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($images, 'orphan_shrink'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/standards', array(
             array('methods' => \WP_REST_Server::READABLE, 'callback' => array($standards, 'get_standards'), 'permission_callback' => array($this, 'check_permission')),
             array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($standards, 'save_standards'), 'permission_callback' => array($this, 'check_permission')),
