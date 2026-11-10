@@ -80,13 +80,26 @@ final class AvalaiHttpClient {
             $body['response_format'] = array('type' => 'json_object');
         }
 
-        $response = $this->post($this->api_key, $body, $suggestions_request ? Settings::TIMEOUT_LONG : Settings::TIMEOUT_BULK);
+        $timeout  = $suggestions_request ? Settings::TIMEOUT_LONG : Settings::TIMEOUT_BULK;
+        $response = $this->post($this->api_key, $body, $timeout);
         if (is_wp_error($response)) {
             return $response;
         }
 
         $code = wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
+
+        // Some models behind an OpenAI-compatible gateway reject response_format=json_object; retry once as plain text
+        // (ContentParser / AiResponseDecoder already extract JSON from free text).
+        if ($code === 400 && $json_response && isset($body['response_format']) && stripos((string) wp_remote_retrieve_body($response), 'response_format') !== false) {
+            unset($body['response_format']);
+            $response = $this->post($this->api_key, $body, $timeout);
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            $code = wp_remote_retrieve_response_code($response);
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+        }
 
         if ($code !== 200) {
             $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
@@ -108,7 +121,7 @@ final class AvalaiHttpClient {
         if (!$this->is_configured()) {
             return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.');
         }
-        $response = wp_remote_post(Settings::IMAGE_ENDPOINT, array(
+        $response = wp_remote_post(Settings::images_endpoint(), array(
             'headers' => array('Content-Type' => 'application/json', 'Authorization' => 'Bearer ' . $this->api_key),
             'body'    => wp_json_encode(array('model' => $model, 'prompt' => $prompt, 'n' => 1, 'size' => $size)),
             'timeout' => Settings::TIMEOUT_IMAGE,
@@ -129,6 +142,40 @@ final class AvalaiHttpClient {
             return array('b64' => $data['data'][0]['b64_json']);
         }
         return new \WP_Error('invalid_image_response', 'پاسخ نامعتبر از سرویس تولید تصویر.');
+    }
+
+    /**
+     * Model catalogue of the provider (GET {base}/models, OpenAI-compatible): sorted list of model ids, or WP_Error.
+     *
+     * @return string[]|\WP_Error
+     */
+    public function models($key) {
+        $key = trim((string) $key);
+        if ($key === '') {
+            return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.', array('status' => 400));
+        }
+        $response = wp_remote_get(Settings::models_endpoint(), array(
+            'headers' => array('Authorization' => 'Bearer ' . $key, 'Accept' => 'application/json'),
+            'timeout' => Settings::TIMEOUT_DEFAULT,
+        ));
+        if (is_wp_error($response)) {
+            return new \WP_Error('connection_failed', 'خطا در ارتباط با سرویس: ' . $response->get_error_message(), array('status' => 502));
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if ($code === 401 || $code === 403) {
+            return new \WP_Error('invalid_api_key', 'کلید API نامعتبر است.', array('status' => 400));
+        }
+        if ($code !== 200 || !isset($data['data']) || !is_array($data['data'])) {
+            return new \WP_Error('api_error', 'دریافت فهرست مدل‌ها ناموفق بود (کد ' . $code . ').', array('status' => 502));
+        }
+        $ids = array();
+        foreach ($data['data'] as $row) {
+            if (is_array($row) && isset($row['id']) && Settings::is_valid_model_id((string) $row['id'])) $ids[] = (string) $row['id'];
+        }
+        $ids = array_values(array_unique($ids));
+        sort($ids, SORT_NATURAL | SORT_FLAG_CASE);
+        return $ids;
     }
 
     /**
@@ -177,7 +224,7 @@ final class AvalaiHttpClient {
             return new \WP_Error('missing_api_key', 'کلید API ثبت نشده است.', array('status' => 400));
         }
 
-        $response = wp_remote_get(Settings::AI_BALANCE_ENDPOINT, array(
+        $response = wp_remote_get(Settings::credit_endpoint(), array(
             'headers' => array('Authorization' => 'Bearer ' . $key, 'Accept' => 'application/json'),
             'timeout' => Settings::TIMEOUT_DEFAULT,
         ));
@@ -204,7 +251,7 @@ final class AvalaiHttpClient {
     }
 
     private function post($key, array $body, $timeout) {
-        return wp_remote_post(Settings::AI_ENDPOINT, array(
+        return wp_remote_post(Settings::chat_endpoint(), array(
             'headers' => array(
                 'Content-Type'  => 'application/json',
                 'Authorization' => 'Bearer ' . $key,

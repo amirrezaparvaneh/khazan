@@ -721,7 +721,7 @@ ${siteExpanded ? `
               <label style="display:block; font-size:0.825rem; font-weight:500; margin-bottom:4px;">کلید API سرویس AvalAI: ${s.hasAvalAIKey ? `<span class="wila-badge wila-badge-success">فعال</span>` : ''}</label>
               <input type="text" id="wila-avalai-key-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${s.hasAvalAIKey ? s.avalAIMaskedKey : ''}" placeholder="کلید API AvalAI" />
               ${this.aiBalanceBadge('full')}
-              <p style="font-size:0.75rem; color:#64748b; margin-bottom:0;">مدل ثابت: <code>gpt-5.4-mini</code></p>
+              ${this.aiModelPicker(s)}
             </div>
 
 
@@ -732,6 +732,27 @@ ${siteExpanded ? `
             <div id="wila-test-result" style="margin-top:16px; display:none;"></div>
           `;
       return contentHtml;
+    },
+
+    // انتخاب مدل: فهرست زنده از /models پرووایدر + ورود دستی شناسه؛ مقدار در #wila-ai-model-input نگه‌داری می‌شود
+    aiModelPicker: function (s) {
+      const m = this.state.aiModels || { loading: false, list: [], error: '' };
+      const current = s.avalAIModel || '';
+      const options = m.list.length
+        ? `<datalist id="wila-ai-model-list">${m.list.map(id => `<option value="${escapeHtml(id)}"></option>`).join('')}</datalist>`
+        : '';
+      return `
+        <label style="display:block; font-size:0.825rem; font-weight:500; margin:12px 0 4px;">مدل تولید متن:</label>
+        <input type="text" id="wila-ai-model-input" class="wila-input" list="wila-ai-model-list" style="width:100%; text-align:left; direction:ltr;" value="${escapeHtml(current)}" placeholder="مثلاً gpt-5.4-mini" />
+        ${options}
+        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+          <button type="button" class="wila-btn wila-btn-outline" id="wila-ai-models-refresh-btn" ${m.loading ? 'disabled' : ''}>${m.loading ? 'در حال دریافت...' : 'دریافت فهرست مدل‌ها از AvalAI'}</button>
+          <span style="font-size:0.75rem; color:#64748b;">${m.list.length ? m.list.length + ' مدل در دسترس' : 'برای دیدن مدل‌های حساب خود، فهرست را دریافت کنید.'}</span>
+        </div>
+        ${m.error ? `<p style="font-size:0.75rem; color:#991b1b; margin:6px 0 0;">${escapeHtml(m.error)}</p>` : ''}
+        <label style="display:block; font-size:0.825rem; font-weight:500; margin:12px 0 4px;">آدرس پایه API (سازگار با OpenAI):</label>
+        <input type="text" id="wila-ai-base-url-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${escapeHtml(s.aiBaseUrl || '')}" placeholder="${escapeHtml(s.aiDefaultBaseUrl || 'https://api.avalai.ir/v1')}" />
+        <p style="font-size:0.75rem; color:#64748b; margin:6px 0 0;">برای استفاده از AvalAI خالی بگذارید. برای تولید محتوای فارسی طولانی مدل‌های توانمندتر (سطح mini به بالا) نتیجه بهتری می‌دهند.</p>`;
     },
 
     // ورود به تب تولید انبوه: منبع پیش‌فرض «محصولات سایت» است (مگر ردیف CSV بارگذاری شده یا صف در حال اجرا باشد)

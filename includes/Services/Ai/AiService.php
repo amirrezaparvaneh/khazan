@@ -29,7 +29,7 @@ final class AiService {
     public function __construct() {
         $this->provider = Settings::AI_PROVIDER;
         $this->api_key  = Settings::avalai_api_key();
-        $this->model    = self::MODEL;
+        $this->model    = Settings::ai_model();
         $this->http     = new AvalaiHttpClient($this->api_key, $this->model);
         $this->entities = new SiteEntityRepository();
         $this->prompts  = new PromptBuilder(trim(Settings::homepage_keywords()));

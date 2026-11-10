@@ -20,7 +20,8 @@ final class CostEstimator {
      *
      * @return array{model:string,input_tokens:int,output_tokens:int,input_per_1k:float,output_per_1k:float,per_row_unit:float}
      */
-    public static function per_row($model = Settings::AI_MODEL) {
+    public static function per_row($model = null) {
+        if ($model === null) $model = Settings::ai_model();
         $price = Settings::ai_pricing($model);
         $in  = Settings::AI_EST_INPUT_TOKENS_PER_ROW;
         $out = Settings::AI_EST_OUTPUT_TOKENS_PER_ROW;
@@ -37,7 +38,7 @@ final class CostEstimator {
     /**
      * @return float estimated USD (UNIT) for $rows rows
      */
-    public static function estimate($rows, $model = Settings::AI_MODEL) {
+    public static function estimate($rows, $model = null) {
         $rows = max(0, (int) $rows);
         $one = self::per_row($model);
         return round($one['per_row_unit'] * $rows, 6);

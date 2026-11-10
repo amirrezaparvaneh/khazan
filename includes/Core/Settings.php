@@ -17,6 +17,8 @@ final class Settings {
     // ---- WordPress option keys ----
     const OPT_AVALAI_API_KEY             = 'wila_avalai_api_key';
     const OPT_AI_PROVIDER                = 'wila_ai_provider';
+    const OPT_AI_MODEL                   = 'wila_ai_model';
+    const OPT_AI_BASE_URL                = 'wila_ai_base_url';
     const OPT_HOMEPAGE_KEYWORDS          = 'wila_homepage_keywords';
     const OPT_BRAND_NAME                 = 'wila_brand_name';
     const OPT_PRODUCT_POST_TYPE          = 'wila_product_post_type';
@@ -60,6 +62,10 @@ final class Settings {
     const AI_PROVIDER = 'avalai';
     const AI_MODEL    = 'gpt-5.4-mini';
     const AI_ENDPOINT = 'https://api.avalai.ir/v1/chat/completions';
+    /** Default OpenAI-compatible base URL; every endpoint below is derived from the saved base URL. */
+    const AI_BASE_URL = 'https://api.avalai.ir/v1';
+    const TRANSIENT_AI_MODELS = 'wila_ai_models';
+    const AI_MODELS_CACHE_TTL = 3600;
 
     // ---- in-article image generation (AvalAI, OpenAI-compatible images API) ----
     const IMAGE_MODEL      = 'flux.2-pro';
@@ -230,7 +236,8 @@ final class Settings {
      *
      * @return array{input_per_1k:float,output_per_1k:float}
      */
-    public static function ai_pricing($model = self::AI_MODEL) {
+    public static function ai_pricing($model = null) {
+        if ($model === null) $model = self::ai_model();
         $table = apply_filters(self::FILTER_AI_PRICING, array(self::AI_MODEL => self::AI_DEFAULT_PRICING));
         $row = (is_array($table) && isset($table[$model]) && is_array($table[$model])) ? $table[$model] : self::AI_DEFAULT_PRICING;
         return array(
@@ -266,6 +273,35 @@ final class Settings {
     /** Auto in-article image generation switch (off by default: every image costs credit). */
     public static function auto_image_enabled() {
         return get_option(self::OPT_AUTO_IMAGE_ENABLED, '0') === '1';
+    }
+
+    /** Model used for text generation: the saved choice, else the built-in default. */
+    public static function ai_model() {
+        $model = trim((string) get_option(self::OPT_AI_MODEL, ''));
+        return self::is_valid_model_id($model) ? $model : self::AI_MODEL;
+    }
+
+    /** Model ids are plain identifiers such as gpt-5.4-mini or provider/model:tag. */
+    public static function is_valid_model_id($model) {
+        return is_string($model) && $model !== '' && strlen($model) <= 100 && preg_match('/^[A-Za-z0-9][A-Za-z0-9._:\/-]*$/', $model) === 1;
+    }
+
+    /** OpenAI-compatible base URL (https only, no trailing slash); falls back to AvalAI. */
+    public static function ai_base_url() {
+        $url = trim((string) get_option(self::OPT_AI_BASE_URL, ''));
+        if ($url === '' || stripos($url, 'https://') !== 0 || !filter_var($url, FILTER_VALIDATE_URL)) return self::AI_BASE_URL;
+        return rtrim($url, '/');
+    }
+
+    public static function chat_endpoint()   { return self::ai_base_url() . '/chat/completions'; }
+    public static function images_endpoint() { return self::ai_base_url() . '/images/generations'; }
+    public static function models_endpoint() { return self::ai_base_url() . '/models'; }
+
+    /** AvalAI credit API lives at the host root (/user/v1/credit), not under /v1. */
+    public static function credit_endpoint() {
+        $parts = wp_parse_url(self::ai_base_url());
+        $host = isset($parts['scheme'], $parts['host']) ? $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') : 'https://api.avalai.ir';
+        return $host . '/user/v1/credit';
     }
 
     public static function avalai_api_key() {

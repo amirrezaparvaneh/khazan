@@ -29,6 +29,8 @@
           hasAvalAIKey: data.has_avalai_key,
           avalAIMaskedKey: data.avalai_masked_key || '',
           avalAIModel: data.avalai_model || 'gpt-5.4-mini',
+          aiBaseUrl: data.ai_base_url || '',
+          aiDefaultBaseUrl: data.ai_default_base_url || '',
           homepageKeywords: data.homepage_keywords || '',
           autoImageEnabled: !!data.auto_image_enabled,
           productPostType: data.product_post_type || 'product',
@@ -480,11 +482,32 @@
       }
     },
 
+    fetchAiModels: async function (refresh) {
+      const st = this.state;
+      // مقدارهای تایپ‌شده را پیش از رندر مجدد نگه می‌داریم
+      const typedModel = document.getElementById('wila-ai-model-input');
+      const typedBase = document.getElementById('wila-ai-base-url-input');
+      if (typedModel) st.aiSettings.avalAIModel = typedModel.value.trim();
+      if (typedBase) st.aiSettings.aiBaseUrl = typedBase.value.trim();
+      st.aiModels = { loading: true, list: (st.aiModels && st.aiModels.list) || [], error: '' };
+      this.render();
+      try {
+        const res = await this.apiFetch('/settings/ai-models' + (refresh ? '?refresh=1' : ''));
+        if (!res.success) throw new Error(res.message || 'دریافت فهرست مدل‌ها ناموفق بود.');
+        st.aiModels = { loading: false, list: res.models || [], error: '' };
+      } catch (e) {
+        st.aiModels = { loading: false, list: [], error: e.message };
+      }
+      this.render();
+    },
+
     saveSettings: async function () {
       const app = this;
       const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const homepageKeywords = document.getElementById('wila-homepage-keywords-input')?.value.trim() || '';
       const autoImageInput = document.getElementById('wila-auto-image-input');
+      const modelInput = document.getElementById('wila-ai-model-input');
+      const baseUrlInput = document.getElementById('wila-ai-base-url-input');
 
       try {
         await this.apiFetch('/settings', {
@@ -493,6 +516,8 @@
             provider: 'avalai',
             avalai_api_key: avalaiKey,
             homepage_keywords: homepageKeywords,
+            ...(modelInput ? { ai_model: modelInput.value.trim() } : {}),
+            ...(baseUrlInput ? { ai_base_url: baseUrlInput.value.trim() } : {}),
             ...(autoImageInput ? { auto_image_enabled: autoImageInput.checked } : {})
           })
         });

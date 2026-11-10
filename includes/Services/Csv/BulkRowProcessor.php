@@ -203,7 +203,7 @@ final class BulkRowProcessor {
     }
 
     private function mark_generated($product_id, $mode) {
-        $generated = array('at' => current_time('mysql'), 'model' => Settings::AI_MODEL, 'mode' => $mode);
+        $generated = array('at' => current_time('mysql'), 'model' => Settings::ai_model(), 'mode' => $mode);
         update_post_meta($product_id, ProductMatcher::GENERATED_META, wp_json_encode($generated));
         return $generated;
     }

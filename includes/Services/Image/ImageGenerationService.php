@@ -29,7 +29,7 @@ final class ImageGenerationService {
 
     public function __construct($http = null, MediaRepository $media = null, $overlay = null) {
         $this->overlay = $overlay;
-        $this->http  = $http ?: new AvalaiHttpClient(Settings::avalai_api_key(), Settings::AI_MODEL);
+        $this->http  = $http ?: new AvalaiHttpClient(Settings::avalai_api_key(), Settings::ai_model());
         $this->media = $media ?: new MediaRepository();
     }
 
