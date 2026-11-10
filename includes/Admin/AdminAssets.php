@@ -29,7 +29,7 @@ final class AdminAssets {
 
         add_action('admin_head', array($this, 'print_font_preconnect'), 1);
 
-        wp_enqueue_style('wila-admin-style', $this->url('assets/css/wila-admin.css'), array(), WILA_VERSION);
+        wp_enqueue_style('wila-admin-style', $this->url('assets/css/wila-admin.css'), array(), $this->version('assets/css/wila-admin.css'));
 
         // ترتیب بارگذاری: ابزارها -> CSV -> API، فرم‌ها، صف محصولات و صف دسته‌بندی‌ها و تب‌ها -> هسته (wila-admin.js)
         $scripts = array(
