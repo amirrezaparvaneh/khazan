@@ -64,11 +64,11 @@ final class Deduplicator {
     }
 
     /** Duplicate groups with usage and a keeper; dry-run, changes nothing. */
-    public static function report($max_groups = 5) {
+    public static function report($max_groups = 5, $offset = 0) {
         global $wpdb;
         $hashes = $wpdb->get_col($wpdb->prepare(
-            "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> 'missing' GROUP BY meta_value HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC LIMIT %d",
-            self::META_HASH, (int) $max_groups
+            "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value <> 'missing' GROUP BY meta_value HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC, meta_value ASC LIMIT %d OFFSET %d",
+            self::META_HASH, (int) $max_groups, max(0, (int) $offset)
         ));
         $groups = array();
         foreach ($hashes as $hash) {
