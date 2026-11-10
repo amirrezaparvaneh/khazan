@@ -84,5 +84,26 @@ check('cards sorted by potential', $cards[0]['potential'] >= $cards[count($cards
 check('page kinds', S::page_kind('https://x.com/category/hats/') === 'category' && S::page_kind('https://x.com/') === 'home' && S::page_kind('https://x.com/blog/a') === 'page');
 check('plan of nothing', S::plan(array('near_top' => array(), 'low_ctr' => array(), 'deep' => array(), 'cannibal' => array())) === array());
 
+// the same page spelled differently is one page, not a competitor of itself
+$same = S::opportunities(array(
+    'queries' => array(array('query' => 'hat', 'clicks' => 2, 'impressions' => 104, 'ctr' => 0.02, 'position' => 12)),
+    'pages' => array(
+        array('page' => 'https://www.x.com/category/hats', 'clicks' => 1, 'impressions' => 60, 'ctr' => 0.016, 'position' => 9),
+        array('page' => 'https://x.com/category/hats/?utm=1', 'clicks' => 1, 'impressions' => 44, 'ctr' => 0.02, 'position' => 24),
+    ),
+    'pairs' => array(
+        array('query' => 'hat', 'page' => 'https://www.x.com/category/hats', 'clicks' => 1, 'impressions' => 60, 'ctr' => 0.016, 'position' => 9),
+        array('query' => 'hat', 'page' => 'https://x.com/category/hats/?utm=1', 'clicks' => 1, 'impressions' => 44, 'ctr' => 0.02, 'position' => 24),
+    ),
+));
+check('spellings of one url do not compete', $same['cannibal'] === array());
+check('canonical key ignores www, scheme, slash, query', S::canonical_key('http://www.x.com/a/b/?q=1#z') === S::canonical_key('https://x.com/a/b'));
+check('different pages keep different keys', S::canonical_key('https://x.com/a') !== S::canonical_key('https://x.com/b'));
+$r = S::regroup(array('pages' => array(
+    array('page' => 'https://x.com/a/', 'clicks' => 2, 'impressions' => 100, 'ctr' => 0.02, 'position' => 10),
+    array('page' => 'https://www.x.com/a', 'clicks' => 1, 'impressions' => 300, 'ctr' => 0.0033, 'position' => 20),
+)));
+check('regroup sums stats and weights position', count($r['pages']) === 1 && $r['pages'][0]['impressions'] === 400 && $r['pages'][0]['clicks'] === 3 && $r['pages'][0]['position'] === 17.5 && $r['pages'][0]['page'] === 'https://www.x.com/a');
+
 echo "$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
