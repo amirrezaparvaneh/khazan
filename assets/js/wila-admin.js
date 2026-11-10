@@ -21,6 +21,7 @@
       postTypes: [],
       taxonomies: [],
       images: { overview: null, busy: '', log: [], dupes: null, error: '' },
+      linking: { data: null, busy: '', error: '', open: {}, sub: 'orphans', filter: 'all', q: '' },
       search: { data: null, opps: null, filter: 'all', busy: '', error: '', sites: [], message: '', keyDraft: '' },
       standards: { data: null, analysis: null, analysisBusy: false, saving: false, formError: '', error: '' },
       aiSettings: {
@@ -174,6 +175,7 @@
       this.bindProductSpecsEvents();
       this.bindImagesEvents();
       this.bindSearchEvents();
+      this.bindLinkingEvents();
       this.bindStandardsEvents();
       this.bindFormEvents();
 
@@ -183,7 +185,7 @@
   };
 
   // ماژول‌های API، فرم‌ها، صف و تب‌ها روی app سوار می‌شوند (متدها با this === app اجرا می‌شوند)
-  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanProductSpecs.methods, window.KhazanImages.methods, window.KhazanSearch.methods, window.KhazanStandards.methods, window.KhazanTabs.methods);
+  Object.assign(app, window.KhazanApi.methods, window.KhazanForms.methods, window.KhazanQueue.methods, window.KhazanCategories.methods, window.KhazanProductSpecs.methods, window.KhazanImages.methods, window.KhazanSearch.methods, window.KhazanLinking.methods, window.KhazanStandards.methods, window.KhazanTabs.methods);
 
   document.addEventListener('DOMContentLoaded', () => app.init());
 })();

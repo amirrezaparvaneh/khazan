@@ -80,6 +80,7 @@ final class Plugin {
         (new RestRouter())->register();
         \Khazan\Modules\Images\ImageConverter::register();
         \Khazan\Modules\Images\AltText::register();
+        \Khazan\Modules\Linking\LinkSuggester::register();
 
         add_action('plugins_loaded', array($this, 'maybe_upgrade_database'));
 
