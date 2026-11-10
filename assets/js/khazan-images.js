@@ -23,7 +23,84 @@
         if (!r.success) throw new Error(r.message || 'اطلاعات تصاویر دریافت نشد.');
         im.overview = r; im.error = '';
       } catch (e) { im.error = e.message; }
+      await this.loadOrphans(true);
       this.render();
+    },
+
+    // ---- فایل‌های بیرون از کتابخانه‌ی رسانه ----
+    loadOrphans: async function (quiet) {
+      const im = this.state.images;
+      try {
+        const r = await this.apiFetch('/images/orphans/report');
+        if (r.success) { im.orph = { summary: r.summary, items: r.items }; im.orphSel = {}; }
+      } catch (e) { if (!quiet) im.error = e.message; }
+      if (!quiet) this.render();
+    },
+
+    scanOrphans: async function () {
+      const im = this.state.images;
+      if (im.busy) return;
+      im.busy = 'orph-scan'; im.error = ''; this.render();
+      try {
+        const r = await this.apiFetch('/images/orphans/scan', { method: 'POST', body: '{}' });
+        if (!r.success) throw new Error(r.message || 'اسکن انجام نشد.');
+        im.orph = { summary: r.summary, items: { removable: [], unused: [] } };
+      } catch (e) { im.error = e.message; }
+      im.busy = '';
+      this.render();
+      if (!im.error && im.orph && im.orph.summary.pending_analyze > 0) await this.runImagesLoop('orph-analyze');
+      else await this.loadOrphans();
+    },
+
+    removeOrphansAuto: async function () {
+      const im = this.state.images;
+      if (im.busy) return;
+      const sm = (im.orph && im.orph.summary) || {};
+      if (!sm.removable) return this.toast('موردی برای حذف خودکار نیست.');
+      if (!window.confirm(`${sm.removable} فایل «تکراری و بدون استفاده» (حدود ${bytes(sm.removable_bytes)}) به‌صورت خودکار حذف شود؟ هر فایل قبل از حذف دوباره بررسی می‌شود و نسخه‌ی پشتیبان در khazan-quarantine/orphans می‌ماند.`)) return;
+      im.busy = 'orph-remove'; im.stop = false; im.error = ''; this.startProgress('orph-remove', 'حذف خودکار فایل‌های تکراری بیرون از کتابخانه', sm.removable);
+      this.render();
+      let total = 0, bytesTotal = 0, guard = 0;
+      try {
+        while (!im.stop && guard++ < 2000) {
+          const r = await this.apiFetch('/images/orphans/report');
+          if (!r.success) throw new Error(r.message || 'گزارش دریافت نشد.');
+          const rels = (r.items.removable || []).map(i => i.rel);
+          if (!rels.length) break;
+          let removedNow = 0;
+          for (let i = 0; i < rels.length && !im.stop; i += 10) {
+            const d = await this.apiFetch('/images/orphans/remove', { method: 'POST', body: JSON.stringify({ rels: rels.slice(i, i + 10) }) });
+            if (!d.success) throw new Error(d.message || 'حذف انجام نشد.');
+            removedNow += d.removed.length; total += d.removed.length; bytesTotal += d.bytes || 0;
+            this.tickProgress(d.removed.length, d.bytes || 0);
+          }
+          this.imagesLog(`تا الان ${fa(total)} فایل حذف شد، ${bytes(bytesTotal)} آزاد شد`);
+          if (!removedNow) break;
+        }
+      } catch (e) { im.error = e.message; }
+      const pr = im.progress;
+      this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'حذف خودکار تمام شد')}: ${fa(total)} فایل حذف شد و ${bytes(bytesTotal)} آزاد شد (نسخه‌ی پشتیبان در quarantine است)، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}.` : '', !im.stop && !im.error);
+      im.busy = '';
+      await this.loadOrphans(true);
+      await this.loadImages();
+    },
+
+    removeOrphansManual: async function () {
+      const im = this.state.images;
+      const rels = Object.keys(im.orphSel || {}).filter(k => im.orphSel[k]);
+      if (!rels.length) return this.toast('فایلی انتخاب نشده است.');
+      if (!window.confirm(`${rels.length} فایلِ انتخاب‌شده حذف شود؟ این فایل‌ها نسخه‌ی هم‌ارز ندارند. اگر قالب یا کدی مستقیم به آن‌ها اشاره کند، ممکن است عکسی از سایت بیفتد. نسخه‌ی پشتیبان در khazan-quarantine/orphans می‌ماند.`)) return;
+      im.busy = 'orph-remove-manual'; im.error = ''; this.render();
+      try {
+        for (let i = 0; i < rels.length; i += 10) {
+          const d = await this.apiFetch('/images/orphans/remove', { method: 'POST', body: JSON.stringify({ rels: rels.slice(i, i + 10), manual: true }) });
+          if (!d.success) throw new Error(d.message || 'حذف انجام نشد.');
+          this.imagesLog(`${fa(d.removed.length)} فایل حذف شد، ${bytes(d.bytes)} آزاد شد` + (Object.keys(d.skipped || {}).length ? `، ${fa(Object.keys(d.skipped).length)} مورد رد شد` : ''));
+        }
+      } catch (e) { im.error = e.message; }
+      im.busy = '';
+      await this.loadOrphans(true);
+      await this.loadImages();
     },
 
     imagesLog: function (text) {
@@ -109,10 +186,12 @@
       if (im.busy) return;
       im.busy = kind; im.stop = false; im.error = '';
       if (kind === 'hash') im.autoDone = false;
-      const endpoint = { convert: '/images/convert-batch', shrink: '/images/shrink-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch' }[kind];
+      const endpoint = { convert: '/images/convert-batch', shrink: '/images/shrink-batch', alt: '/images/alt-batch', hash: '/images/dedupe/hash-batch', 'orph-analyze': '/images/orphans/analyze-batch', 'orph-shrink': '/images/orphans/shrink-batch' }[kind];
       let guard = 0, interruptions = 0;
-      const labels = { convert: 'تبدیل تصاویر', shrink: 'کاهش حجم تصاویر سنگین', alt: 'نوشتن متن جایگزین', hash: 'بررسی تصاویر برای یافتن تکراری‌ها' };
-      this.startProgress(kind, labels[kind], (im.overview && im.overview.pending && im.overview.pending[kind]) || 0);
+      const labels = { convert: 'تبدیل تصاویر', shrink: 'کاهش حجم تصاویر سنگین', alt: 'نوشتن متن جایگزین', hash: 'بررسی تصاویر برای یافتن تکراری‌ها', 'orph-analyze': 'تحلیل فایل‌های بیرون از کتابخانه', 'orph-shrink': 'کاهش حجم فایل‌های بیرون از کتابخانه' };
+      const osum = (im.orph && im.orph.summary) || {};
+      const total = kind === 'orph-analyze' ? osum.pending_analyze : (kind === 'orph-shrink' ? osum.pending_shrink : (im.overview && im.overview.pending && im.overview.pending[kind]));
+      this.startProgress(kind, labels[kind], total || 0);
       this.render();
       try {
         while (!im.stop && guard++ < 5000) {
@@ -121,7 +200,7 @@
             r = await this.apiFetch(endpoint, { method: 'POST', body: '{}' });
           } catch (e) {
             // a heavy image can kill the PHP request; it is marked server-side and skipped next time, so just carry on
-            if ((kind === 'shrink' || kind === 'convert') && /fetch|network/i.test(e.message || '') && interruptions < 10) {
+            if ((kind === 'shrink' || kind === 'convert' || kind === 'orph-shrink') && /fetch|network/i.test(e.message || '') && interruptions < 10) {
               interruptions++;
               this.imagesLog(`درخواست قطع شد (احتمالاً یک تصویر سنگین یا کمبود حافظه‌ی هاست)؛ آن تصویر رد می‌شود و ادامه می‌دهم (${fa(interruptions)})`);
               this.render();
@@ -135,9 +214,11 @@
           if (kind === 'shrink') this.imagesLog(`${fa(r.processed)} تصویر بررسی شد، ${fa(r.shrunk)} تصویر فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + ((r.reasons || []).length ? ' — فایل‌های ردشده: ' + r.reasons.map(x => `${x.message} (${fa(x.count)})`).join('، ') : ''));
           if (kind === 'alt') (r.items || []).forEach(i => this.imagesLog(i.alt ? `متن جایگزین: ${i.alt}` : `ردشد: ${i.error}`));
           if (kind === 'hash') this.imagesLog(`${fa(r.done)} تصویر بررسی شد`);
-          this.tickProgress(kind === 'hash' ? r.done : (kind === 'alt' ? (r.items || []).length : r.processed), (kind === 'convert' || kind === 'shrink') ? r.saved_bytes : 0);
+          if (kind === 'orph-analyze') this.imagesLog(`${fa(r.done)} فایل تحلیل شد`);
+          if (kind === 'orph-shrink') this.imagesLog(`${fa(r.processed)} فایل بررسی شد، ${fa(r.shrunk)} فایل فشرده شد، ${bytes(r.saved_bytes)} صرفه‌جویی` + ((r.reasons || []).length ? ' — فایل‌های ردشده: ' + r.reasons.map(x => `${x.message} (${fa(x.count)})`).join('، ') : ''));
+          this.tickProgress((kind === 'hash' || kind === 'orph-analyze') ? r.done : (kind === 'alt' ? (r.items || []).length : r.processed), (kind === 'convert' || kind === 'shrink' || kind === 'orph-shrink') ? r.saved_bytes : 0);
           if (r.stopped) { im.error = r.stopped; break; }
-          const empty = kind === 'hash' ? r.done === 0 : (kind === 'convert' || kind === 'shrink' ? r.processed === 0 : (r.items || []).length === 0);
+          const empty = (kind === 'hash' || kind === 'orph-analyze') ? r.done === 0 : (kind === 'convert' || kind === 'shrink' || kind === 'orph-shrink' ? r.processed === 0 : (r.items || []).length === 0);
           await this.loadImagesQuiet();
           this.render();
           if (empty || r.remaining === 0) break;
@@ -147,6 +228,7 @@
       this.finishProgress(pr ? `${im.stop ? 'متوقف شد' : (im.error ? 'با خطا متوقف شد' : 'تمام شد')}: ${fa(pr.done)} تصویر پردازش شد` + (pr.bytes ? `، ${bytes(pr.bytes)} صرفه‌جویی` : '') + (interruptions ? `، ${fa(interruptions)} بار درخواست به‌خاطر تصویر سنگین قطع شد و آن تصویر رد شد` : '') + `، زمان کل ${this.fmtDuration((Date.now() - pr.start) / 1000)}.` : '', !im.stop && !im.error);
       im.busy = '';
       if (kind === 'hash') await this.loadDuplicates();
+      if (kind === 'orph-analyze' || kind === 'orph-shrink') await this.loadOrphans(true);
       await this.loadImages();
     },
 
@@ -269,6 +351,14 @@
           : '<p style="color:#047857">تصویر تکراری پیدا نشد.</p>');
       }
 
+      const osum = (im.orph && im.orph.summary) || {};
+      const orphItems = (im.orph && im.orph.items) || { removable: [], unused: [] };
+      const orphUnused = (orphItems.unused || []).length ? `
+        <h4 style="margin:14px 0 6px">فایل‌های بدون استفاده و بدون نسخه‌ی هم‌ارز (نمونه‌ی ${fa(orphItems.unused.length)} مورد اول)</h4>
+        ${orphItems.unused.map(i => `<label style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:0.8rem">
+          <input type="checkbox" class="khz-orph-check" data-rel="${escapeHtml(i.rel)}" ${(im.orphSel || {})[i.rel] ? 'checked' : ''} />
+          <span dir="ltr" style="text-align:left">${escapeHtml(i.rel)} — ${bytes(i.bytes)}</span></label>`).join('')}
+        <button class="wila-btn wila-btn-outline" id="khz-orph-manual" ${busy ? 'disabled' : ''} style="margin-top:8px">حذف موارد انتخاب‌شده</button>` : '';
       return `
         ${im.error ? `<div class="wila-card" style="border-color:#fecaca;color:#991b1b">${escapeHtml(im.error)}</div>` : ''}
         ${this.progressHtml()}
@@ -322,6 +412,25 @@
           ${dupes}
         </div>
 
+
+        <div class="wila-card">
+          <h3>فایل‌های بیرون از کتابخانه‌ی رسانه</h3>
+          <p>این‌ها فایل‌های تصویری داخل پوشه‌ی uploads هستند که در کتابخانه‌ی وردپرس ثبت نیستند (مثلاً افزونه‌ای یا فرایندی آن‌ها را ساخته)، پس ابزارهای بالا آن‌ها را نمی‌بینند. اسکن فقط می‌خواند و چیزی را تغییر نمی‌دهد. فایلی که نامش جایی در نوشته‌ها، متا یا تنظیمات آمده باشد «در حال استفاده» حساب می‌شود و حذف نمی‌شود. توجه: استفاده‌ی مستقیم از داخل فایل‌های قالب یا CSS را نمی‌توان دید، برای همین همه‌ی حذف‌ها نسخه‌ی پشتیبان دارند.</p>
+          ${btn('khz-orph-scan', 'اسکن پوشه‌ی uploads', 'orph-scan')}
+          ${osum.pending_analyze ? btn('khz-orph-analyze', `ادامه‌ی تحلیل (${fa(osum.pending_analyze)} فایل)`, 'orph-analyze') : ''}
+          ${osum.removable ? btn('khz-orph-auto', 'حذف خودکار تکراری‌های بدون استفاده', 'orph-remove') : ''}
+          ${osum.pending_shrink ? btn('khz-orph-shrink', `کاهش حجم این فایل‌ها (${fa(osum.pending_shrink)})`, 'orph-shrink') : ''}
+          ${osum.scanned_at ? `
+            <p style="margin-top:12px"><b>${fa(osum.orphans)}</b> فایل بیرون از کتابخانه، مجموعاً <b>${bytes(osum.orphan_bytes)}</b> (از ${fa(osum.on_disk)} تصویر روی دیسک).
+              ${osum.pending_analyze ? `هنوز ${fa(osum.pending_analyze)} فایل تحلیل نشده است.` : ''}</p>
+            <ul style="font-size:0.85rem;line-height:1.9">
+              <li><b style="color:#991b1b">${fa(osum.removable)}</b> فایل «تکراری و بدون استفاده» (${bytes(osum.removable_bytes)}) — قابل حذف خودکار</li>
+              <li><b style="color:#b45309">${fa(osum.unused)}</b> فایل بدون استفاده و بدون نسخه‌ی هم‌ارز (${bytes(osum.unused_bytes)}) — فقط با انتخاب خودتان حذف می‌شود</li>
+              <li><b>${fa(osum.used)}</b> فایل در حال استفاده (${bytes(osum.used_bytes)}) — حذف نمی‌شود، ولی می‌توان حجمش را کم کرد</li>
+            </ul>` : '<p style="margin-top:12px">هنوز اسکن نشده است.</p>'}
+          ${orphUnused}
+        </div>
+
         ${im.log.length ? `<div class="wila-card"><h3>گزارش عملیات</h3>${im.log.map(l => `<div style="font-size:0.8rem">${escapeHtml(l)}</div>`).join('')}</div>` : ''}
       `;
     },
@@ -338,6 +447,12 @@
       on('#khz-prog-close', () => { this.state.images.progress = null; this.render(); });
       on('#khz-dup-remove', () => this.removeDuplicates());
       on('#khz-dup-auto', () => this.removeAllDuplicates());
+      on('#khz-orph-scan', () => this.scanOrphans());
+      on('#khz-orph-analyze', () => this.runImagesLoop('orph-analyze'));
+      on('#khz-orph-auto', () => this.removeOrphansAuto());
+      on('#khz-orph-shrink', () => this.runImagesLoop('orph-shrink'));
+      on('#khz-orph-manual', () => this.removeOrphansManual());
+      this.root.querySelectorAll('.khz-orph-check').forEach(c => c.addEventListener('change', e => { const im = this.state.images; im.orphSel = im.orphSel || {}; im.orphSel[e.target.getAttribute('data-rel')] = e.target.checked; }));
       this.root.querySelectorAll('.khz-dup-check').forEach(c => c.addEventListener('change', e => { this.state.images.selected[e.target.getAttribute('data-id')] = e.target.checked; }));
     },
   };
