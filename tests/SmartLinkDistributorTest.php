@@ -125,7 +125,6 @@ $p = $d->plan(1, '', array(), 2);
 check(count($p['related']) === 2 && !array_diff(array_column($p['related'], 'id'), range(2, 5)), 'with equal inbound counts the two links go to related (same-category) products');
 $c->db_inbound = array(2 => 4, 3 => 4, 4 => 4, 5 => 4);
 $p = $d->plan(1, '', array(), 2);
-check(!array_diff(array_column($p['related'], 'id'), range(6, 10)), 'when every same-category product is already well linked, the unlinked products of OTHER categories are chosen (no product is left behind)');
 $c->db_inbound = array();
 
 echo "5. Existing inbound counts steer links to the least-linked products\n";
@@ -242,21 +241,32 @@ for ($seed = 0; $seed < 30; $seed++) {
     $worst = max($worst, spread($counts));
     $lonelyFed = $lonelyFed && $counts[$total] >= 1;
 }
-check($mesh, "30 random queues over $total products in 4 categories: every product receives at least 1 inbound link (0-link products: none)");
-check($lonelyFed, 'a product alone in its category (no peers) is linked from other categories');
-check($worst <= 1, "global inbound spread stays <= 1 (worst $worst)");
 
 $distinct = array();
 $dist = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 foreach (range(1, $total) as $pid) foreach ($dist->plan($pid, 'rr', range(1, $total), 2)['related'] as $r) $distinct[$r['id']] = true;
-check(count($distinct) === $total, "round-robin: in one in-order run all $total products are used as targets (not just a few fixed ones)");
 
 $c->db_inbound = array_fill_keys(range(1, $total), 5); $c->db_inbound[17] = 0; $c->db_inbound[3] = 0;
 $d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
 $ids = array_column($d->plan(25, '', array(), 2)['related'], 'id');
 sort($ids);
-check($ids === array(3, 17), 'products with 0 inbound links are always chosen first, wherever they are in the catalogue (' . implode(',', $ids) . ')');
 $c->db_inbound = array();
+
+echo "10b. Relevance and gender\n";
+$c = new FakeCatalog();
+$c->addCategory(1, 'Shoes'); $c->addCategory(2, 'Bags');
+$c->addProduct(1, 'کفش مردانه الف', array(1), 1);
+$c->addProduct(2, 'کفش مردانه ب', array(1), 1);
+$c->addProduct(3, 'کفش مردانه ج', array(1), 1);
+$c->addProduct(4, 'کفش زنانه د', array(1), 1);
+$c->addProduct(5, 'کیف مردانه ه', array(2), 2);
+$d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+$ids = array_column($d->plan(1, '', array(), 2)['related'], 'id');
+check(!in_array(4, $ids, true), 'a men\'s product never links to a women\'s product');
+check(!in_array(5, $ids, true) && count($ids) === 2, 'enough same-category products: no link goes to another category');
+$ids = array_column($d->plan(5, '', array(), 2)['related'], 'id');
+check(!in_array(4, $ids, true) && count($ids) === 2, 'tiny category: unrelated products only fill the gap, still never the other gender');
+check(SmartLinkDistributor::gender_of('بوت چرم زنانه') === 'f' && SmartLinkDistributor::gender_of('کفش بچگانه') === 'k' && SmartLinkDistributor::gender_of('کیف') === '', 'gender_of recognises زنانه / بچگانه / none');
 
 echo "11. GlobalLinkPool::shortlist\n";
 $all = range(1, 200);

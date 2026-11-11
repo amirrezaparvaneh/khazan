@@ -34,6 +34,7 @@ final class SettingsController extends BaseController {
             'ai_base_url' => Settings::ai_base_url(),
             'ai_default_base_url' => Settings::AI_BASE_URL,
             'homepage_keywords' => $homepage_keywords,
+            'content_wrapper_class' => \Khazan\Services\Content\Guard\WrapperGuard::wrapper_class(),
             'auto_image_enabled' => Settings::auto_image_enabled(),
             'image_model' => Settings::IMAGE_MODEL,
             'product_post_type' => Settings::product_post_type(),

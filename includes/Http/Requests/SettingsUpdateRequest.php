@@ -32,6 +32,9 @@ final class SettingsUpdateRequest {
         if (isset($this->input['homepage_keywords'])) {
             $options[Settings::OPT_HOMEPAGE_KEYWORDS] = sanitize_textarea_field($this->input['homepage_keywords']);
         }
+        if (isset($this->input['content_wrapper_class'])) {
+            $options[Settings::OPT_CONTENT_WRAPPER_CLASS] = \Khazan\Services\Content\Guard\WrapperGuard::clean_class($this->input['content_wrapper_class']);
+        }
         if (isset($this->input['avalai_api_key'])) {
             $key = trim(sanitize_text_field($this->input['avalai_api_key']));
             // کلید ماسک‌شده (با «...») هرگز ذخیره نمی‌شود

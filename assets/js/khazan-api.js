@@ -32,6 +32,7 @@
           aiBaseUrl: data.ai_base_url || '',
           aiDefaultBaseUrl: data.ai_default_base_url || '',
           homepageKeywords: data.homepage_keywords || '',
+          contentWrapperClass: data.content_wrapper_class || '',
           autoImageEnabled: !!data.auto_image_enabled,
           productPostType: data.product_post_type || 'product',
           productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
@@ -505,6 +506,7 @@
       const app = this;
       const avalaiKey = document.getElementById('wila-avalai-key-input')?.value.trim() || '';
       const homepageKeywords = document.getElementById('wila-homepage-keywords-input')?.value.trim() || '';
+      const wrapperInput = document.getElementById('wila-wrapper-class-input');
       const autoImageInput = document.getElementById('wila-auto-image-input');
       const modelInput = document.getElementById('wila-ai-model-input');
       const baseUrlInput = document.getElementById('wila-ai-base-url-input');
@@ -516,6 +518,7 @@
             provider: 'avalai',
             avalai_api_key: avalaiKey,
             homepage_keywords: homepageKeywords,
+            ...(wrapperInput ? { content_wrapper_class: wrapperInput.value.trim() } : {}),
             ...(modelInput ? { ai_model: modelInput.value.trim() } : {}),
             ...(baseUrlInput ? { ai_base_url: baseUrlInput.value.trim() } : {}),
             ...(autoImageInput ? { auto_image_enabled: autoImageInput.checked } : {})

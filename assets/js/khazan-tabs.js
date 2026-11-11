@@ -710,6 +710,12 @@ ${siteExpanded ? `
               <textarea id="wila-homepage-keywords-input" class="wila-input" style="width:100%; height:70px; resize:vertical;" placeholder="مثلاً: چرم تیماج، خرید محصولات چرمی، کیف چرم طبیعی">${s.homepageKeywords || ''}</textarea>
             </div>
 
+            <div style="background:#f8fafc; padding:16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;">
+              <h4 style="margin-top:0; font-size:0.95rem;">🎨 کلاس CSS محتوای تولیدشده</h4>
+              <p style="margin:0 0 10px 0; font-size:0.8rem; color:#475569;">متن هر محصول یا دسته داخل یک div با این کلاس ذخیره می‌شود تا ظاهر آن مثل بقیه سایت باشد (فاصله‌ها، بالت‌ها، عنوان‌ها). اگر قالب سایت چنین کلاسی ندارد، این کادر را خالی بگذارید تا هیچ div اضافه‌ای نیاید.</p>
+              <input type="text" id="wila-wrapper-class-input" class="wila-input" dir="ltr" style="width:100%;" value="${escapeHtml(s.contentWrapperClass || '')}" placeholder="aka-desc-wrapper" />
+            </div>
+
             <div style="background:#fffbeb; padding:16px; border-radius:8px; border:1px solid #fde68a; margin-bottom:20px;">
               <h4 style="margin-top:0; font-size:0.95rem; color:#92400e;">🖼️ تصویر خودکار بین متن</h4>
               <label style="display:flex; align-items:center; gap:8px; font-size:0.825rem; font-weight:500; cursor:pointer;">

@@ -18,11 +18,10 @@ final class HtmlSanitizer {
     const BLOCK_TAGS = 'p|h[1-6]|ul|ol|li|div|section|blockquote|table|thead|tbody|tfoot|tr';
 
     /**
-     * پاک‌سازی کامل بدنه محتوا؛ جدول فقط برای محصولات به لیست تبدیل می‌شود
+     * پاک‌سازی کامل بدنه محتوا (جدول مشخصات مجاز است؛ tables_to_lists برای فراخوانی دستی می‌ماند)
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
-        if ($kind === Settings::KIND_PRODUCT) $html = self::tables_to_lists($html);
         return self::tidy_whitespace($html);
     }
 
