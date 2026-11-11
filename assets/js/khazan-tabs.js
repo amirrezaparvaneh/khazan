@@ -453,7 +453,7 @@ ${siteExpanded ? `
           ${queueVisible ? `
             <div class="khazan-toggle-grid" id="wila-queue-settings">
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره عنوان سئو، توضیحات متا و کلیدواژه در Yoast و Rank Math</small></span></label>
-              <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>لینک به دسته‌بندی محصول و ۲ محصول هم‌دسته</small></span></label>
+              <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>${this.productLinkCaption()}</small></span></label>
               ${siteMode ? '' : `<label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-create" ${b.createMissing ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>➕ ساخت پیش‌نویس محصول</strong><small>ایجاد خودکار محصول پیش‌نویس برای موارد یافت‌نشده</small></span></label>`}
             </div>
             ${siteMode ? `<div class="khazan-statusbar"><span class="khazan-status-pill">🛍️ ${toPersianDigits(srcIdx.length)} محصول در صف (${toPersianDigits(selectedCount)} مورد برای تولید انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>` : `            <div class="khazan-statusbar"><span class="khazan-status-pill">🔗 از بین ${toPersianDigits(b.rows.length)} محصول، ${toPersianDigits(matchedCount)} تا به سایت متصل شدن و آماده تولید هستن (${toPersianDigits(selectedCount)} مورد انتخاب شده)</span>${this.costEstimateHtml(selectedCount)}</div>
@@ -746,6 +746,12 @@ ${siteExpanded ? `
     },
 
     // انتخاب مدل: فهرست زنده از /models پرووایدر + ورود دستی شناسه؛ مقدار در #wila-ai-model-input نگه‌داری می‌شود
+    productLinkCaption: function () {
+      const p = (this.state.aiSettings || {}).linkPlan;
+      if (!p) return 'لینک به دسته‌بندی اصلی و چند محصول هم‌دسته و هم‌جنسیت (تعداد طبق استانداردها)';
+      return `${toPersianDigits(p.product_total)} لینک داخلی: ۱ لینک به دسته‌بندی اصلی و ${toPersianDigits(p.product_related)} لینک به محصولات هم‌دسته و هم‌جنسیت (مردانه فقط به مردانه). تعداد در تب استانداردها قابل تغییر است.`;
+    },
+
     aiUsageHtml: function () {
       const rows = this.state.aiUsage || [];
       const n = v => formatNumber(v || 0);
