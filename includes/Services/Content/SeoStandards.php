@@ -30,7 +30,7 @@ final class SeoStandards {
             // main body text (HTML below the product list)
             'body_words_min'      => 1300,
             'body_words_max'      => 1500,   // soft ceiling: longer is fine only with real content
-            'product_words'       => array(700, 1000),
+            'product_words'       => array(550, 800),
             'article_words'       => array(1000, 1500),
             'top_words_min'       => 150,    // text above the product list
             'top_words_max'       => 250,
