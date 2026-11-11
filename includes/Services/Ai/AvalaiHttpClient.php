@@ -109,6 +109,7 @@ final class AvalaiHttpClient {
         if (!isset($data['choices'][0]['message']['content'])) {
             return new \WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
         }
+        UsageLog::record($this->model, isset($data['usage']) ? $data['usage'] : array());
         return $data['choices'][0]['message']['content'];
     }
 

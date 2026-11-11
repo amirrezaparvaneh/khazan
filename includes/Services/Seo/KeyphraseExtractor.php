@@ -156,7 +156,7 @@ final class KeyphraseExtractor {
      * Puts conditional modifiers found in $source back into $core, right after the first word (the product type),
      * highest priority first, until the phrase reaches the 4-word ceiling.
      */
-    private static function fill_conditionals(array $core, array $source) {
+    private static function fill_conditionals(array $core, array $source, array $prefer = array()) {
         $slots = Settings::KEYPHRASE_MAX_WORDS - count($core);
         if ($slots <= 0 || !$core) return $core;
         $lists = Settings::keyphrase_words();
@@ -168,6 +168,15 @@ final class KeyphraseExtractor {
             foreach ($source as $t) {
                 if (self::key($t) === $ck) { $picked[] = $t; break; }
             }
+        }
+        // words that the category name itself carries (e.g. «روزمره» in «کفش روزمره مردانه») win over generic ones such as «چرم»
+        if ($prefer) {
+            $pk = array_map(array(__CLASS__, 'key'), $prefer);
+            usort($picked, function ($a, $b) use ($pk) {
+                $x = in_array(KeyphraseExtractor::key($a), $pk, true) ? 0 : 1;
+                $y = in_array(KeyphraseExtractor::key($b), $pk, true) ? 0 : 1;
+                return $x - $y;
+            });
         }
         $picked = array_slice($picked, 0, $slots);
         if (!$picked) return $core;
@@ -208,8 +217,11 @@ final class KeyphraseExtractor {
 
         // base: the main category words when the title contains all of them, else product type + audience qualifiers
         $core_keys = array_map($key, $core);
-        $cat_tokens = array_values(array_filter(self::words($category), function ($t) use ($key, $fillers) { return !isset($fillers[call_user_func($key, $t)]); }));
-        if ($cat_tokens && !array_diff(array_map($key, $cat_tokens), $core_keys)) {
+        $cat_all = array_values(array_filter(self::words($category), function ($t) use ($key, $fillers, $conditional) { $k = call_user_func($key, $t); return !isset($fillers[$k]) || isset($conditional[$k]); }));
+        $cat_tokens = array_values(array_filter($cat_all, function ($t) use ($key, $conditional) { return !isset($conditional[call_user_func($key, $t)]); }));
+        $cat_modifiers = array_values(array_filter($cat_all, function ($t) use ($key, $conditional) { return isset($conditional[call_user_func($key, $t)]); }));
+        if ($cat_tokens && !array_diff(array_map($key, $cat_all), $core_keys)) {
+            // [type + gender] stays; the category's own modifier (اسپرت، روزمره، طبی ...) is added back below when a slot is free
             $base = $cat_tokens;
         } else {
             $base = array();
@@ -254,7 +266,7 @@ final class KeyphraseExtractor {
             }
         }
         // the core is [type + gender + model]; with free slots the conditional modifiers (چرم …) complete it to 4 words
-        $result = self::fill_conditionals($result, $tokens);
+        $result = self::fill_conditionals($result, $tokens, isset($cat_modifiers) ? $cat_modifiers : array());
         return self::limit(implode(' ', $result), $max);
     }
 

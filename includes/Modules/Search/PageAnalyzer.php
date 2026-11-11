@@ -73,6 +73,40 @@ final class PageAnalyzer {
         return is_array($v) ? array_slice(array_values(array_filter($v, 'is_array')), 0, $max) : array();
     }
 
+    /**
+     * What a visitor (and Google) sees on a rendered page: H1, SEO title, meta description and the main text.
+     * Header, footer, menus, forms and product grids are dropped so only the real page copy is counted.
+     *
+     * @return array{h1:string,title:string,description:string,html:string}
+     */
+    public static function extract_rendered($html) {
+        $out = array('h1' => '', 'title' => '', 'description' => '', 'html' => '');
+        $html = (string) $html;
+        if ($html === '' || !class_exists('DOMDocument')) return $out;
+        $prev = libxml_use_internal_errors(true);
+        $doc = new \DOMDocument();
+        $doc->loadHTML('<?xml encoding="utf-8"?>' . $html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+        $xp = new \DOMXPath($doc);
+        $text = function ($node) { return trim(preg_replace('/\s+/u', ' ', $node ? $node->textContent : '')); };
+        $out['title'] = $text($xp->query('//title')->item(0));
+        $meta = $xp->query('//meta[@name="description"]/@content')->item(0);
+        $out['description'] = $meta ? trim($meta->nodeValue) : '';
+        $out['h1'] = $text($xp->query('//h1')->item(0));
+        $drop = '//script|//style|//noscript|//nav|//header|//footer|//aside|//form|//select|//svg|//iframe'
+            . '|//*[contains(concat(" ",normalize-space(@class)," ")," products ")]|//*[contains(@class,"woocommerce-loop")]|//*[contains(@class,"breadcrumb")]|//*[contains(@class,"pagination")]|//*[contains(@class,"sidebar")]|//*[contains(@class,"widget")]';
+        foreach ($xp->query($drop) as $n) { if ($n->parentNode) $n->parentNode->removeChild($n); }
+        $root = $xp->query('//main')->item(0);
+        if (!$root) $root = $xp->query('//*[@id="content" or @id="main" or contains(@class,"site-content")]')->item(0);
+        if (!$root) $root = $xp->query('//body')->item(0);
+        if (!$root) return $out;
+        $inner = '';
+        foreach ($root->childNodes as $c) $inner .= $doc->saveHTML($c);
+        $out['html'] = trim(preg_replace('/\s+/u', ' ', $inner));
+        return $out;
+    }
+
     /** Model reply → a fixed shape; unknown fields dropped, sizes capped, empty entries removed. */
     public static function normalize(array $a) {
         $state = isset($a['content_state']) && in_array($a['content_state'], array('empty', 'thin', 'good'), true) ? $a['content_state'] : 'thin';
@@ -138,6 +172,19 @@ final class PageAnalyzer {
         return $rules . "داده‌های صفحه:\n" . json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
+    private static function wc($html) {
+        $p = HtmlLinkText::plain((string) $html);
+        return $p === '' ? 0 : count(preg_split('/\s+/u', $p));
+    }
+
+    /** Words of the page copy that sit OUTSIDE the term description (0 when the description holds all of it). */
+    public static function outside_words($page) {
+        if ($page['kind'] !== 'term') return 0;
+        $seen = self::rendered($page['url']);
+        if (!$seen) return 0;
+        return max(0, self::wc($seen['html']) - self::wc($page['html']));
+    }
+
     // ---- WordPress ----
 
     /** The post or term behind a URL of this site. */
@@ -162,6 +209,23 @@ final class PageAnalyzer {
         }
         if ($key === '/') return new \WP_Error('khazan_page', 'صفحه‌ی اصلی سایت قابل تحلیل محتوایی نیست.', array('status' => 400));
         return new \WP_Error('khazan_page', 'صفحه‌ی مربوط به این آدرس در وردپرس پیدا نشد.', array('status' => 404));
+    }
+
+    /**
+     * The page as it is served (own host only, cached 1 h). Category copy added from outside WordPress (a dashboard, ACF,
+     * a theme field) is not in the term description but is on the page, so the analysis reads what is actually shown.
+     */
+    public static function rendered($url) {
+        $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+        if (HtmlLinkText::url_key($url, $host) === null) return null;
+        $ck = 'khazan_rendered_' . md5($url);
+        $cached = get_transient($ck);
+        if (is_array($cached)) return $cached;
+        $res = wp_remote_get($url, array('timeout' => 12, 'redirection' => 3, 'headers' => array('Accept' => 'text/html'), 'user-agent' => 'Mozilla/5.0 (compatible; KhazanAudit)'));
+        if (is_wp_error($res) || (int) wp_remote_retrieve_response_code($res) !== 200) return null;
+        $r = self::extract_rendered(wp_remote_retrieve_body($res));
+        set_transient($ck, $r, HOUR_IN_SECONDS);
+        return $r;
     }
 
     /** Light lookup for card headers: the page's real name and what kind of page it is (no content is loaded). */
@@ -209,6 +273,17 @@ final class PageAnalyzer {
         $page = self::resolve($url);
         if (is_wp_error($page)) return $page;
         $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+        $seen = $page['kind'] === 'term' ? self::rendered($page['url']) : null;
+        $source = 'stored';
+        if ($seen && self::wc($seen['html']) > self::wc($page['html']) * 1.5 + 60) {
+            // the page shows more copy than the term description holds: read what is shown
+            $page['html'] = $seen['html'];
+            $source = 'rendered';
+        }
+        if ($seen) {
+            if ($page['seo']['title'] === '') $page['seo']['title'] = $seen['title'];
+            if ($page['seo']['desc'] === '') $page['seo']['desc'] = $seen['description'];
+        }
         $facts = self::facts($page['html'], $host);
 
         $queries = array();
@@ -231,6 +306,7 @@ final class PageAnalyzer {
             'seo' => array('title' => $page['seo']['title'], 'description' => $page['seo']['desc'], 'focus_keyword' => $page['seo']['focuskw']),
             'search_console' => array('page' => $stats, 'queries' => $queries),
             'structure' => array_diff_key($facts, array('headings' => 1)), 'headings' => $facts['headings'],
+            'h1' => $seen ? $seen['h1'] : '', 'content_source' => $source === 'rendered' ? 'متن از خود صفحه‌ی منتشرشده خوانده شد (ممکن است از داشبورد یا فیلد دیگری اضافه شده باشد)' : 'متن توضیحات دسته/نوشته',
             'content' => mb_substr($plain, 0, self::CONTENT_CHARS, 'UTF-8') . (mb_strlen($plain, 'UTF-8') > self::CONTENT_CHARS ? ' …[ادامه‌ی متن کوتاه شد]' : ''),
         );
         $client = new AvalaiHttpClient(Settings::avalai_api_key(), Settings::ai_model());

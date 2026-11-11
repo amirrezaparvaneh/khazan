@@ -38,6 +38,7 @@
           productCategoryTaxonomy: data.product_category_taxonomy || 'product_cat',
         };
         this.state.aiPricing = data.ai_pricing || null;
+        try { const u = await this.apiFetch('/settings/ai-usage'); this.state.aiUsage = (u && u.items) || []; } catch (e) { this.state.aiUsage = []; }
         const pts = await this.apiFetch('/post-types');
         this.state.postTypes = pts.items || [];
         if (this.state.aiSettings.productPostType && this.state.postTypes.length) {
