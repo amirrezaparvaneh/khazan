@@ -162,6 +162,9 @@ final class ContentUpdater {
         if (!$analysis) return new \WP_Error('khazan_update', 'ابتدا این صفحه را با هوش مصنوعی تحلیل کنید.', array('status' => 400));
         $page = PageAnalyzer::resolve($url);
         if (is_wp_error($page)) return $page;
+        if (PageAnalyzer::outside_words($page) > 150) {
+            return new \WP_Error('khazan_update', 'بخش اصلی متن این دسته از بیرون وردپرس (مثلاً داشبورد) درج شده و در توضیحات دسته نیست. افزونه نمی‌تواند آن را بدون خطا به‌روزرسانی کند؛ تحلیل را بخوانید و تغییرات را همان‌جا که متن را می‌نویسید اعمال کنید.', array('status' => 409));
+        }
         $kind = self::kind_of($page);
         $html = $page['html'];
         $words = \Khazan\Services\Content\ContentAudit::word_count($html);

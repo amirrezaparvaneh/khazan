@@ -43,6 +43,11 @@ final class SettingsController extends BaseController {
         ));
     }
 
+    /** Last AI requests with their token use (local log; no prompt text). */
+    public function get_ai_usage() {
+        return rest_ensure_response(array('success' => true, 'items' => \Khazan\Services\Ai\UsageLog::all()));
+    }
+
     public function get_available_post_types() {
         $pts = get_post_types(array('public' => true), 'objects');
         unset($pts['attachment']);

@@ -716,6 +716,8 @@ ${siteExpanded ? `
               <input type="text" id="wila-wrapper-class-input" class="wila-input" dir="ltr" style="width:100%;" value="${escapeHtml(s.contentWrapperClass || '')}" placeholder="aka-desc-wrapper" />
             </div>
 
+            ${this.aiUsageHtml()}
+
             <div style="background:#fffbeb; padding:16px; border-radius:8px; border:1px solid #fde68a; margin-bottom:20px;">
               <h4 style="margin-top:0; font-size:0.95rem; color:#92400e;">🖼️ تصویر خودکار بین متن</h4>
               <label style="display:flex; align-items:center; gap:8px; font-size:0.825rem; font-weight:500; cursor:pointer;">
@@ -744,6 +746,13 @@ ${siteExpanded ? `
     },
 
     // انتخاب مدل: فهرست زنده از /models پرووایدر + ورود دستی شناسه؛ مقدار در #wila-ai-model-input نگه‌داری می‌شود
+    aiUsageHtml: function () {
+      const rows = this.state.aiUsage || [];
+      const n = v => formatNumber(v || 0);
+      const body = rows.length ? `<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:0.78rem;"><thead><tr style="text-align:right; color:#64748b;"><th style="padding:4px 6px;">زمان</th><th style="padding:4px 6px;">کار</th><th style="padding:4px 6px;">مدل</th><th style="padding:4px 6px;">ورودی</th><th style="padding:4px 6px;">خروجی</th><th style="padding:4px 6px;">تفکر مدل</th></tr></thead><tbody>${rows.slice(0, 30).map(r => `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:4px 6px;">${escapeHtml(shortJalali ? shortJalali(r.at) : r.at)}</td><td style="padding:4px 6px;">${escapeHtml(r.what)}</td><td style="padding:4px 6px;" dir="ltr">${escapeHtml(r.model)}</td><td style="padding:4px 6px;">${n(r.prompt)}</td><td style="padding:4px 6px;">${n(r.completion)}</td><td style="padding:4px 6px;">${n(r.reasoning)}</td></tr>`).join('')}</tbody></table></div>` : '<p style="margin:0; font-size:0.8rem; color:#64748b;">هنوز درخواستی ثبت نشده است.</p>';
+      return `<details style="background:#f8fafc; padding:12px 16px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:20px;"><summary style="cursor:pointer; font-weight:700; font-size:0.9rem;">📊 مصرف توکن (۳۰ درخواست آخر)</summary><p style="margin:8px 0; font-size:0.78rem; color:#475569;">هر بار که افزونه از هوش مصنوعی چیزی می‌خواهد، اینجا ثبت می‌شود. اگر اعتبار کم شد و ردیفی اینجا نبود، مصرف از جای دیگری (مثلاً داشبورد لاراول با همین کلید) بوده است.</p>${body}</details>`;
+    },
+
     aiModelPicker: function (s) {
       const m = this.state.aiModels || { loading: false, list: [], error: '' };
       const current = s.avalAIModel || '';
