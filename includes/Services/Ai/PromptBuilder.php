@@ -129,7 +129,7 @@ final class PromptBuilder {
             \Khazan\Services\Content\ContentRules::product_blueprint() . self::length_line(Settings::KIND_PRODUCT) .
             \Khazan\Services\Content\ContentRules::writing_rules($kind) .
             ($links ? "لینک داخلی اجباری با <a href=\"URL\">:\n" . implode("\n", $links) . "\n" : '') . $this->locked_links_block($params['internal_links']) .
-            $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array()) .
+            $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array(), isset($params['target']['inferred_specs']) ? $params['target']['inferred_specs'] : array()) .
             "داده‌ها:\n" . wp_json_encode($data, JSON_UNESCAPED_UNICODE) . "\n" .
             "خروجی دقیقاً با برچسب‌ها:\n===WILA_CONTENT_START===\n[HTML]\n===WILA_CONTENT_END===";
         if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
@@ -297,7 +297,7 @@ final class PromptBuilder {
         if ($is_product) {
             $prompt .= \Khazan\Services\Content\ContentRules::product_blueprint() .
                 "لینک اجباری: حتماً فقط یک بار (نه بیشتر) به دسته‌بندی والد این محصول (target.parent_categories) با HTML <a href=\"URL\">انکر کلکسیون‌محور داده‌شده برای دسته در internal_links (نه نام خام دسته)</a> در جمله‌ای طبیعی لینک بده. در صورت ارتباط طبیعی، دقیقاً ۲ لینک به ۲ محصول مرتبط متفاوت (هر محصول فقط یک بار در کل متن) (target.related_products) بده و انکرتکست هر لینک را فقط از فیلد anchor همان مورد (کلیدواژه کانونی آن محصول) بگیر، نه نام کامل محصول؛ مجبور به استفاده از همه آن‌ها نیستی.\n" .
-                $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array());
+                $this->product_specs_block(isset($params['target']['custom_specs']) ? $params['target']['custom_specs'] : array(), isset($params['target']['inferred_specs']) ? $params['target']['inferred_specs'] : array());
         } else {
             $prompt .= "ساختار پیشنهادی دسته‌بندی: مقدمه‌ای که دسته و محصولات آن را معرفی می‌کند، راهنمای انتخاب (معیارهای واقعی)، معرفی زیردسته‌ها (target.subcategories) با لینک به URL هرکدام و در صورت وجود، یک لینک طبیعی به دسته والد (target.parent_category)، انواع محصولات، و پرسش‌های متداول. نام محصولات نمونه (sample_products) را فقط برای مثال بیاور و ادعا درباره‌شان نساز. محتوا باید برای نمایش بالا یا پایین لیست محصولات مناسب و غیرتکراری باشد.\n";
         }
@@ -311,9 +311,20 @@ final class PromptBuilder {
      * (Settings::PRODUCT_SPEC_FIELDS). هرگز اجازه حدس زدن جنس زیره/رویه/آستر را به مدل نمی‌دهد؛ اگر محصولی
      * مشخصاتی ثبت نکرده باشد، به‌جای حدس به عبارت عمومی دستور می‌دهد.
      */
-    private function product_specs_block($specs) {
+    private function product_specs_block($specs, $inferred = array()) {
         $specs = is_array($specs) ? array_filter($specs, function ($value) { return trim((string) $value) !== ''; }) : array();
+        $inferred = is_array($inferred) ? array_filter($inferred, function ($value) { return trim((string) $value) !== ''; }) : array();
+        $similar = '';
+        if ($inferred) {
+            $rows = array();
+            foreach (\Khazan\Core\Settings::PRODUCT_SPEC_FIELDS as $key => $label) {
+                if (isset($inferred[$key])) $rows[] = '- ' . $label . ': ' . $inferred[$key];
+            }
+            $similar = "### مشخصات محصولات مشابه هم‌دسته (برای همین محصول تأیید نشده):\n" . implode("\n", $rows) . "\n" .
+                "این موارد از محصولات مشابه همین دسته گرفته شده است. می‌توانی همین مقادیر را به‌عنوان ویژگی‌های محصول طبیعی در متن بیاوری، اما فقط همین مقادیر را؛ چیزی به آن‌ها اضافه نکن و درباره‌ی ویژگی‌هایی که این‌جا هم نیامده حدس نزن.\n";
+        }
         if (!$specs) {
+            if ($similar) return "### مشخصات قطعی و غیرقابل تغییر محصول:\nبرای این محصول مشخصات تأییدشده‌ای ثبت نشده است.\n" . $similar;
             return "### مشخصات قطعی و غیرقابل تغییر محصول:\nاین محصول هیچ مشخصات فنی ثبت‌شده‌ای در سامانه ندارد.\n" .
                 "*قانون خط قرمز:* تحت هیچ شرایطی جنس زیره، رویه، آستر یا هر مشخصات فنی دیگری را حدس نزن یا تخیل نکن؛ به‌جای ادعای جنس خاص، از عبارات عمومی مانند «زیره استاندارد و باکیفیت» استفاده کن.\n";
         }
@@ -322,7 +333,7 @@ final class PromptBuilder {
             if (isset($specs[$key])) $lines[] = '- ' . $label . ': ' . $specs[$key];
         }
         return "### مشخصات قطعی و غیرقابل تغییر محصول:\n" . implode("\n", $lines) . "\n" .
-            "*قانون خط قرمز:* صرفاً بر اساس مشخصات فوق متن را تنظیم کن و تحت هیچ شرایطی جنس زیره یا متریال دیگری را حدس نزن یا تخیل نکن؛ برای هر مشخصه‌ای که در لیست بالا نیامده، از عبارت عمومی مانند «زیره استاندارد و باکیفیت» استفاده کن.\n";
+            "*قانون خط قرمز:* صرفاً بر اساس مشخصات فوق متن را تنظیم کن و تحت هیچ شرایطی جنس زیره یا متریال دیگری را حدس نزن یا تخیل نکن؛ برای هر مشخصه‌ای که در لیست بالا نیامده، از عبارت عمومی مانند «زیره استاندارد و باکیفیت» استفاده کن.\n" . $similar;
     }
 
     /**

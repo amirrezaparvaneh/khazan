@@ -15,6 +15,7 @@ final class GoogleServiceAuth {
 
     const TOKEN_URI = 'https://oauth2.googleapis.com/token';
     const SCOPE_READONLY = 'https://www.googleapis.com/auth/webmasters.readonly';
+    const SCOPE_SHEETS = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 
     public static function b64url($data) {
         return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
