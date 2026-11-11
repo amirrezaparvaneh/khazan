@@ -22,7 +22,7 @@ final class HtmlSanitizer {
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
-        if ($kind === Settings::KIND_PRODUCT) $html = self::drop_unknowns($html);
+        if ($kind === Settings::KIND_PRODUCT) $html = self::polish_product(self::drop_unknowns($html));
         $html = self::style_tables($html);
         return self::tidy_whitespace($html);
     }
@@ -44,6 +44,25 @@ final class HtmlSanitizer {
             }, $html);
         }
         return $html;
+    }
+
+    /**
+     * Product copy: machine-sounding material phrases ("چرم تبریز با پایه چرم گاوی"), a space before the Persian comma,
+     * and a link left alone at the end of a paragraph (no sentence around it) is wrapped into a sentence.
+     */
+    public static function polish_product($html) {
+        $html = preg_replace('~چرم\s+تبریز\s+با\s+(?:پایه|منشأ|منشا)\s+(?:چرم\s+)?گاوی~u', 'چرم گاوی تبریز', $html);
+        $html = preg_replace('~\s+با\s+(?:پایه|منشأ|منشا)\s+(?=(?:چرم\s+)?(?:گاوی|طبیعی))~u', ' ', $html);
+        $html = preg_replace('~\s+([،؛])~u', '$1', $html);
+        return preg_replace_callback('~<p\b([^>]*)>(.*?)</p>~is', function ($m) {
+            if (preg_match('~^(.*[.!؟])\s*(?:[^<\s.!؟]+\s+){0,2}(<a\b[^>]*>[^<]{2,80}</a>)\s*$~us', $m[2], $x)) {
+                return '<p' . $m[1] . '>' . $x[1] . ' برای دیدن گزینه‌های بیشتر می‌توانید به ' . $x[2] . ' سر بزنید.</p>';
+            }
+            if (preg_match('~^\s*(<a\b[^>]*>[^<]{2,80}</a>)\s*$~us', $m[2], $x)) {
+                return '<p' . $m[1] . '>برای دیدن گزینه‌های بیشتر می‌توانید به ' . $x[1] . ' سر بزنید.</p>';
+            }
+            return $m[0];
+        }, $html);
     }
 
     /** Wording that announces a missing fact: it must not reach a product page (a buyer reads it as a flaw). */
