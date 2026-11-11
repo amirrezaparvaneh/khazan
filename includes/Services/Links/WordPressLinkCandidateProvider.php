@@ -32,6 +32,9 @@ final class WordPressLinkCandidateProvider implements LinkCandidateProvider {
     /** @var array<int,array|null> */
     private $category_cache = array();
 
+    /** @var array<string,int>|null url key => impressions (lazy) */
+    private $impressions_by_key = null;
+
     public function __construct(SiteEntityRepository $entities = null, LinkRepository $links = null, ContentTargetRepository $targets = null) {
         $this->entities = $entities ?: new SiteEntityRepository();
         $this->links    = $links ?: new LinkRepository();
@@ -102,6 +105,32 @@ final class WordPressLinkCandidateProvider implements LinkCandidateProvider {
             $ids = array_values(array_unique(array_merge($ids, $this->entities->published_product_ids_in_categories($ancestors, $product['id']))));
         }
         return $ids;
+    }
+
+    /**
+     * Search Console impressions per product (id => impressions), from the synced page data; products without data are absent.
+     *
+     * @param int[] $product_ids
+     * @return array<int,int>
+     */
+    public function impressions(array $product_ids) {
+        if ($this->impressions_by_key === null) {
+            $this->impressions_by_key = array();
+            $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+            $data = \Khazan\Modules\Search\SearchConsole::data();
+            foreach (isset($data['pages']) ? $data['pages'] : array() as $p) {
+                $key = HtmlLinkText::url_key($p['page'], $host);
+                if ($key !== null) $this->impressions_by_key[$key] = (int) $p['impressions'];
+            }
+        }
+        if (!$this->impressions_by_key) return array();
+        $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+        $out = array();
+        foreach ($product_ids as $id) {
+            $key = HtmlLinkText::url_key((string) get_permalink((int) $id), $host);
+            if ($key !== null && isset($this->impressions_by_key[$key])) $out[(int) $id] = $this->impressions_by_key[$key];
+        }
+        return $out;
     }
 
     public function inbound_counts(array $product_ids) {

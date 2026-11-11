@@ -81,6 +81,7 @@ final class ContentAudit {
             'external_links' => 0,
             'duplicate_urls' => array(),
             'max_links_per_paragraph' => 0,
+            'min_link_gap' => null,
         );
 
         if (preg_match_all('/<(h[23])\b[^>]*>(.*?)<\/\1>/is', $html, $heads, PREG_SET_ORDER)) {
@@ -112,6 +113,8 @@ final class ContentAudit {
             foreach ($blocks[2] as $block) $m['max_links_per_paragraph'] = max($m['max_links_per_paragraph'], preg_match_all('/<a\b/i', $block));
         }
 
+        $m['min_link_gap'] = self::min_link_gap($html, $host);
+
         $f = array();
         list($wmin) = SeoStandards::words_range($kind);
         if (isset($opts['words_min'])) $wmin = max(1, (int) $opts['words_min']);
@@ -130,6 +133,7 @@ final class ContentAudit {
         list($emin, $emax) = SeoStandards::external_range();
         if ($m['external_links'] > $emax) $f['external_links'] = "لینک خارجی {$m['external_links']} است؛ حداکثر {$emax}.";
         if ($std['link_each_url_once'] && $m['duplicate_urls']) $f['duplicate_links'] = 'یک آدرس بیش از یک‌بار لینک شده است.';
+        if ($m['min_link_gap'] !== null && isset($std['links_min_gap_words']) && $m['min_link_gap'] < (int) $std['links_min_gap_words']) $f['links_clustered'] = "دو لینک داخلی فقط {$m['min_link_gap']} کلمه با هم فاصله دارند؛ لینک‌ها باید در کل متن و در بخش‌های مختلف پخش شوند (حداقل {$std['links_min_gap_words']} کلمه فاصله).";
         if ($m['max_links_per_paragraph'] > $std['links_per_paragraph']) $f['links_per_paragraph'] = "یک پاراگراف {$m['max_links_per_paragraph']} لینک دارد؛ حداکثر {$std['links_per_paragraph']}.";
 
         if (isset($opts['title'])) {
@@ -147,6 +151,30 @@ final class ContentAudit {
         $m['failures'] = $f;
         $m['ok'] = !$f;
         return $m;
+    }
+
+    /**
+     * Smallest number of words between two consecutive internal links (null with fewer than two).
+     * Pure: links are replaced by a marker, tags are dropped, words are counted between markers.
+     */
+    public static function min_link_gap($html, $home_host = '') {
+        $home_host = strtolower((string) $home_host);
+        $marked = preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use ($home_host) {
+            $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
+            if ($href === '' || $href[0] === '#') return $m[3];
+            $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+            $internal = $h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host));
+            return $internal ? ' ' . "\x01" . ' ' : $m[3];
+        }, (string) $html);
+        $text = html_entity_decode(strip_tags(preg_replace('~</(?:p|li|h[1-6]|div|tr)>~i', ' ', $marked)), ENT_QUOTES, 'UTF-8');
+        $words = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+        $last = null; $min = null;
+        foreach ($words as $i => $w) {
+            if (strpos($w, "\x01") === false) continue;
+            if ($last !== null) { $gap = $i - $last - 1; $min = $min === null ? $gap : min($min, $gap); }
+            $last = $i;
+        }
+        return $min;
     }
 
     /** Persian summary of failures for a repair prompt. */

@@ -197,14 +197,17 @@ final class SmartLinkDistributor {
                 $pending[(int) $queued] = true;
             }
         }
+        $impressions = method_exists($this->provider, 'impressions') ? $this->provider->impressions(array_keys($candidates)) : array();
         foreach ($candidates as $id => $candidate) {
             $assigned = isset($state['assigned'][$id]) ? $state['assigned'][$id] : 0;
             $candidates[$id]['inbound'] = (isset($inbound[$id]) ? $inbound[$id] : 0) + $assigned;
             $candidates[$id]['pending'] = isset($pending[$id]) ? 0 : 1;
+            // a page without any link always goes first; after that the share follows the page's value
+            $candidates[$id]['load'] = $candidates[$id]['inbound'] === 0 ? -1.0 : $candidates[$id]['inbound'] / self::value_weight(isset($impressions[$id]) ? $impressions[$id] : 0);
         }
 
         usort($candidates, function ($a, $b) {
-            if ($a['inbound'] !== $b['inbound']) return $a['inbound'] < $b['inbound'] ? -1 : 1;
+            if (abs($a['load'] - $b['load']) > 1e-9) return $a['load'] < $b['load'] ? -1 : 1;
             if ($a['pending'] !== $b['pending']) return $a['pending'] < $b['pending'] ? -1 : 1;
             if ($a['score'] !== $b['score']) return $a['score'] > $b['score'] ? -1 : 1;
             return $a['id'] < $b['id'] ? -1 : 1;
@@ -215,6 +218,16 @@ final class SmartLinkDistributor {
             $picked[] = array('id' => (int) $candidate['id'], 'title' => $candidate['title'], 'anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($candidate['anchor']), 'url' => $candidate['url']);
         }
         return $picked;
+    }
+
+    /**
+     * Value weight of a page from its Search Console impressions: 1.0 (no data) up to 2.0 (about 10 000 impressions).
+     * Inbound links are shared in proportion to it, so a page that earns traffic can take up to twice the links of a
+     * page nobody searches for, but every page still gets its first link before any page gets a second.
+     */
+    public static function value_weight($impressions) {
+        $i = max(0, (float) $impressions);
+        return 1.0 + min(1.0, log10(1.0 + $i) / 4.0);
     }
 
     /** @return string 'f' | 'm' | 'k' (kids) | '' when the title names no audience */
