@@ -81,7 +81,8 @@ final class PromptBuilder {
         }
         $prompt .= "===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا، بدون ایموجی]\n===WILA_SEO_TITLE_END===\n" .
             "===WILA_META_DESCRIPTION_START===\n[توضیحات متا فارسی با طول ۱۴۰ تا ۱۵۵ کاراکتر، بدون ایموجی]\n===WILA_META_DESCRIPTION_END===\n" .
-            "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف مرتبط با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
+            \Khazan\Services\Content\ContentRules::synonym_rules() .
+            "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ کلیدواژه فرعی طبق قواعد کلیدواژه‌های فرعی، با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
         return $prompt;
     }
 
@@ -135,7 +136,7 @@ final class PromptBuilder {
         if ($need_title || $need_meta) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::seo_title_rules($kind, isset($params['focus_keyword']) ? $params['focus_keyword'] : '');
         if ($need_title) $prompt .= "\n===WILA_SEO_TITLE_START===\n[عنوان سئو طبق قواعد بالا، بدون ایموجی]\n===WILA_SEO_TITLE_END===";
         if ($need_meta) $prompt .= "\n===WILA_META_DESCRIPTION_START===\n[متا ۱۴۰ تا ۱۵۵ کاراکتر، بدون ایموجی]\n===WILA_META_DESCRIPTION_END===";
-        if ($need_syn) $prompt .= "\n===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ مترادف با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
+        if ($need_syn) $prompt .= "\n" . \Khazan\Services\Content\ContentRules::synonym_rules() . "===WILA_KEYWORD_SYNONYMS_START===\n[۳ تا ۶ کلیدواژه فرعی طبق قواعد کلیدواژه‌های فرعی، با ویرگول]\n===WILA_KEYWORD_SYNONYMS_END===";
 
         return $prompt;
     }

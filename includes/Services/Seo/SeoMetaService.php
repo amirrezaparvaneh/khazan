@@ -34,6 +34,24 @@ final class SeoMetaService {
     }
 
     /**
+     * Secondary keywords fit to store: 2-5 words, no emoji, never equal to / containing the focus phrase,
+     * unique, at most 6 (model output is untrusted; the sheet's own related keywords pass the same filter).
+     */
+    public static function clean_synonyms($raw, $focus = '') {
+        $focus_key = mb_strtolower(trim((string) $focus));
+        $out = array();
+        foreach (self::split_keywords($raw, $focus) as $item) {
+            $item = trim(preg_replace(SeoMetaRules::EMOJI, '', $item));
+            $words = count(array_filter(preg_split('/\s+/u', $item), 'strlen'));
+            if ($words < 2 || $words > 5) continue;
+            if ($focus_key !== '' && mb_strpos(mb_strtolower($item), $focus_key) !== false) continue;
+            $out[] = $item;
+            if (count($out) >= 6) break;
+        }
+        return $out;
+    }
+
+    /**
      * فیلد مترادف Yoast یک آرایه JSON است که هر خانه آن رشته ویرگول‌دار مترادف‌های یک عبارت کلیدی است:
      * خانه ۰ برای کلیدواژه کانونی و خانه‌های بعدی به ترتیب برای عبارات کلیدی مرتبط.
      * اگر هر مترادف در یک خانه جدا ذخیره شود، Yoast فقط اولی را مترادف کلیدواژه کانونی می‌شناسد.
@@ -86,7 +104,7 @@ final class SeoMetaService {
      */
     public static function post_meta_map($seo) {
         $focus = KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
-        $synonyms = self::split_keywords($seo['synonyms'], $focus);
+        $synonyms = self::clean_synonyms($seo['synonyms'], $focus);
         $map = array(
             '_yoast_wpseo_title'           => SeoTitleGuard::strip_variables($seo['title']),
             '_yoast_wpseo_metadesc'        => $seo['desc'],
@@ -107,7 +125,7 @@ final class SeoMetaService {
      */
     public static function term_meta_map($seo) {
         $focus = KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
-        $synonyms = self::split_keywords($seo['synonyms'], $focus);
+        $synonyms = self::clean_synonyms($seo['synonyms'], $focus);
         $map = array(
             'wpseo_title'           => SeoTitleGuard::strip_variables($seo['title']),
             'wpseo_desc'            => $seo['desc'],
