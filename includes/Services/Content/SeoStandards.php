@@ -52,6 +52,7 @@ final class SeoStandards {
             'links_article'       => array(3, 8),
             'links_external'      => array(1, 2),
             'links_per_paragraph' => 2,
+            'links_min_gap_words' => 70,     // words between two internal links: links are spread over the text, never bunched
             'link_each_url_once'  => true,
         );
     }
