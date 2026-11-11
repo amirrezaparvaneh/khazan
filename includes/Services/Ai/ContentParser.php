@@ -96,6 +96,8 @@ final class ContentParser {
         $self = isset($params['target']['url']) ? (string) $params['target']['url'] : '';
         $links = \Khazan\Services\Links\LinkSanitizer::apply($content, $plan, $self, $host, $verified);
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($links['html']);
+        // one internal link per paragraph: extra links move to link-free paragraphs elsewhere in the body
+        if ($kind === Settings::KIND_PRODUCT) $content = \Khazan\Services\Links\LinkSpreader::spread($content, $host);
 
         $title = sanitize_text_field($seo_title ?: $params['h1_title']);
         $meta  = sanitize_textarea_field($meta_description);
