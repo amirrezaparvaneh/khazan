@@ -20,6 +20,7 @@ final class Settings {
     const OPT_AI_MODEL                   = 'wila_ai_model';
     const OPT_AI_BASE_URL                = 'wila_ai_base_url';
     const OPT_HOMEPAGE_KEYWORDS          = 'wila_homepage_keywords';
+    const OPT_CONTENT_WRAPPER_CLASS      = 'wila_content_wrapper_class';
     const OPT_BRAND_NAME                 = 'wila_brand_name';
     const OPT_PRODUCT_POST_TYPE          = 'wila_product_post_type';
     const OPT_PRODUCT_CATEGORY_TAXONOMY  = 'wila_product_category_taxonomy';

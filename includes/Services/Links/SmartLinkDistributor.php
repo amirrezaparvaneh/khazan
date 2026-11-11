@@ -173,12 +173,21 @@ final class SmartLinkDistributor {
             if ($this->cannibalizes($candidate['anchor'], $product, true)) {
                 continue;
             }
-            // global pool: unrelated products are valid targets too (similarity only ranks candidates with equal inbound counts)
+            // a men's product never links to a women's one (and vice versa)
+            if (self::gender_conflict($product['title'], $candidate['title'])) {
+                continue;
+            }
             $candidate['score'] = $this->similarity($product, $candidate);
             $candidates[(int) $candidate['id']] = $candidate;
         }
         if (!$candidates) {
             return array();
+        }
+        // relevance first: same / parent category or near-identical titles. Unrelated products only fill the gap
+        // when the relevant ones are fewer than the links needed (tiny categories).
+        $relevant = array_filter($candidates, function ($c) { return $c['score'] > 0; });
+        if (count($relevant) >= $limit) {
+            $candidates = $relevant;
         }
 
         $inbound = $this->provider->inbound_counts(array_keys($candidates));
@@ -206,6 +215,21 @@ final class SmartLinkDistributor {
             $picked[] = array('id' => (int) $candidate['id'], 'title' => $candidate['title'], 'anchor' => \Khazan\Services\Seo\KeyphraseExtractor::cap($candidate['anchor']), 'url' => $candidate['url']);
         }
         return $picked;
+    }
+
+    /** @return string 'f' | 'm' | 'k' (kids) | '' when the title names no audience */
+    public static function gender_of($title) {
+        $t = (string) $title;
+        if (preg_match('/دخترانه|پسرانه|بچگانه|بچه‌گانه|کودک/u', $t)) return 'k';
+        if (preg_match('/زنانه|بانوان|خانم/u', $t)) return 'f';
+        if (preg_match('/مردانه|آقایان/u', $t)) return 'm';
+        return '';
+    }
+
+    public static function gender_conflict($a, $b) {
+        $x = self::gender_of($a);
+        $y = self::gender_of($b);
+        return $x !== '' && $y !== '' && $x !== $y;
     }
 
     /**

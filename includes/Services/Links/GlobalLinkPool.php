@@ -2,9 +2,8 @@
 /**
  * Global, balanced candidate pool for internal product links (mesh / spider architecture).
  *
- * Every published product is a possible link target. The shortlist is ordered by effective inbound count
- * (database + links already assigned in the current run, lowest first), then related (same / ancestor category)
- * products, then cyclic id order from the current product (id+1, id+2, ... then wrap around), and cut to SIZE.
+ * Every published product is a possible link target. The shortlist is ordered by relatedness (same / ancestor
+ * category first), then effective inbound count (database + links assigned in the current run, lowest first), then cyclic id order from the current product (id+1, id+2, ... then wrap around), and cut to SIZE.
  * The least-linked products therefore always reach the distributor (no product stays without inbound links),
  * related ones win ties, and the targets rotate from row to row instead of always being the lowest ids.
  *
@@ -45,7 +44,7 @@ final class GlobalLinkPool {
             );
         }
         usort($rows, function ($a, $b) {
-            foreach (array('count', 'related', 'wrap', 'id') as $field) {
+            foreach (array('related', 'count', 'wrap', 'id') as $field) {
                 if ($a[$field] !== $b[$field]) return $a[$field] < $b[$field] ? -1 : 1;
             }
             return 0;
