@@ -15,7 +15,32 @@ class LinkSpreader {
         'اگر می‌خواهید انتخاب دیگری را هم ببینید، %s ارزش نگاه‌کردن دارد.',
     );
 
+    /**
+     * Planned links the model left out are written into link-free paragraphs of the body (same short sentences as spread()).
+     * Returns the html and the links that still found no free paragraph.
+     *
+     * @param array[] $missing rows with url + anchor
+     * @return array{html:string,missing:array[]}
+     */
+    public static function place($html, array $missing, $home_host = '') {
+        $html = (string) $html;
+        $left = array();
+        foreach ($missing as $link) {
+            if (empty($link['url']) || empty($link['anchor'])) { $left[] = $link; continue; }
+            $a = '<a href="' . htmlspecialchars((string) $link['url'], ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars((string) $link['anchor'], ENT_QUOTES, 'UTF-8') . '</a>';
+            $out = self::run($html, $home_host, $a);
+            if ($out === $html) { $left[] = $link; continue; }
+            $html = $out;
+        }
+        return array('html' => $html, 'missing' => $left);
+    }
+
     public static function spread($html, $home_host = '') {
+        return self::run($html, $home_host, null);
+    }
+
+    /** $extra: a ready anchor to write into the best free paragraph (place); null: move crowded links (spread). */
+    private static function run($html, $home_host, $extra) {
         $html = (string) $html;
         $parts = preg_split('~(<p\b[^>]*>.*?</p>)~is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
         if (!$parts || count($parts) < 5) return $html;
@@ -47,17 +72,26 @@ class LinkSpreader {
 
         $links = array();
         foreach ($paras as $i) $links[$i] = $count($parts[$i]);
-        $used = 0;
+        $used = preg_match_all('~(?:بیندازید|بررسی کنید|نگاه‌کردن دارد)\.</p>~u', $html);
+        $pick = function () use (&$links, $paras, $closed, &$parts) {
+            $best = null; $best_dist = 0;
+            foreach ($paras as $tpos => $t) {
+                if ($links[$t] > 0 || isset($closed[$t]) || mb_strlen(trim(strip_tags($parts[$t]))) < 60) continue;
+                $dist = PHP_INT_MAX;
+                foreach ($paras as $opos => $o) if ($links[$o] > 0) $dist = min($dist, abs($tpos - $opos));
+                if ($dist > $best_dist) { $best_dist = $dist; $best = $t; }
+            }
+            return $best;
+        };
+        if ($extra !== null) {
+            $best = $pick();
+            if ($best === null) return $html;
+            $parts[$best] = preg_replace('~\s*</p>\s*$~i', ' ' . sprintf(self::TEMPLATES[$used % count(self::TEMPLATES)], $extra) . '</p>', $parts[$best], 1);
+            return implode('', $parts);
+        }
         foreach ($paras as $pos => $i) {
             while ($links[$i] > 1) {
-                // target: the free paragraph farthest from every linked one
-                $best = null; $best_dist = 0;
-                foreach ($paras as $tpos => $t) {
-                    if ($links[$t] > 0 || isset($closed[$t]) || mb_strlen(trim(strip_tags($parts[$t]))) < 60) continue;
-                    $dist = PHP_INT_MAX;
-                    foreach ($paras as $opos => $o) if ($links[$o] > 0) $dist = min($dist, abs($tpos - $opos));
-                    if ($dist > $best_dist) { $best_dist = $dist; $best = $t; }
-                }
+                $best = $pick();
                 if ($best === null) break;
                 // unwrap the last internal link of the crowded paragraph, keep its words
                 $moved = null; $seen = 0; $total = $links[$i];
