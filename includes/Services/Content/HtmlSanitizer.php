@@ -54,6 +54,14 @@ final class HtmlSanitizer {
         $html = preg_replace('~چرم\s+تبریز\s+با\s+(?:پایه|منشأ|منشا)\s+(?:چرم\s+)?گاوی~u', 'چرم گاوی تبریز', $html);
         $html = preg_replace('~\s+با\s+(?:پایه|منشأ|منشا)\s+(?=(?:چرم\s+)?(?:گاوی|طبیعی))~u', ' ', $html);
         $html = preg_replace('~\s+([،؛])~u', '$1', $html);
+        // benefit bullets: an arrow points the wrong way in right-to-left text; "feature: benefit" with a bold feature reads right
+        $html = preg_replace_callback('~<li\b([^>]*)>(.*?)</li>~is', function ($m) {
+            if (!preg_match('~^\s*(.+?)\s*(?:→|←|⇒|⇐|&rarr;|&larr;|-&gt;|=&gt;)\s*(.+)$~us', $m[2], $x)) return $m[0];
+            $label = trim(preg_replace('~</?(?:strong|b)\b[^>]*>~i', '', $x[1]));
+            // a full sentence before the arrow (the shop-trust bullet) is joined as plain text instead of a bold label
+            if (preg_match_all('/\S+/u', strip_tags($label)) > 6) return '<li' . $m[1] . '>' . rtrim($label, ' .') . '؛ ' . trim($x[2]) . '</li>';
+            return '<li' . $m[1] . '><strong>' . rtrim($label, ' :') . ':</strong> ' . trim($x[2]) . '</li>';
+        }, $html);
         return preg_replace_callback('~<p\b([^>]*)>(.*?)</p>~is', function ($m) {
             if (preg_match('~^(.*[.!؟])\s*(?:[^<\s.!؟]+\s+){0,2}(<a\b[^>]*>[^<]{2,80}</a>)\s*$~us', $m[2], $x)) {
                 return '<p' . $m[1] . '>' . $x[1] . ' برای دیدن گزینه‌های بیشتر می‌توانید به ' . $x[2] . ' سر بزنید.</p>';
