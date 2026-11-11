@@ -23,5 +23,8 @@ check(strpos($q, 'با پایه') === false && strpos($q, 'چرم گاوی تب�
 check(strpos($q, 'سبک است.') !== false && strpos($q, 'می‌توانید به <a href="/c">بوت چرم زنانه</a> سر بزنید.') !== false, 'a link left alone after a sentence is wrapped into a sentence');
 check(strpos($q, '<p>متن عادی با <a href="/x">لینک</a> وسط.</p>') !== false, 'inline links stay untouched');
 check(strpos($q, 'به <a href="/y">کفش روزمره</a> سر بزنید.</p>') !== false, 'an anchor-only paragraph becomes a sentence');
+$li = H::clean('<ul><li>زیره EVA → قدم‌ها سبک‌تر می‌شود.</li><li><strong>کفی طبی</strong> → پشتیبانی بهتر.</li><li>این مدل با ارسال رایگان، خرید ۴ قسطه و ضمانت بازگشت همراه است → خیال خریدار راحت‌تر می‌شود.</li><li>بدون پیکان.</li></ul>', 'product');
+check(strpos($li, '→') === false && strpos($li, '<li><strong>زیره EVA:</strong> قدم‌ها سبک‌تر می‌شود.</li>') !== false && strpos($li, '<li><strong>کفی طبی:</strong> پشتیبانی بهتر.</li>') !== false, 'benefit arrows become a bold label with a colon');
+check(strpos($li, 'همراه است؛ خیال خریدار راحت‌تر می‌شود.</li>') !== false && strpos($li, '<li>بدون پیکان.</li>') !== false, 'a sentence before the arrow is joined as text; other bullets stay');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
