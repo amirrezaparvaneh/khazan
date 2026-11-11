@@ -22,7 +22,56 @@ final class HtmlSanitizer {
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
+        if ($kind === Settings::KIND_PRODUCT) $html = self::drop_unknowns($html);
+        $html = self::style_tables($html);
         return self::tidy_whitespace($html);
+    }
+
+    /**
+     * Tables get visible borders without any theme CSS: inline style on table / th / td (only where no style exists yet).
+     */
+    public static function style_tables($html) {
+        $cell = 'border:1px solid #d9d9d9;padding:8px 12px;text-align:right;vertical-align:top;';
+        $map = array(
+            'table' => 'width:100%;border-collapse:collapse;border:1px solid #d9d9d9;margin:12px 0;font-size:14px;',
+            'th' => $cell . 'background:#f5f5f5;font-weight:700;',
+            'td' => $cell,
+        );
+        foreach ($map as $tag => $style) {
+            $html = preg_replace_callback('~<' . $tag . '\b([^>]*)>~i', function ($m) use ($tag, $style) {
+                if (stripos($m[1], 'style=') !== false) return $m[0];
+                return '<' . $tag . $m[1] . ' style="' . $style . '">';
+            }, $html);
+        }
+        return $html;
+    }
+
+    /** Wording that announces a missing fact: it must not reach a product page (a buyer reads it as a flaw). */
+    const UNKNOWN = '(?:اعلام\s*نشده|ثبت\s*نشده|ذکر\s*نشده|مشخص\s*نشده|مشخص\s*نیست|نامشخص|تأیید\s*نشده|تایید\s*نشده|بدون\s*اتکا\s*به\s*حدس|(?:داده|مشخصات)[\x{200c}\s]*های?\s*رسمی|تکیه\s*کنید)';
+
+    /**
+     * Product copy: spec-table rows without a real value are removed (the table goes when fewer than 2 rows are left),
+     * and sentences that announce a missing fact are cut; a FAQ question left without an answer goes too.
+     */
+    public static function drop_unknowns($html) {
+        $unknown = '~' . self::UNKNOWN . '~u';
+        $html = preg_replace_callback('~<table\b[^>]*>.*?</table>~is', function ($m) use ($unknown) {
+            $rows = 0;
+            $out = preg_replace_callback('~<tr\b[^>]*>(.*?)</tr>~is', function ($r) use ($unknown, &$rows) {
+                if (!preg_match('~<td\b~i', $r[1])) return $r[0];
+                if (preg_match($unknown, strip_tags($r[1])) || preg_match('~<td\b[^>]*>\s*(?:[-–—]|)\s*</td>\s*</tr>~i', $r[0])) return '';
+                $rows++;
+                return $r[0];
+            }, $m[0]);
+            return $rows >= 2 ? $out : '';
+        }, $html);
+        $html = preg_replace_callback('~<(p|li)\b([^>]*)>(.*?)</\1>~is', function ($m) use ($unknown) {
+            if (!preg_match($unknown, strip_tags($m[3]))) return $m[0];
+            $parts = preg_split('~(?<=[.!؟?])\s+~u', $m[3]);
+            $kept = array_filter($parts, function ($s) use ($unknown) { return !preg_match($unknown, strip_tags($s)); });
+            return $kept ? '<' . $m[1] . $m[2] . '>' . implode(' ', $kept) . '</' . $m[1] . '>' : '';
+        }, $html);
+        return preg_replace('~<h3\b[^>]*>[^<]*</h3>\s*(?=<h[23]\b|$)~iu', '', $html);
     }
 
     /**
