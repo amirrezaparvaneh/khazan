@@ -25,7 +25,7 @@ check('category min at 1300 words', LinkPolicy::internal_target(Settings::KIND_C
 check('category max at the max body length', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 1500) === 8);
 check('category mid at 1400 words', in_array(LinkPolicy::internal_target(Settings::KIND_CATEGORY, 1400), array(6, 7), true));
 check('short text clamps to min', LinkPolicy::internal_target(Settings::KIND_CATEGORY, 400) === 5);
-check('product range 3..6', LinkPolicy::internal_target(Settings::KIND_PRODUCT, 700) === 3 && LinkPolicy::internal_target(Settings::KIND_PRODUCT, 1000) === 6);
+check('product range 3..6', LinkPolicy::internal_target(Settings::KIND_PRODUCT, 550) === 3 && LinkPolicy::internal_target(Settings::KIND_PRODUCT, 800) === 6);
 list($pmin, $pmax) = Khazan\Services\Content\SeoStandards::words_range(Settings::KIND_PRODUCT);
 check('product has its own length range', $pmin < 1300 && $pmax >= $pmin);
 $prodHtml = '<h2>کیف چرم</h2><p>' . str_repeat('کیف چرم مدل ', 2) . str_repeat('متن ', $pmin) . '</p>';
