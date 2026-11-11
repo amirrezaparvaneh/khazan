@@ -18,5 +18,10 @@ $p = H::clean('<p>رویه چرم است. جنس زیره اعلام نشده ا
 check($p === '<p>رویه چرم است.</p><h3>ست؟</h3><p>با پالتو.</p>', 'sentences announcing missing facts are cut; a question left without an answer goes');
 check(strpos($out, 'style="') !== false && strpos($out, 'border:1px solid') !== false && substr_count($out, '<td style') === substr_count($out, '<td'), 'tables carry inline borders without theme CSS');
 check(H::style_tables(H::style_tables($t)) === H::style_tables($t), 'styling is idempotent');
+$q = H::clean('<p>رویه از چرم تبریز با پایه چرم گاوی است ، و سبک است. کلکسیون <a href="/c">بوت چرم زنانه</a></p><p>متن عادی با <a href="/x">لینک</a> وسط.</p><p><a href="/y">کفش روزمره</a></p><table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>', 'product');
+check(strpos($q, 'با پایه') === false && strpos($q, 'چرم گاوی تبریز') !== false && strpos($q, ' ،') === false, 'machine-sounding material phrase and comma spacing are fixed');
+check(strpos($q, 'سبک است.') !== false && strpos($q, 'می‌توانید به <a href="/c">بوت چرم زنانه</a> سر بزنید.') !== false, 'a link left alone after a sentence is wrapped into a sentence');
+check(strpos($q, '<p>متن عادی با <a href="/x">لینک</a> وسط.</p>') !== false, 'inline links stay untouched');
+check(strpos($q, 'به <a href="/y">کفش روزمره</a> سر بزنید.</p>') !== false, 'an anchor-only paragraph becomes a sentence');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
