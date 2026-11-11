@@ -352,7 +352,12 @@ final class ContentParser {
 
         $content = \Khazan\Services\Content\HtmlSanitizer::clean($content, $kind);
         $content = \Khazan\Services\Content\ContentGuard::enforce_link_anchors($content);
-        if ($kind === Settings::KIND_PRODUCT) $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content);
+        if ($kind === Settings::KIND_PRODUCT) {
+            // the ceiling follows the standards (category + related products + external), not a fixed 2 products
+            list(, $internal_max) = \Khazan\Services\Content\SeoStandards::internal_range(Settings::KIND_PRODUCT);
+            list(, $external_max) = \Khazan\Services\Content\SeoStandards::external_range();
+            $content = \Khazan\Services\Content\ContentGuard::enforce_unique_links($content, array(), $internal_max, $external_max);
+        }
         $content = \Khazan\Services\Content\ContentGuard::enforce_heading_keyphrases($content, $seo['focuskw'], $seo['synonyms']);
         $content = \Khazan\Services\Content\ContentGuard::cap_anchor_length($content);
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($content);

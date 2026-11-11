@@ -32,6 +32,7 @@
           aiBaseUrl: data.ai_base_url || '',
           aiDefaultBaseUrl: data.ai_default_base_url || '',
           homepageKeywords: data.homepage_keywords || '',
+          linkPlan: data.link_plan || null,
           contentWrapperClass: data.content_wrapper_class || '',
           autoImageEnabled: !!data.auto_image_enabled,
           productPostType: data.product_post_type || 'product',

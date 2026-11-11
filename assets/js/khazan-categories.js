@@ -16,6 +16,12 @@
   ];
 
   const methods = {
+    categoryLinkCaption: function () {
+      const p = (this.state.aiSettings || {}).linkPlan;
+      const n = p ? `${toPersianDigits(p.category_min)} تا ${toPersianDigits(p.category_max)} لینک داخلی` : 'چند لینک داخلی';
+      return `${n}: دسته‌ی مادر، زیردسته‌ها، ۳ تا ۴ محصول همان دسته و یک مقاله‌ی مرتبط. تعداد طبق استانداردها و طول متن تعیین می‌شود.`;
+    },
+
     // سوییچ «محصولات / دسته‌بندی‌های محصولات» بالای صفحه تولید انبوه
     bulkTargetSwitchHtml: function () {
       const b = this.state.bulk;
@@ -188,7 +194,7 @@
         ${c.loaded && c.items.length ? `
           <div class="khazan-toggle-grid" id="wila-queue-settings">
             <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-cat-seo" ${c.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره کلیدواژه، عنوان و توضیحات متا در ساختار دسته‌بندی Yoast و Rank Math</small></span></label>
-            <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-cat-links" ${c.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🕸️ لینک‌سازی عنکبوتی</strong><small>۱ لینک به صفحه اصلی و ۲ تا ۳ لینک متوازن به دسته‌بندی‌های دیگر</small></span></label>
+            <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-cat-links" ${c.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🕸️ لینک‌سازی عنکبوتی</strong><small>${this.categoryLinkCaption()}</small></span></label>
           </div>
           <div class="khazan-statusbar"><span class="khazan-status-pill">🗂️ ${toPersianDigits(selectedCount)} از ${toPersianDigits(c.items.length)} دسته‌بندی انتخاب شده (جایگزینی کامل توضیحات؛ نسخه قبلی نگه داشته می‌شود)</span>${this.costEstimateHtml(selectedCount, 'دسته‌بندی')}</div>
           ${queueControls}

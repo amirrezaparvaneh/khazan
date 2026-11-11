@@ -34,6 +34,7 @@ final class SettingsController extends BaseController {
             'ai_base_url' => Settings::ai_base_url(),
             'ai_default_base_url' => Settings::AI_BASE_URL,
             'homepage_keywords' => $homepage_keywords,
+            'link_plan' => self::link_plan(),
             'content_wrapper_class' => \Khazan\Services\Content\Guard\WrapperGuard::wrapper_class(),
             'auto_image_enabled' => Settings::auto_image_enabled(),
             'image_model' => Settings::IMAGE_MODEL,
@@ -46,6 +47,13 @@ final class SettingsController extends BaseController {
     /** Last AI requests with their token use (local log; no prompt text). */
     public function get_ai_usage() {
         return rest_ensure_response(array('success' => true, 'items' => \Khazan\Services\Ai\UsageLog::all()));
+    }
+
+    /** Internal-link counts the generators really plan (from the SEO standards), for the toggles' captions. */
+    private static function link_plan() {
+        $total = \Khazan\Services\Links\LinkPolicy::internal_target(Settings::KIND_PRODUCT, \Khazan\Services\Csv\BulkRowProcessor::target_words());
+        list($cmin, $cmax) = \Khazan\Services\Content\SeoStandards::internal_range(Settings::KIND_CATEGORY);
+        return array('product_total' => $total, 'product_related' => max(0, $total - 1), 'category_min' => $cmin, 'category_max' => $cmax);
     }
 
     public function get_available_post_types() {
