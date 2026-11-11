@@ -36,6 +36,24 @@ final class ProductSpecsRepository {
     }
 
     /**
+     * Features borrowed from similar products, only for the fields this product has no real value for.
+     *
+     * @return array<string,string>
+     */
+    public function get_inferred($product_id) {
+        $product_id = absint($product_id);
+        if (!$product_id) return array();
+        $stored = get_post_meta($product_id, Settings::META_PRODUCT_INFERRED_SPECS, true);
+        $stored = is_array($stored) && isset($stored['specs']) && is_array($stored['specs']) ? $stored['specs'] : array();
+        $real = $this->get($product_id);
+        $out = array();
+        foreach (Settings::PRODUCT_SPEC_FIELDS as $key => $label) {
+            if (!isset($real[$key]) && !empty($stored[$key])) $out[$key] = trim((string) $stored[$key]);
+        }
+        return $out;
+    }
+
+    /**
      * ذخیره سریع ایجکس؛ فقط فیلدهای تعریف‌شده و غیرخالی نگه داشته می‌شوند
      *
      * @return array|\WP_Error مشخصات ذخیره‌شده

@@ -37,6 +37,9 @@ final class Settings {
     const META_PREVIOUS_DESCRIPTION  = '_wila_previous_description';
     const META_SOURCE_PRODUCT        = '_wila_source_product';
     const META_PRODUCT_CUSTOM_SPECS  = '_wila_product_custom_specs';
+    /** Features borrowed from similar products of the same category (not confirmed for this product). */
+    const META_PRODUCT_INFERRED_SPECS = '_khazan_specs_inferred';
+    const META_PRODUCT_SPECS_BACKUP  = '_khazan_specs_backup';
 
     // ---- public filter hooks (names are part of the plugin API) ----
     const FILTER_PRODUCT_POST_TYPE         = 'wila_product_post_type';
@@ -229,6 +232,7 @@ final class Settings {
         'upper_material'  => 'نوع چرم رویه',
         'lining_material' => 'جنس آستر',
         'stitching_type'  => 'نوع دوخت و کفی',
+        'other_features'  => 'ویژگی‌های دیگر',
     );
 
     /**

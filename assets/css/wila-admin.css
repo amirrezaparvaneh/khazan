@@ -2027,3 +2027,30 @@ body.khz-drawer-lock { overflow: hidden; }
 .khz-opp-note.is-warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
 .khz-opp-check { margin: 10px 0 0; font-size: 0.78rem; color: var(--wila-text-muted); }
 .khz-opp-actions[hidden] { display: none; }
+
+/* ---- Product features import (sheet / CSV) ---- */
+.khz-sh-card { margin-bottom: 16px; }
+.khz-sh-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.khz-sh-sub { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.9; color: var(--wila-text-muted); max-width: 560px; }
+.khz-sh-steps { list-style: none; margin: 14px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.8rem; color: var(--wila-text-muted); }
+.khz-sh-steps li { display: flex; align-items: center; gap: 6px; }
+.khz-sh-steps li span { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; background: rgba(15, 23, 42, 0.07); }
+.khz-sh-steps li.is-on { color: var(--wila-text-primary); font-weight: 600; }
+.khz-sh-steps li.is-on span { background: var(--wila-primary); color: #fff; }
+.khz-sh-steps li.is-done span { background: #10b981; color: #fff; }
+.khz-sh-lbl { display: block; font-size: 0.82rem; font-weight: 600; margin: 8px 0 4px; }
+.khz-sh-hint { font-size: 0.78rem; line-height: 1.9; color: var(--wila-text-muted); margin: 6px 0; }
+.khz-sh-or { text-align: center; font-size: 0.78rem; color: var(--wila-text-muted); margin: 10px 0; }
+.khz-sh-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 12px 0; }
+.khz-sh-map label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 600; }
+.khz-sh-sample { margin: 10px 0; max-height: 190px; overflow: auto; font-size: 0.78rem; }
+.khz-sh-foot { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--wila-border); }
+.khz-sh-h { margin: 18px 0 6px; font-size: 0.88rem; }
+.khz-sh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+.khz-sh-list li { padding: 8px 12px; border: 1px solid var(--wila-border); border-radius: 8px; font-size: 0.8rem; line-height: 1.9; }
+.khz-sh-list small { display: block; color: var(--wila-text-muted); }
+.khz-sh-pill { display: inline-block; margin: 2px 0 2px 6px; padding: 1px 8px; border-radius: 999px; background: rgba(15, 23, 42, 0.05); font-size: 0.74rem; }
+.khz-sh-pill i { font-style: normal; color: var(--wila-text-muted); margin-inline-end: 4px; }
+.khz-sh-busy { display: flex; align-items: center; gap: 12px; padding: 24px 0; font-size: 0.85rem; color: #475569; }
+.khz-sh-busy p { margin: 0; }
+@media (max-width: 600px) { .khz-sh-head { flex-direction: column; } .khz-sh-foot .wila-btn { flex: 1 1 100%; } }

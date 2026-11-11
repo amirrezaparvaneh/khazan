@@ -11,6 +11,7 @@ namespace Khazan\Http;
 use Khazan\Http\Controllers\ContentController;
 use Khazan\Http\Controllers\ImagesController;
 use Khazan\Http\Controllers\ProductSpecsController;
+use Khazan\Http\Controllers\SpecSheetController;
 use Khazan\Http\Controllers\QueueController;
 use Khazan\Http\Controllers\ReportController;
 use Khazan\Http\Controllers\SeoRepairController;
@@ -38,6 +39,7 @@ final class RestRouter {
         $settings = new SettingsController();
         $seo      = new SeoRepairController();
         $specs    = new ProductSpecsController();
+        $sheet    = new SpecSheetController();
         $images   = new ImagesController();
         $standards = new StandardsController();
 
@@ -121,6 +123,10 @@ final class RestRouter {
         register_rest_route($this->namespace, '/test-connection', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($settings, 'test_avalai_connection'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/seo-repair', array('methods' => 'POST', 'callback' => array($seo, 'analyze'), 'permission_callback' => array($seo, 'permission')));
         register_rest_route($this->namespace, '/product-specs', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($specs, 'list_products'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/product-specs/sheet/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($sheet, 'status'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/product-specs/sheet/load', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($sheet, 'load'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/product-specs/sheet/preview', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($sheet, 'preview'), 'permission_callback' => array($this, 'check_permission')));
+        register_rest_route($this->namespace, '/product-specs/sheet/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($sheet, 'apply'), 'permission_callback' => array($this, 'check_permission')));
         register_rest_route($this->namespace, '/product-specs/save', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($specs, 'save_specs'), 'permission_callback' => array($this, 'check_permission')));
     }
 
