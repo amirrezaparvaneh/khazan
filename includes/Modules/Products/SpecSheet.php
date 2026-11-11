@@ -69,6 +69,22 @@ final class SpecSheet {
         return $out;
     }
 
+    // ---- header row ----
+
+    /**
+     * Sheets often start with a title or blank-ish rows; the header is the first row among the top ones that
+     * has the most filled cells.
+     */
+    public static function header_index(array $rows, $look = 15) {
+        $best = 0;
+        $best_n = -1;
+        foreach (array_slice($rows, 0, $look, true) as $i => $r) {
+            $n = count(array_filter($r, function ($c) { return trim((string) $c) !== ''; }));
+            if ($n > $best_n) { $best_n = $n; $best = $i; }
+        }
+        return $best;
+    }
+
     // ---- columns ----
 
     /**

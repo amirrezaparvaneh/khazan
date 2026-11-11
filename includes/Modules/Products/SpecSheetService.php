@@ -132,6 +132,9 @@ final class SpecSheetService {
             $rows = $r['rows'];
             $title = $r['title'];
         }
+        $rows = array_values($rows);
+        $h = SpecSheet::header_index($rows);
+        if ($h > 0) $rows = array_slice($rows, $h);
         if (count($rows) < 2) return self::error('khazan_sheet_empty', 'در شیت ردیفی برای خواندن نبود. سطر اول باید عنوان ستون‌ها باشد.', 400);
         $rows = array_slice($rows, 0, self::MAX_ROWS + 1);
         $id = wp_generate_password(12, false);
