@@ -112,7 +112,7 @@ $prompt_no_specs = $pb->bulk_product($params_no_specs, $row);
 check(strpos($prompt_no_specs, 'مشخصات قطعی و غیرقابل تغییر محصول') !== false, 'the mandatory spec header is always present (bulk_product)');
 check(strpos($prompt_no_specs, 'هیچ مشخصات فنی ثبت‌شده‌ای') !== false, 'no stored specs -> explicit "nothing stored" notice');
 check(strpos($prompt_no_specs, 'هرگز جنس زیره') === false && strpos($prompt_no_specs, 'حدس نزن') !== false, 'the red-line rule against guessing the sole/upper material is in the prompt');
-check(strpos($prompt_no_specs, 'زیره استاندارد و باکیفیت') !== false, 'the generic fallback phrase is suggested instead of a guess');
+check(strpos($prompt_no_specs, 'قانون سکوت') !== false && strpos($prompt_no_specs, 'جدول مشخصات نساز') !== false, 'missing data is never announced or padded with filler, and no spec table is built');
 
 $params_with_specs = $base_params;
 $params_with_specs['target'] = array('custom_specs' => array('sole_material' => 'PU استاندارد', 'upper_material' => 'چرم طبیعی گاوی'));
