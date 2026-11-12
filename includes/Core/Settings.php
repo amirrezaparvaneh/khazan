@@ -113,6 +113,8 @@ final class Settings {
     const KEYPHRASE_MIN_WORDS = 2;
     /** A keyphrase extended to tell sibling products apart may grow to this many words. */
     const KEYPHRASE_UNIQUE_MAX_WORDS = 6;
+    /** Colour words: a variant of a model, not part of its name. */
+    const KEYPHRASE_COLOURS = array('سفید', 'مشکی', 'سیاه', 'قرمز', 'کرم', 'کرمی', 'قهوه‌ای', 'قهوه', 'ای', 'عسلی', 'طوسی', 'خاکستری', 'سرمه‌ای', 'سرمه', 'آبی', 'سبز', 'زرد', 'نارنجی', 'بنفش', 'صورتی', 'بژ', 'کالباسی', 'شتری', 'خاکی', 'زرشکی', 'نقره‌ای', 'طلایی', 'یشمی', 'زیتونی', 'کاراملی', 'شکلاتی', 'گردویی', 'نسکافه‌ای', 'نسکافه', 'مسی', 'برنزی', 'لیمویی');
     const KEYPHRASE_MODEL_MARKER = 'مدل';
     const FILTER_KEYPHRASE_WORDS = 'wila_keyphrase_words';
 

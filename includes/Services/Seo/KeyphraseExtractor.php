@@ -68,11 +68,13 @@ final class KeyphraseExtractor {
      * Over-long phrases are reduced to their most meaningful words (see from_title), not just cut at the 4th word.
      */
     public static function cap($phrase) {
-        $phrase = self::strip_stop_words(self::limit($phrase, PHP_INT_MAX));
+        $raw = self::limit($phrase, PHP_INT_MAX);
+        $phrase = self::strip_stop_words($raw);
         if (self::count_words($phrase) <= Settings::KEYPHRASE_MAX_WORDS) {
             return $phrase;
         }
-        return self::limit(self::from_title($phrase), Settings::KEYPHRASE_MAX_WORDS);
+        // from_title (on the original words, so «مدل» still marks the model name) keeps a multi-word name whole
+        return self::from_title($raw);
     }
 
     /**
@@ -287,11 +289,17 @@ final class KeyphraseExtractor {
             $tail = array_values(array_filter($kept, function ($t) use ($key, $base_keys) { return !in_array(call_user_func($key, $t), $base_keys, true); }));
             $tail = array_slice($tail, -2);
         }
-        $tail = array_slice($tail, 0, max(1, $max - 1));
-
-        // keep the model name: shrink the base before cutting the tail
-        $tail_keep = min(count($tail), 2);
-        $base = array_slice($base, 0, max(1, $max - $tail_keep));
+        // the model name is never cut in the middle («سمیرا یقه ایستاده» stays whole): a long name lets the phrase grow
+        // past 4 words (up to KEYPHRASE_UNIQUE_MAX_WORDS); the base keeps product type + gender
+        // a colour after the model name is a variant, not part of the name (disambiguate() adds it back when siblings need it)
+        $colours = array_flip(array_map($key, Settings::KEYPHRASE_COLOURS));
+        $named = array_values(array_filter($tail, function ($t) use ($key, $colours) { return !isset($colours[call_user_func($key, $t)]); }));
+        if ($named) $tail = $named;
+        $tail = array_slice($tail, 0, 3);
+        if (count($base) + count($tail) > $max) {
+            $base = array_slice($base, 0, max(1, min(count($base), 2)));
+            $max = min(Settings::KEYPHRASE_UNIQUE_MAX_WORDS, count($base) + count($tail));
+        }
         $result = array_merge($base, array_slice($tail, 0, $max - count($base)));
 
         // dedupe (case/shape insensitive)
