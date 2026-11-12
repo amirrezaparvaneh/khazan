@@ -36,7 +36,7 @@
     { key: 'search', tab: 'search', icon: 'compass', label: 'سرچ کنسول', title: 'سرچ کنسول گوگل' },
     { key: 'standards', tab: 'standards', icon: 'target', label: 'استانداردها و تحلیل سایت', title: 'استانداردها و تحلیل سایت' },
     { key: 'orphans', tab: 'orphans', icon: 'compass', label: 'صفحات یتیم و لینک‌سازی', title: 'صفحات یتیم و لینک‌سازی' },
-    { key: 'seofix', tab: 'seofix', icon: 'wrench', label: 'رفع خطای هوشمند سئو', title: 'رفع خطای هوشمند سئو' },
+    { key: 'fix', tab: 'fix', icon: 'wrench', label: 'بازبینی و رفع ایراد', title: 'بازبینی و رفع ایراد محتوا' },
     { key: 'archive', tab: 'archive', icon: 'book', label: 'آرشیو محتوا', title: 'آرشیو محتوا' },
     { key: 'settings', tab: 'settings', icon: 'gear', label: 'تنظیمات هوش مصنوعی', title: 'تنظیمات هوش مصنوعی' }
   ];
@@ -47,7 +47,7 @@
   ];
 
   const methods = {
-    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', search: 'viewSearch', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewLinking', settings: 'viewSettings' },
+    viewNames: { home: 'viewHome', overview: 'viewOverview', generator: 'viewGenerator', archive: 'viewArchive', seofix: 'viewSeoFix', fix: 'viewFix', bulk: 'viewBulk', specs: 'viewProductSpecs', images: 'viewImages', search: 'viewSearch', standards: 'viewStandards', planner: 'viewPlanner', items: 'viewItems', orphans: 'viewLinking', settings: 'viewSettings' },
 
     renderView: function () {
       const name = this.viewNames[this.state.activeTab];
@@ -159,7 +159,7 @@
           { go: 'generator', icon: 'edit', title: 'تولید محتوای تکی', desc: 'تولید مقاله، توضیحات محصول و دسته‌بندی با رعایت قوانین سئو و لینک‌سازی هوشمند.', btn: 'باز کردن ماژول' },
           { go: 'bulk', icon: 'sheet', title: 'تولید انبوه محتوا', desc: 'انتخاب محصولات سایت یا بارگذاری فایل شیت، تطبیق خودکار و تولید صف‌بندی‌شده محتوا.', btn: 'باز کردن ماژول' },
           { go: 'orphans', icon: 'compass', title: 'صفحات یتیم و لینک‌سازی', desc: 'شناسایی صفحاتی که هیچ لینک ورودی ندارند و ساخت لینک داخلی برای آن‌ها.', btn: 'باز کردن ماژول' },
-          { go: 'seofix', icon: 'wrench', title: 'رفع خطای هوشمند سئو', desc: 'بررسی خطاهای خوانایی و سئو و اصلاح انتخابی متن با هوش مصنوعی.', btn: 'باز کردن ماژول' },
+          { go: 'fix', icon: 'wrench', title: 'بازبینی و رفع ایراد', desc: 'بررسی محتوای موجود با استانداردها و اصلاح لینک‌ها، کلمه کلیدی و خطاهای Yoast بدون بازنویسی کل متن.', btn: 'باز کردن ماژول' },
           { go: 'settings', icon: 'gear', title: 'تنظیمات API', desc: 'ثبت کلید AvalAI، تست اتصال و مدیریت تنظیمات هوش مصنوعی.', btn: 'تنظیمات' },
           { go: 'archive', icon: 'book', title: 'آمار محتواهای تولیدشده', desc: 'تعداد کل محتواهای ذخیره‌شده در آرشیو: <strong class="khazan-stat">' + histCount + '</strong> محتوا', btn: 'مشاهده آرشیو' }
         ];
@@ -809,6 +809,7 @@ ${siteExpanded ? `
         if (this.state.activeTab === 'orphans' && !this.state.linking.busy) this.loadLinking();
         if (this.state.activeTab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
         if (this.state.activeTab === 'standards' && !this.state.standards.data) this.loadStandards();
+        if (this.state.activeTab === 'fix') this.enterFixTab();
         if (this.state.activeTab === 'images' && !this.state.images.overview && !this.state.images.busy) this.loadImages();
         if (this.state.activeTab === 'search' && !this.state.search.data && !this.state.search.busy) this.loadSearch();
         if (this.state.activeTab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
@@ -826,6 +827,7 @@ ${siteExpanded ? `
         if (target.tab === 'archive') { this.state.historyLoading = true; this.fetchContentHistory(); }
         if (target.tab === 'orphans' && !this.state.linking.busy) this.loadLinking();
         if (target.tab === 'seofix' && !this.state.seoFix.targets.length) this.fetchSeoFixTargets(this.state.seoFix.search || '');
+        if (target.tab === 'fix') this.enterFixTab();
         if (target.tab === 'specs' && !this.state.productSpecs.loaded && !this.state.productSpecs.loading) this.loadProductSpecs();
         this.render();
       }));

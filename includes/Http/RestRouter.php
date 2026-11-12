@@ -64,6 +64,13 @@ final class RestRouter {
         register_rest_route($this->namespace, '/linking/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'apply'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/undo', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'undo'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/linking/settings', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($linking, 'settings'), 'permission_callback' => $perm));
+        $fix = new \Khazan\Http\Controllers\FixController();
+        register_rest_route($this->namespace, '/fix/items', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($fix, 'items'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/fix/ids', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($fix, 'ids'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/fix/preview', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($fix, 'preview'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/fix/apply', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($fix, 'apply'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/fix/run', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($fix, 'run'), 'permission_callback' => $perm));
+        register_rest_route($this->namespace, '/fix/restore', array('methods' => \WP_REST_Server::CREATABLE, 'callback' => array($fix, 'restore'), 'permission_callback' => $perm));
         $search = new \Khazan\Http\Controllers\SearchController();
         register_rest_route($this->namespace, '/search/status', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'status'), 'permission_callback' => $perm));
         register_rest_route($this->namespace, '/search/data', array('methods' => \WP_REST_Server::READABLE, 'callback' => array($search, 'data'), 'permission_callback' => $perm));
