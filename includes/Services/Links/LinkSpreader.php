@@ -13,7 +13,11 @@ class LinkSpreader {
         'برای مقایسه‌ی بیشتر، نگاهی به %s هم بیندازید.',
         '%s هم گزینه‌ای است که می‌توانید کنار این مدل بررسی کنید.',
         'اگر می‌خواهید انتخاب دیگری را هم ببینید، %s ارزش نگاه‌کردن دارد.',
+        'اگر سلیقه‌تان کمی فرق دارد، %s را هم در نظر بگیرید.',
+        'برای پیدا کردن مدل نزدیک به این سبک، به %s سر بزنید.',
+        'در همین فضا، %s هم می‌تواند انتخاب شما باشد.',
     );
+
 
     /**
      * Planned links the model left out are written into link-free paragraphs of the body (same short sentences as spread()).
@@ -72,7 +76,11 @@ class LinkSpreader {
 
         $links = array();
         foreach ($paras as $i) $links[$i] = $count($parts[$i]);
-        $used = preg_match_all('~(?:بیندازید|بررسی کنید|نگاه‌کردن دارد)\.</p>~u', $html);
+        $used = 0;
+        foreach (self::TEMPLATES as $t) {
+            $tail = trim(preg_replace('~^.*%s~u', '', $t));
+            if ($tail !== '' && $tail !== '.') $used += substr_count($html, preg_replace('~\.$~u', '', $tail) . '.');
+        }
         $pick = function () use (&$links, $paras, $closed, &$parts) {
             $best = null; $best_dist = 0;
             foreach ($paras as $tpos => $t) {
