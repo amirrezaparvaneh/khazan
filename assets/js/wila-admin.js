@@ -29,6 +29,7 @@
         hasAvalAIKey: false,
         avalAIMaskedKey: '',
         avalAIModel: 'gpt-5.4-mini',
+        aiReasoning: 'low',
         homepageKeywords: ''
       },
       plannerForm: {

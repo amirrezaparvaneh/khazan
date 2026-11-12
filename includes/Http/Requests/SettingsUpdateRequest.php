@@ -46,6 +46,10 @@ final class SettingsUpdateRequest {
             $model = trim(sanitize_text_field($this->input['ai_model']));
             if (Settings::is_valid_model_id($model)) $options[Settings::OPT_AI_MODEL] = $model;
         }
+        if (isset($this->input['ai_reasoning'])) {
+            $level = strtolower(trim(sanitize_text_field($this->input['ai_reasoning'])));
+            if (in_array($level, Settings::AI_REASONING_LEVELS, true)) $options[Settings::OPT_AI_REASONING] = $level;
+        }
         if (isset($this->input['ai_base_url'])) {
             $url = trim(esc_url_raw((string) $this->input['ai_base_url'], array('https')));
             // خالی = بازگشت به آدرس پیش‌فرض AvalAI

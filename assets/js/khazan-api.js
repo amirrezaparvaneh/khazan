@@ -29,6 +29,7 @@
           hasAvalAIKey: data.has_avalai_key,
           avalAIMaskedKey: data.avalai_masked_key || '',
           avalAIModel: data.avalai_model || 'gpt-5.4-mini',
+          aiReasoning: data.ai_reasoning || 'low',
           aiBaseUrl: data.ai_base_url || '',
           aiDefaultBaseUrl: data.ai_default_base_url || '',
           homepageKeywords: data.homepage_keywords || '',
@@ -492,6 +493,8 @@
       const typedBase = document.getElementById('wila-ai-base-url-input');
       if (typedModel) st.aiSettings.avalAIModel = typedModel.value.trim();
       if (typedBase) st.aiSettings.aiBaseUrl = typedBase.value.trim();
+      const typedReasoning = document.getElementById('wila-ai-reasoning-input');
+      if (typedReasoning) st.aiSettings.aiReasoning = typedReasoning.value;
       st.aiModels = { loading: true, list: (st.aiModels && st.aiModels.list) || [], error: '' };
       this.render();
       try {
@@ -512,6 +515,7 @@
       const autoImageInput = document.getElementById('wila-auto-image-input');
       const modelInput = document.getElementById('wila-ai-model-input');
       const baseUrlInput = document.getElementById('wila-ai-base-url-input');
+      const reasoningInput = document.getElementById('wila-ai-reasoning-input');
 
       try {
         await this.apiFetch('/settings', {
@@ -522,6 +526,7 @@
             homepage_keywords: homepageKeywords,
             ...(wrapperInput ? { content_wrapper_class: wrapperInput.value.trim() } : {}),
             ...(modelInput ? { ai_model: modelInput.value.trim() } : {}),
+            ...(reasoningInput ? { ai_reasoning: reasoningInput.value } : {}),
             ...(baseUrlInput ? { ai_base_url: baseUrlInput.value.trim() } : {}),
             ...(autoImageInput ? { auto_image_enabled: autoImageInput.checked } : {})
           })

@@ -56,6 +56,10 @@ final class AvalaiHttpClient {
         );
         if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
             $body['max_completion_tokens'] = $max_tokens;
+            $effort = Settings::ai_reasoning();
+            if ($effort !== 'default') {
+                $body['reasoning_effort'] = $effort;
+            }
         } else {
             $body['temperature'] = 0.2;
             $body['max_tokens']  = $max_tokens;
@@ -93,6 +97,17 @@ final class AvalaiHttpClient {
         // (ContentParser / AiResponseDecoder already extract JSON from free text).
         if ($code === 400 && $json_response && isset($body['response_format']) && stripos((string) wp_remote_retrieve_body($response), 'response_format') !== false) {
             unset($body['response_format']);
+            $response = $this->post($this->api_key, $body, $timeout);
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            $code = wp_remote_retrieve_response_code($response);
+            $data = json_decode(wp_remote_retrieve_body($response), true);
+        }
+
+        // Gateways/models that do not support reasoning_effort: retry once without it.
+        if ($code === 400 && isset($body['reasoning_effort']) && stripos((string) wp_remote_retrieve_body($response), 'reasoning') !== false) {
+            unset($body['reasoning_effort']);
             $response = $this->post($this->api_key, $body, $timeout);
             if (is_wp_error($response)) {
                 return $response;
