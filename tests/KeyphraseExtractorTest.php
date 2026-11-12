@@ -169,5 +169,14 @@ check(K::optimal('', $title) === 'کفش طبی مردانه مارکو', 'no st
 check(K::optimal('کفش طبی مردانه مارکو', $title) === 'کفش طبی مردانه مارکو', 'a conforming stored phrase is kept');
 check(K::optimal('بوت چرم زنانه آلفردو', 'x') === 'بوت چرم زنانه آلفردو', 'without a usable title the stored phrase is kept');
 
+// --- sibling products never share a keyphrase (Yoast "keyphrase previously used")
+$base = 'کاپشن زنانه سمیرا متوسط';
+check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط', array()) === $base, 'no sibling: keyphrase unchanged');
+check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط کمربنددار', array('کاپشن چرم زنانه مدل سمیرا متوسط کلاه‌دار', 'کاپشن چرم مردانه مدل آرین')) === $base . ' کمربنددار', 'the variant word of the title is appended');
+check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط رنگ عسلی', array('کاپشن چرم زنانه مدل سمیرا متوسط رنگ مشکی')) === $base . ' عسلی', 'colour tells siblings apart; «رنگ» itself is skipped');
+check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط', array('کاپشن چرم زنانه مدل سمیرا متوسط')) === $base, 'identical titles cannot be told apart: unchanged');
+check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط جیر عسلی', array('کاپشن چرم زنانه مدل سمیرا متوسط جیر مشکی', 'کاپشن چرم زنانه مدل سمیرا متوسط عسلی')) === $base . ' جیر عسلی', 'two words when one is not enough');
+check(K::count_words(K::disambiguate($base . ' الف ب', 'کاپشن زنانه سمیرا متوسط الف ب پ ت', array('کاپشن زنانه سمیرا متوسط الف ب'))) <= 6, 'never longer than 6 words');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

@@ -111,6 +111,8 @@ final class Settings {
     // ---- focus keyphrase / anchor text standard: 2-4 meaningful words, never a full product title ----
     const KEYPHRASE_MAX_WORDS = 4;
     const KEYPHRASE_MIN_WORDS = 2;
+    /** A keyphrase extended to tell sibling products apart may grow to this many words. */
+    const KEYPHRASE_UNIQUE_MAX_WORDS = 6;
     const KEYPHRASE_MODEL_MARKER = 'مدل';
     const FILTER_KEYPHRASE_WORDS = 'wila_keyphrase_words';
 

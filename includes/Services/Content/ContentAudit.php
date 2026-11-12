@@ -8,6 +8,8 @@
 
 namespace Khazan\Services\Content;
 
+use Khazan\Services\Seo\YoastRules;
+
 use Khazan\Core\Settings;
 
 if (!defined('ABSPATH')) {
@@ -15,6 +17,10 @@ if (!defined('ABSPATH')) {
 }
 
 final class ContentAudit {
+
+    /** Share of sentences Yoast may call passive before the audit asks for a rewrite (Yoast's own limit is 10 %). */
+    const PASSIVE_LIMIT = 9.0;
+
 
     /** Persian-aware normal form: Arabic yeh/kaf, ZWNJ, digits, case. */
     public static function normalize($text) {
@@ -119,8 +125,28 @@ final class ContentAudit {
         list($wmin) = SeoStandards::words_range($kind);
         if (isset($opts['words_min'])) $wmin = max(1, (int) $opts['words_min']);
         if ($words < $wmin) $f['length_short'] = "متن {$words} کلمه است؛ حداقل {$wmin} کلمه لازم است.";
-        if ($m['density'] < $std['density_min']) $f['density_low'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداقل {$std['density_min']}٪ لازم است.";
-        if ($m['density'] > $std['density_max']) $f['density_high'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداکثر {$std['density_max']}٪ مجاز است.";
+        if ($kind === Settings::KIND_PRODUCT && trim((string) $focus) !== '') {
+            // products follow Yoast's own arithmetic, so the editor shows no keyphrase / passive / subheading warning
+            list($ymin, $ymax) = YoastRules::keyphrase_bounds($words, $focus);
+            $m['yoast_keyword_count'] = YoastRules::keyphrase_count($html, $focus);
+            $m['yoast_keyword_max']   = $ymax;
+            $need = min((int) ceil($words * $std['density_min'] / 100), max($ymin, $ymax - 2));
+            if ($count < $need) $f['density_low'] = "کلمه اصلی {$count} بار آمده؛ برای این طول متن حداقل {$need} بار لازم است.";
+            if ($m['yoast_keyword_count'] > $ymax) $f['density_high'] = "کلمه اصلی (با شمارش Yoast) {$m['yoast_keyword_count']} بار آمده؛ برای این طول متن حداکثر {$ymax} بار مجاز است. تکرارهای اضافه را با «این مدل» یا نام کوتاه محصول جایگزین کن.";
+            elseif ($m['density'] > $std['density_max']) $f['density_high'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداکثر {$std['density_max']}٪ مجاز است.";
+
+            $passive = YoastRules::passive($html);
+            $m['passive_percent'] = $passive['percent'];
+            if ($passive['percent'] > self::PASSIVE_LIMIT) $f['passive_high'] = "{$passive['percent']}٪ جمله‌ها از نگاه Yoast مجهول‌اند (سقف ۱۰٪). جمله‌هایی را که این واژه‌ها را دارند با فعل معلوم بازنویسی کن و این واژه‌ها را به‌تنهایی نیاور: " . implode('، ', array_slice($passive['words'], 0, 12)) . '.';
+
+            $sub = YoastRules::subheadings($html, $focus);
+            $m['subheadings_with_keyword'] = $sub['matches'];
+            if ($sub['count'] > 1 && $sub['matches'] < $sub['min']) $f['subheading_keyword_low'] = "کلمه اصلی فقط در {$sub['matches']} زیرعنوان از {$sub['count']} زیرعنوان (H2 و H3) آمده؛ حداقل {$sub['min']} لازم است. آن را در یکی از پرسش‌های متداول (H3) هم بیاور.";
+            if ($sub['count'] > 1 && $sub['matches'] > $sub['max']) $f['subheading_keyword_high'] = "کلمه اصلی در {$sub['matches']} زیرعنوان از {$sub['count']} آمده؛ حداکثر {$sub['max']}.";
+        } else {
+            if ($m['density'] < $std['density_min']) $f['density_low'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداقل {$std['density_min']}٪ لازم است.";
+            if ($m['density'] > $std['density_max']) $f['density_high'] = "تراکم کلمه اصلی {$m['density']}٪ است؛ حداکثر {$std['density_max']}٪ مجاز است.";
+        }
         if (!$m['keyword_in_first_words']) $f['keyword_not_in_first'] = "کلمه اصلی در {$std['keyword_in_first']} کلمه اول نیامده است.";
         if ($m['h1'] > 0) $f['h1_in_body'] = 'متن اصلی نباید H1 داشته باشد.';
         if ($m['h2'] < $std['h2_min']) $f['h2_few'] = "تعداد H2 برابر {$m['h2']} است؛ حداقل {$std['h2_min']} لازم است.";

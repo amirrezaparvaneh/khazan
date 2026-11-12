@@ -288,13 +288,48 @@ final class ContentTargetRepository {
     }
 
     /**
+     * Focus keyphrase of a product: the stored / title-derived phrase, extended with the distinguishing words of the
+     * title when other products would get the very same phrase (Yoast: "keyphrase previously used").
+     */
+    public function product_focus($id, $stored = '', $title = null) {
+        $id = (int) $id;
+        // a review draft speaks for its source product
+        $source = $id ? (int) get_post_meta($id, Settings::META_SOURCE_PRODUCT, true) : 0;
+        $own = $source ?: $id;
+        if ($title === null || $source) $title = $own ? (string) get_the_title($own) : (string) $title;
+        $category = $own ? $this->primary_category_name($own) : '';
+        $stored = trim(preg_replace('/\s+/u', ' ', (string) $stored));
+        $derived = KeyphraseExtractor::from_title($title, $category);
+        // an already extended phrase (derived phrase + extra title words) is first reduced to its base
+        $base = KeyphraseExtractor::optimal(KeyphraseExtractor::count_words($stored) > Settings::KEYPHRASE_MAX_WORDS ? '' : $stored, $title, $category);
+        if ($base === '') $base = $derived;
+        $title_keys = array_map(array(KeyphraseExtractor::class, 'key'), KeyphraseExtractor::words($title));
+        $in_title = array_filter(KeyphraseExtractor::words($base), function ($w) use ($title_keys) { return in_array(KeyphraseExtractor::key($w), $title_keys, true); });
+        return KeyphraseExtractor::disambiguate($base, $title, $this->sibling_titles($own, implode(' ', $in_title), $source ? $id : 0));
+    }
+
+    /** Titles of the other products whose title carries every word of $focus (review drafts excluded). */
+    private function sibling_titles($id, $focus, $also_exclude = 0) {
+        global $wpdb;
+        $words = KeyphraseExtractor::words($focus);
+        if (!$words || !isset($wpdb)) return array();
+        $where = ''; $args = array(Settings::product_post_type(), (int) $id, (int) $also_exclude);
+        foreach ($words as $w) { $where .= ' AND post_title LIKE %s'; $args[] = '%' . $wpdb->esc_like($w) . '%'; }
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT post_title FROM {$wpdb->posts} WHERE post_type = %s AND ID NOT IN (%d, %d) AND post_status IN ('draft', 'pending', 'private', 'publish', 'future'){$where} AND post_title NOT LIKE %s LIMIT 50",
+            array_merge($args, array($wpdb->esc_like('[بازبینی]') . '%'))
+        ));
+        return is_array($rows) ? $rows : array();
+    }
+
+    /**
      * ذخیره متای سئو محصول در یوست و رنک‌مث (فقط مقادیر غیرخالی)
      */
     public function write_post_seo($id, $seo) {
         if (get_post_type($id) === Settings::product_post_type() && !empty($seo['title'])) {
-            $category = $this->primary_category_name($id);
-            $focus = KeyphraseExtractor::optimal(isset($seo['focuskw']) ? $seo['focuskw'] : '', (string) get_the_title($id), $category);
+            $focus = $this->product_focus($id, isset($seo['focuskw']) ? $seo['focuskw'] : '');
             $seo['focuskw'] = $focus;
+            $seo['focuskw_exact'] = KeyphraseExtractor::count_words($focus) > Settings::KEYPHRASE_MAX_WORDS;
             $seo['title'] = \Khazan\Services\Seo\SeoMetaRules::fit_title($seo['title'], $focus !== '' ? $focus : get_the_title($id), \Khazan\Core\Settings::brand_name());
         }
         elseif (get_post_type($id) === Settings::blog_post_type() && !empty($seo['title']) && !empty($seo['focuskw'])) {

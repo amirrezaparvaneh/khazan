@@ -112,6 +112,10 @@ final class ContentParser {
             }
             // two links closer than the standard gap are separated (category links stay)
             $content = \Khazan\Services\Links\LinkSpreader::separate($content, $host, $keep, (int) \Khazan\Services\Content\SeoStandards::get('links_min_gap_words'));
+            // Yoast: keyphrase in enough subheadings, keyphrase count inside the recommended range, fewer passive sentences
+            $content = \Khazan\Services\Content\Guard\YoastGuard::apply($content, $focus);
+        } elseif ($kind === Settings::KIND_ARTICLE) {
+            $content = \Khazan\Services\Content\Guard\YoastGuard::soften_passive($content, $focus);
         }
 
         $title = sanitize_text_field($seo_title ?: $params['h1_title']);
