@@ -39,12 +39,12 @@ $titles = array(
 $allOk = true; $minOk = true; $subsetOk = true;
 foreach ($titles as $n => $list) foreach ($list as $t) {
     $out = K::from_title($t);
-    $allOk = $allOk && wc($t) >= 5 && wc($t) <= 10 && wc($out) <= 4;
+    $allOk = $allOk && wc($t) >= 5 && wc($t) <= 10 && wc($out) <= 6;
     $minOk = $minOk && wc($out) >= 2;
     foreach (K::words($out) as $w) $subsetOk = $subsetOk && in_array($w, K::words($t), true);
     echo "     [$n words] $t  =>  $out\n";
 }
-check($allOk, 'every 5-8 word title yields <= 4 words');
+check($allOk, 'every 5-8 word title yields <= 6 words (a long model name stays whole)');
 check($minOk, 'and never fewer than 2 words');
 check($subsetOk, 'every derived word comes from the product title');
 
@@ -94,14 +94,14 @@ for ($i = 0; $i < 600; $i++) {
     $n = mt_rand(5, 12); $ws = array();
     for ($j = 0; $j < $n; $j++) $ws[] = $pool[mt_rand(0, count($pool) - 1)];
     $t = implode(' ', $ws); $out = K::from_title($t);
-    if (wc($out) > 4) $bad++;
+    if (wc($out) > 6) $bad++;
     $fill = array_flip(array_merge(\Khazan\Core\Settings::KEYPHRASE_FILLERS, array('مدل')));
     $distinct = count(array_unique(array_diff($ws, array_keys($fill), \Khazan\Core\Settings::KEYPHRASE_CITIES, array("۴۲"))));
     if ($distinct >= 2 && wc($out) < 2) $short++;
     foreach (K::words($out) as $w) if (!in_array($w, $ws, true)) $subsetBad++;
-    if (wc(K::optimal($t, $t)) > 4) $bad++;
+    if (wc(K::optimal($t, $t)) > 6) $bad++;
 }
-check($bad === 0, 'never more than 4 words across 600 random titles (violations: ' . $bad . ')');
+check($bad === 0, 'never more than 6 words across 600 random titles (violations: ' . $bad . ')');
 check($short === 0, 'never fewer than 2 words when the title has >= 2 distinctive words (violations: ' . $short . ')');
 check($subsetBad === 0, 'derived words always come from the title');
 
@@ -138,12 +138,12 @@ $over = 0; $leak = 0;
 for ($i = 0; $i < 500; $i++) {
     $ws = array(); for ($j = 0, $n = mt_rand(3, 11); $j < $n; $j++) $ws[] = $pool[mt_rand(0, 18)];
     $o = K::from_title(implode(' ', $ws)); $oc = K::cap(implode(' ', $ws));
-    if (K::count_words($o) > 4 || K::count_words($oc) > 4) $over++;
+    if (K::count_words($o) > 6 || K::count_words($oc) > 6) $over++;
     $uncond = array('طبیعی', 'تبریز', 'مدل', 'طرح', 'اصل', 'کد');
     $real = array_diff($ws, $uncond, array('چرم', 'چرمی', 'روزمره', 'مجلسی'));
     if (count(array_unique($real)) >= 2) foreach ($uncond as $x) { if (in_array($x, K::words($o), true)) $leak++; }
 }
-check($over === 0, '500 random titles: never more than 4 words');
+check($over === 0, '500 random titles: never more than 6 words');
 check($leak === 0, '500 random titles: unconditional stop words never leak (' . $leak . ')');
 
 echo "10. Semantic 4-word formula: what (type + usage) + for whom (gender) + model\n";
@@ -169,6 +169,10 @@ check(K::optimal('', $title) === 'کفش طبی مردانه مارکو', 'no st
 check(K::optimal('کفش طبی مردانه مارکو', $title) === 'کفش طبی مردانه مارکو', 'a conforming stored phrase is kept');
 check(K::optimal('بوت چرم زنانه آلفردو', 'x') === 'بوت چرم زنانه آلفردو', 'without a usable title the stored phrase is kept');
 
+// --- a multi-word model name is never cut; a colour after it is a variant
+check(K::from_title('کاپشن چرم طبیعی زنانه مدل سمیرا یقه ایستاده') === 'کاپشن زنانه سمیرا یقه ایستاده', 'model name «سمیرا یقه ایستاده» stays whole');
+check(K::cap('کاپشن چرم طبیعی زنانه مدل سمیرا یقه ایستاده') === 'کاپشن زنانه سمیرا یقه ایستاده', 'link anchors keep the whole model name too');
+check(K::from_title('کاپشن چرم طبیعی زنانه مدل سمیرا متوسط کرم') === 'کاپشن زنانه سمیرا متوسط', 'colour is left out of the base keyphrase');
 // --- sibling products never share a keyphrase (Yoast "keyphrase previously used")
 $base = 'کاپشن زنانه سمیرا متوسط';
 check(K::disambiguate($base, 'کاپشن چرم زنانه مدل سمیرا متوسط', array()) === $base, 'no sibling: keyphrase unchanged');
