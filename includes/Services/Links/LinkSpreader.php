@@ -39,6 +39,37 @@ class LinkSpreader {
         return array('html' => $html, 'missing' => $left);
     }
 
+    /**
+     * Paragraphs after the last FAQ answer (the closing call to action and anything the model appended after it) carry no links:
+     * their internal links are unwrapped (the words stay) and handed back so place() can write them into the body.
+     *
+     * @return array{html:string,links:array[]} links: rows with url + anchor
+     */
+    public static function evict_closing($html, $home_host = '') {
+        $html = (string) $html;
+        $home_host = strtolower((string) $home_host);
+        $pos = strripos($html, '<h3');
+        if ($pos === false) return array('html' => $html, 'links' => array());
+        $end = stripos($html, '</p>', $pos);
+        if ($end === false) return array('html' => $html, 'links' => array());
+        $head = substr($html, 0, $end + 4); $tail = substr($html, $end + 4);
+        $links = array();
+        $tail = preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use (&$links, $home_host) {
+            $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
+            $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+            $internal = $href !== '' && $href[0] !== '#' && ($h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host)));
+            if (!$internal) return $m[0];
+            $links[] = array('url' => $href, 'anchor' => trim(strip_tags($m[3])));
+            return $m[3];
+        }, $tail);
+        // links that are still in the body stay there; only the ones that would be lost are handed back
+        $kept = array();
+        foreach ($links as $l) {
+            if (strpos($head, 'href="' . htmlspecialchars($l['url'], ENT_QUOTES, 'UTF-8') . '"') === false && strpos($head, 'href="' . $l['url'] . '"') === false) $kept[] = $l;
+        }
+        return array('html' => $head . $tail, 'links' => $kept);
+    }
+
     public static function spread($html, $home_host = '') {
         return self::run($html, $home_host, null);
     }
