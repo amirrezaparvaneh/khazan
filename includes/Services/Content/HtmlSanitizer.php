@@ -22,7 +22,7 @@ final class HtmlSanitizer {
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
-        if ($kind === Settings::KIND_PRODUCT) $html = self::polish_product(self::drop_unknowns($html));
+        if ($kind === Settings::KIND_PRODUCT) $html = self::drop_faq_terms(self::polish_product(self::drop_unknowns($html)));
         $html = self::style_tables($html);
         return self::tidy_whitespace($html);
     }
@@ -72,6 +72,18 @@ final class HtmlSanitizer {
             }
             return $m[0];
         }, $html);
+    }
+
+    /** A FAQ answer repeating shop terms (shipping, installments, returns) is dropped with its question: those facts appear once, in the benefits list. */
+    public static function drop_faq_terms($html) {
+        $terms = '~(?:ارسال\s+رایگان|اقساط|قسط|اسنپ[‌\s]*پی|ترب[‌\s]*پی|ضمانت\s+بازگشت|بازگشت\s+کالا)~u';
+        $cut = preg_match('~<h2\b[^>]*>[^<]*(?:سوال|سؤال|پرسش)~u', $html, $m, PREG_OFFSET_CAPTURE) ? $m[0][1] : false;
+        if ($cut === false) return $html;
+        $head = substr($html, 0, $cut); $faq = substr($html, $cut);
+        $faq = preg_replace_callback('~(<h3\b[^>]*>[^<]*</h3>)\s*(<p\b[^>]*>.*?</p>)~isu', function ($m) use ($terms) {
+            return preg_match($terms, strip_tags($m[1] . $m[2])) ? '' : $m[0];
+        }, $faq);
+        return $head . $faq;
     }
 
     /** Wording that announces a missing fact: it must not reach a product page (a buyer reads it as a flaw). */

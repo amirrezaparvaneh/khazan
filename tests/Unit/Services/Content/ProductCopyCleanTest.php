@@ -27,5 +27,7 @@ $li = H::clean('<ul><li>زیره EVA → قدم‌ها سبک‌تر می‌شو
 check(strpos($li, '→') === false && strpos($li, '<li><strong>زیره EVA:</strong> قدم‌ها سبک‌تر می‌شود.</li>') !== false && strpos($li, '<li><strong>کفی طبی:</strong> پشتیبانی بهتر.</li>') !== false, 'benefit arrows become a bold label with a colon');
 check(strpos($li, 'همراه است؛ خیال خریدار راحت‌تر می‌شود.</li>') !== false && strpos($li, '<li>بدون پیکان.</li>') !== false, 'a sentence before the arrow is joined as text; other bullets stay');
 check(H::clean('<p>رویه این بوت از چرم طبیعی و چرم تبریز است و جنس رویه چرم تبریز و چرم طبیعی.</p>', 'product') === '<p>رویه این بوت از چرم طبیعی تبریز است و جنس رویه چرم طبیعی تبریز.</p>', 'one leather is not written as two materials');
+$f = H::clean('<h2>مزایا</h2><p>ارسال رایگان.</p><h2>سوالات متداول</h2><h3>نگهداری؟</h3><p>با دستمال نرم.</p><h3>مزیت خرید؟</h3><p>اقساط ۴ قسطه و ضمانت بازگشت.</p><h3>ست؟</h3><p>با پالتو.</p>', 'product');
+check(strpos($f, 'اقساط') === false && strpos($f, 'مزیت خرید') === false && strpos($f, 'ارسال رایگان') !== false && strpos($f, 'نگهداری؟') !== false && strpos($f, 'ست؟') !== false, 'a FAQ answer repeating shop terms is dropped with its question; benefits and other FAQs stay');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
