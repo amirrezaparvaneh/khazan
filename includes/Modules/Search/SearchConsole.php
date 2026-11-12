@@ -339,11 +339,14 @@ final class SearchConsole {
         $jwt = GoogleServiceAuth::jwt($key, GoogleServiceAuth::SCOPE_READONLY, time());
         if (!$jwt) return self::error('khazan_gsc_badkey', 'کلید خصوصی خوانده نشد. فایل JSON را کامل و بدون تغییر بچسبانید.');
         $res = wp_remote_post($key['token_uri'], array('timeout' => 20, 'body' => array('grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer', 'assertion' => $jwt)));
-        if (is_wp_error($res)) return self::error('khazan_gsc_net', 'اتصال به گوگل برقرار نشد: ' . $res->get_error_message());
+        if (is_wp_error($res)) return self::error('khazan_gsc_net', 'اتصال به گوگل برقرار نشد. اینترنت یا فایروال سرور را بررسی کنید و دوباره تلاش کنید.');
         $body = json_decode(wp_remote_retrieve_body($res), true);
         if (empty($body['access_token'])) {
-            $why = is_array($body) && isset($body['error_description']) ? $body['error_description'] : 'پاسخ نامعتبر';
-            return self::error('khazan_gsc_auth', 'گوگل توکن نداد: ' . $why);
+            $desc = is_array($body) && isset($body['error_description']) ? strtolower((string) $body['error_description']) : '';
+            $why = strpos($desc, 'signature') !== false || strpos($desc, 'invalid_grant') !== false || strpos($desc, 'jwt') !== false
+                ? 'فایل کلید سرویس‌اکانت نامعتبر یا ناقص است؛ فایل JSON را دوباره از Google Cloud بگیرید و کامل وارد کنید. اگر ساعت سرور هم اشتباه است، با هاست هماهنگ کنید.'
+                : 'فایل کلید سرویس‌اکانت را بررسی و دوباره ذخیره کنید.';
+            return self::error('khazan_gsc_auth', 'گوگل دسترسی نداد. ' . $why);
         }
         set_transient(self::TRANSIENT_TOKEN, $body['access_token'], max(60, (int) ($body['expires_in'] ?? 3600) - 120));
         return $body['access_token'];
@@ -355,12 +358,16 @@ final class SearchConsole {
         $args = array('method' => $method, 'timeout' => 40, 'headers' => array('Authorization' => 'Bearer ' . $token, 'Content-Type' => 'application/json'));
         if ($payload !== null) $args['body'] = wp_json_encode($payload);
         $res = wp_remote_request($url, $args);
-        if (is_wp_error($res)) return self::error('khazan_gsc_net', 'اتصال به گوگل برقرار نشد: ' . $res->get_error_message());
+        if (is_wp_error($res)) return self::error('khazan_gsc_net', 'اتصال به گوگل برقرار نشد. اینترنت یا فایروال سرور را بررسی کنید و دوباره تلاش کنید.');
         $code = (int) wp_remote_retrieve_response_code($res);
         $body = json_decode(wp_remote_retrieve_body($res), true);
         if ($code >= 400) {
-            $why = is_array($body) && isset($body['error']['message']) ? $body['error']['message'] : 'HTTP ' . $code;
-            return self::error('khazan_gsc_http', 'خطای سرچ کنسول: ' . $why);
+            $why = $code === 401 ? 'نشست گوگل منقضی شده؛ دوباره تلاش کنید.'
+                : ($code === 403 ? 'ایمیل سرویس‌اکانت به این سایت در Search Console دسترسی ندارد؛ آن را در تنظیمات Search Console به‌عنوان کاربر اضافه کنید و مطمئن شوید «Search Console API» در Google Cloud فعال است.'
+                : ($code === 404 ? 'سایت یا آدرس انتخاب‌شده در Search Console پیدا نشد؛ نشانی ثبت‌شده را بررسی کنید.'
+                : ($code === 429 ? 'سقف درخواست گوگل پر شده؛ چند دقیقه بعد دوباره تلاش کنید.'
+                : ($code >= 500 ? 'سرویس گوگل اکنون پاسخ نمی‌دهد؛ کمی بعد دوباره تلاش کنید.' : 'درخواست پذیرفته نشد؛ تنظیمات را بررسی کنید.'))));
+            return self::error('khazan_gsc_http', 'خطای سرچ کنسول (کد ' . $code . '): ' . $why);
         }
         return is_array($body) ? $body : array();
     }

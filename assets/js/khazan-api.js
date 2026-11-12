@@ -13,8 +13,23 @@
     apiFetch: async function (endpoint, options = {}) {
       const url = `${wilaData.restUrl}wila/v1${endpoint}`;
       const defaultHeaders = { 'X-WP-Nonce': wilaData.nonce, 'Content-Type': 'application/json' };
-      const response = await fetch(url, { ...options, headers: { credentials: 'include', ...defaultHeaders, ...options.headers } });
-      return await response.json();
+      let response;
+      try {
+        response = await fetch(url, { ...options, headers: { credentials: 'include', ...defaultHeaders, ...options.headers } });
+      } catch (e) {
+        throw new TypeError('ارتباط با سرور سایت برقرار نشد. اینترنت خود را بررسی کنید و دوباره تلاش کنید.');
+      }
+      try {
+        return await response.json();
+      } catch (e) {
+        const st = response.status;
+        const why = st === 403 ? 'دسترسی شما مجاز نیست یا نشست ورود تمام شده؛ صفحه را تازه کنید و دوباره وارد شوید.'
+          : st === 404 ? 'نشانی درخواستی روی سرور پیدا نشد؛ افزونه را به‌روزرسانی یا پیوندهای یکتا را یک بار ذخیره کنید.'
+          : (st === 502 || st === 503 || st === 504 || st === 524) ? 'سرور سایت دیر پاسخ داد یا شلوغ است (احتمالاً کمبود زمان اجرا)؛ کمی بعد دوباره تلاش کنید.'
+          : st >= 500 ? 'سرور سایت با خطا روبه‌رو شد؛ گزارش خطای PHP هاست را بررسی کنید.'
+          : 'پاسخ سرور قابل‌خواندن نبود.';
+        throw new SyntaxError(why);
+      }
     },
 
     fetchSummary: async function () {
@@ -120,7 +135,7 @@
         st.aiBalance = null;
         const network = e && e.name === 'TypeError', badJson = e && e.name === 'SyntaxError';
         st.aiBalanceErrorCode = (e && e.code) || (network ? 'connection_failed' : 'request_failed');
-        st.aiBalanceError = network ? 'ارتباط با سرور برقرار نشد.' : (badJson ? 'پاسخ نامعتبر از سرور.' : ((e && e.message) || 'استعلام اعتبار ناموفق بود.'));
+        st.aiBalanceError = network ? ((e && e.message) || 'ارتباط با سرور برقرار نشد.') : (badJson ? ((e && e.message) || 'پاسخ نامعتبر از سرور.') : ((e && e.message) || 'استعلام اعتبار ناموفق بود.'));
       }
       st.aiBalanceLoading = false;
       this.render();

@@ -49,9 +49,9 @@ final class SpecSheetService {
         $jwt = GoogleServiceAuth::jwt($key, GoogleServiceAuth::SCOPE_SHEETS, time());
         if (!$jwt) return self::error('khazan_sheet_badkey', 'کلید خصوصی خوانده نشد.');
         $res = wp_remote_post($key['token_uri'], array('timeout' => 20, 'body' => array('grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer', 'assertion' => $jwt)));
-        if (is_wp_error($res)) return self::error('khazan_sheet_net', 'اتصال به گوگل برقرار نشد: ' . $res->get_error_message());
+        if (is_wp_error($res)) return self::error('khazan_sheet_net', 'اتصال به گوگل برقرار نشد. اینترنت یا فایروال سرور را بررسی کنید و دوباره تلاش کنید.');
         $body = json_decode(wp_remote_retrieve_body($res), true);
-        if (empty($body['access_token'])) return self::error('khazan_sheet_auth', 'گوگل توکن نداد: ' . (is_array($body) && isset($body['error_description']) ? $body['error_description'] : 'پاسخ نامعتبر'));
+        if (empty($body['access_token'])) return self::error('khazan_sheet_auth', 'گوگل دسترسی نداد؛ فایل کلید سرویس‌اکانت را بررسی و دوباره ذخیره کنید.');
         set_transient(self::TOKEN, $body['access_token'], max(60, (int) (isset($body['expires_in']) ? $body['expires_in'] : 3600) - 120));
         return $body['access_token'];
     }
@@ -60,7 +60,7 @@ final class SpecSheetService {
         $token = self::token();
         if (is_wp_error($token)) return $token;
         $res = wp_remote_get($url, array('timeout' => 40, 'headers' => array('Authorization' => 'Bearer ' . $token)));
-        if (is_wp_error($res)) return self::error('khazan_sheet_net', 'اتصال به گوگل برقرار نشد: ' . $res->get_error_message());
+        if (is_wp_error($res)) return self::error('khazan_sheet_net', 'اتصال به گوگل برقرار نشد. اینترنت یا فایروال سرور را بررسی کنید و دوباره تلاش کنید.');
         $code = (int) wp_remote_retrieve_response_code($res);
         $body = json_decode(wp_remote_retrieve_body($res), true);
         if ($code >= 200 && $code < 300 && is_array($body)) return $body;
@@ -70,7 +70,7 @@ final class SpecSheetService {
             if ($api_off) return self::error('khazan_sheet_api', 'در Google Cloud باید «Google Sheets API» را هم فعال کنید (مثل Search Console API).', 403);
             return self::error('khazan_sheet_access', 'به این شیت دسترسی نیست. شیت را با ایمیل ' . $email . ' به‌صورت Viewer به اشتراک بگذارید.', 403);
         }
-        return self::error('khazan_sheet_http', 'گوگل خطا داد (' . $code . '): ' . (is_array($body) && isset($body['error']['message']) ? $body['error']['message'] : 'پاسخ نامعتبر'));
+        return self::error('khazan_sheet_http', 'گوگل درخواست را نپذیرفت (کد ' . $code . '). ' . ($code === 429 ? 'سقف درخواست پر شده؛ چند دقیقه بعد دوباره تلاش کنید.' : ($code >= 500 ? 'سرویس گوگل اکنون پاسخ نمی‌دهد؛ کمی بعد دوباره تلاش کنید.' : 'نشانی یا شناسه شیت را بررسی کنید.')));
     }
 
     /** Rows of the sheet (or of the tab named by gid in the link). */

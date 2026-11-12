@@ -106,7 +106,7 @@ final class ImagesController extends BaseController {
             $alt = AltText::generate_and_save($id);
             if (is_wp_error($alt)) {
                 $code = $alt->get_error_code();
-                if ($code === 'ai_rate_limited' || $code === 'missing_api_key' || $code === 'ai_error') { $stop = $alt->get_error_message(); break; }
+                if ($code === 'ai_rate_limited' || $code === 'ai_error' || in_array($code, \Khazan\Services\Ai\ApiErrors::FATAL, true)) { $stop = $alt->get_error_message(); break; }
                 // an image the model cannot use is marked so the batch does not loop on it forever
                 update_post_meta($id, AltText::META_DONE, 'skipped:' . $code);
                 $items[] = array('id' => $id, 'error' => $alt->get_error_message());

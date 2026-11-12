@@ -87,10 +87,10 @@ final class AvalaiHttpClient {
         $timeout  = $suggestions_request ? Settings::TIMEOUT_LONG : Settings::TIMEOUT_BULK;
         $response = $this->post($this->api_key, $body, $timeout);
         if (is_wp_error($response)) {
-            return $response;
+            return ApiErrors::transport($response);
         }
 
-        $code = wp_remote_retrieve_response_code($response);
+        $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
 
         // Some models behind an OpenAI-compatible gateway reject response_format=json_object; retry once as plain text
@@ -99,9 +99,9 @@ final class AvalaiHttpClient {
             unset($body['response_format']);
             $response = $this->post($this->api_key, $body, $timeout);
             if (is_wp_error($response)) {
-                return $response;
+                return ApiErrors::transport($response);
             }
-            $code = wp_remote_retrieve_response_code($response);
+            $code = (int) wp_remote_retrieve_response_code($response);
             $data = json_decode(wp_remote_retrieve_body($response), true);
         }
 
@@ -110,19 +110,18 @@ final class AvalaiHttpClient {
             unset($body['reasoning_effort']);
             $response = $this->post($this->api_key, $body, $timeout);
             if (is_wp_error($response)) {
-                return $response;
+                return ApiErrors::transport($response);
             }
-            $code = wp_remote_retrieve_response_code($response);
+            $code = (int) wp_remote_retrieve_response_code($response);
             $data = json_decode(wp_remote_retrieve_body($response), true);
         }
 
         if ($code !== 200) {
-            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای سرور AvalAI';
-            // Keep 429/503 visible to the client so the bulk queue can back off and retry.
-            return new \WP_Error($code === 429 ? 'ai_rate_limited' : 'ai_error', $msg, in_array($code, array(429, 503), true) ? array('status' => $code) : array());
+            // The provider text is English; ApiErrors maps it to a Persian message (429/503 keep their status so the bulk queue backs off).
+            return ApiErrors::wp_error($code, self::provider_message($data));
         }
         if (!isset($data['choices'][0]['message']['content'])) {
-            return new \WP_Error('invalid_response', 'پاسخ نامعتبر از AvalAI.');
+            return new \WP_Error('invalid_response', 'پاسخ هوش مصنوعی خالی یا ناقص بود. دوباره تلاش کنید.');
         }
         UsageLog::record($this->model, isset($data['usage']) ? $data['usage'] : array());
         return $data['choices'][0]['message']['content'];
@@ -143,13 +142,13 @@ final class AvalaiHttpClient {
             'timeout' => Settings::TIMEOUT_IMAGE,
         ));
         if (is_wp_error($response)) {
-            return $response;
+            return ApiErrors::transport($response);
         }
         $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if ($code !== 200) {
-            $msg = isset($data['error']['message']) ? $data['error']['message'] : 'خطای تولید تصویر در AvalAI (کد ' . $code . ')';
-            return new \WP_Error('image_api_error', $msg);
+            $e = ApiErrors::wp_error($code, self::provider_message($data));
+            return new \WP_Error($e->get_error_code() === 'ai_error' ? 'image_api_error' : $e->get_error_code(), str_replace('سرویس هوش مصنوعی', 'سرویس تولید تصویر', $e->get_error_message()), $e->get_error_data() ?: array());
         }
         if (!empty($data['data'][0]['url'])) {
             return array('url' => esc_url_raw($data['data'][0]['url']));
@@ -157,7 +156,7 @@ final class AvalaiHttpClient {
         if (!empty($data['data'][0]['b64_json'])) {
             return array('b64' => $data['data'][0]['b64_json']);
         }
-        return new \WP_Error('invalid_image_response', 'پاسخ نامعتبر از سرویس تولید تصویر.');
+        return new \WP_Error('invalid_image_response', 'سرویس تولید تصویر پاسخ قابل‌استفاده نداد. دوباره تلاش کنید.');
     }
 
     /**
@@ -175,15 +174,15 @@ final class AvalaiHttpClient {
             'timeout' => Settings::TIMEOUT_DEFAULT,
         ));
         if (is_wp_error($response)) {
-            return new \WP_Error('connection_failed', 'خطا در ارتباط با سرویس: ' . $response->get_error_message(), array('status' => 502));
+            return ApiErrors::transport($response);
         }
         $code = (int) wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
         if ($code === 401 || $code === 403) {
-            return new \WP_Error('invalid_api_key', 'کلید API نامعتبر است.', array('status' => 400));
+            return new \WP_Error('invalid_api_key', 'کلید API نامعتبر است. آن را از پنل AvalAI دوباره کپی کنید.', array('status' => 400));
         }
         if ($code !== 200 || !isset($data['data']) || !is_array($data['data'])) {
-            return new \WP_Error('api_error', 'دریافت فهرست مدل‌ها ناموفق بود (کد ' . $code . ').', array('status' => 502));
+            return new \WP_Error('api_error', 'دریافت فهرست مدل‌ها ناموفق بود' . ($code ? ' (کد ' . $code . ')' : '') . '. کمی بعد دوباره تلاش کنید.', array('status' => 502));
         }
         $ids = array();
         foreach ($data['data'] as $row) {
@@ -209,7 +208,7 @@ final class AvalaiHttpClient {
         $latency  = round((microtime(true) - $start) * 1000);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('connection_failed', 'خطا در ارتباط: ' . $response->get_error_message());
+            return ApiErrors::transport($response);
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -219,13 +218,8 @@ final class AvalaiHttpClient {
             return array('success' => true, 'model' => $this->model, 'latency_ms' => $latency, 'message' => 'ارتباط با موفقیت برقرار شد!');
         }
 
-        if ($code === 503 || $code === 429) {
-            return new \WP_Error('api_error', 'سرور هوش مصنوعی در حال حاضر ترافیک بالایی دارد. لطفاً مجدداً تلاش کنید.');
-        }
-
-        $err_msg = isset($data['error']['message']) ? sanitize_text_field($data['error']['message']) : '';
-        $err_msg = empty($err_msg) ? 'کد وضعیت سرور: ' . $code : 'کد وضعیت سرور: ' . $code . ' (' . $err_msg . ')';
-        return new \WP_Error('api_error', $err_msg, array('status' => $code));
+        $e = ApiErrors::from_response($code, self::provider_message($data));
+        return new \WP_Error($e['code'], $e['message'], array('status' => $code));
     }
 
     /**
@@ -245,7 +239,7 @@ final class AvalaiHttpClient {
             'timeout' => Settings::TIMEOUT_DEFAULT,
         ));
         if (is_wp_error($response)) {
-            return new \WP_Error('connection_failed', 'خطا در ارتباط با سرویس: ' . $response->get_error_message(), array('status' => 502));
+            return ApiErrors::transport($response);
         }
 
         $code = (int) wp_remote_retrieve_response_code($response);
@@ -264,6 +258,13 @@ final class AvalaiHttpClient {
             return new \WP_Error('invalid_response', 'پاسخ استعلام اعتبار معتبر نیست.', array('status' => 502));
         }
         return $data;
+    }
+
+    private static function provider_message($data) {
+        if (!is_array($data)) return '';
+        if (isset($data['error']['message'])) return (string) $data['error']['message'];
+        if (isset($data['error']) && is_string($data['error'])) return $data['error'];
+        return isset($data['message']) && is_string($data['message']) ? $data['message'] : '';
     }
 
     private function post($key, array $body, $timeout) {
