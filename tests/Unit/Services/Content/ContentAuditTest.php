@@ -59,6 +59,8 @@ check('detects few internal links', isset($r['failures']['internal_links']));
 check('detects links per paragraph', isset($r['failures']['links_per_paragraph']));
 check('table found', $r['tables'] === 1 && !isset($r['failures']['table_missing']));
 check('keyword in h2 counted', $r['keyword_in_h2'] === 1 && !isset($r['failures']['keyword_not_in_heading']));
+$h3only = ContentAudit::analyze('<h2>انتخاب مدل</h2><p>متن.</p><h3>کیف چرم زنانه چطور است؟</h3><p>خوب.</p>', 'کیف چرم زنانه', array('kind' => Settings::KIND_CATEGORY, 'home_host' => 'akaleather.com'));
+check('keyword only in an H3 still fails: an H2 must carry it', isset($h3only['failures']['keyword_not_in_heading']));
 check('h1 in body flagged', isset(ContentAudit::analyze('<h1>الف</h1>', 'الف')['failures']['h1_in_body']));
 
 // ---- titles / meta
