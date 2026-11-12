@@ -29,5 +29,13 @@ check(strpos($li, 'همراه است؛ خیال خریدار راحت‌تر م�
 check(H::clean('<p>رویه این بوت از چرم طبیعی و چرم تبریز است و جنس رویه چرم تبریز و چرم طبیعی.</p>', 'product') === '<p>رویه این بوت از چرم طبیعی تبریز است و جنس رویه چرم طبیعی تبریز.</p>', 'one leather is not written as two materials');
 $f = H::clean('<h2>مزایا</h2><p>ارسال رایگان.</p><h2>سوالات متداول</h2><h3>نگهداری؟</h3><p>با دستمال نرم.</p><h3>مزیت خرید؟</h3><p>اقساط ۴ قسطه و ضمانت بازگشت.</p><h3>ست؟</h3><p>با پالتو.</p>', 'product');
 check(strpos($f, 'اقساط') === false && strpos($f, 'مزیت خرید') === false && strpos($f, 'ارسال رایگان') !== false && strpos($f, 'نگهداری؟') !== false && strpos($f, 'ست؟') !== false, 'a FAQ answer repeating shop terms is dropped with its question; benefits and other FAQs stay');
+$g = H::clean('<p>رویه از چرم تبریز با ماهیت گاوی است و چرم تبریز با جنس گاوی و چرم تبریز با کیفیت چرم گاوی.</p><table><tr><td>جنس رویه</td><td>چرم تبریز با ماهیت گاوی</td></tr><tr><td>زیره</td><td>EVA</td></tr></table>', 'product');
+check(strpos($g, 'با ماهیت') === false && strpos($g, 'با جنس') === false && strpos($g, 'با کیفیت') === false && substr_count($g, 'چرم گاوی تبریز') === 4, 'every "چرم تبریز با … گاوی" variant becomes "چرم گاوی تبریز"');
+$a = H::clean('<p>با تکیه بر <a href="/c">مجموعه بوت مردانه </a>، برای شما.</p><p>و <a href="/d"> دستکش</a> هم هست.</p>', 'product');
+check(strpos($a, '</a>،') !== false && strpos($a, ' ،') === false && strpos($a, ' <a href="/d">دستکش</a> هم') !== false, 'spaces inside a link text move outside it');
+$b = H::clean('<p>مقدمه.</p><ul><li><strong>خرید مطمئن:</strong> ارسال رایگان و خرید ۴ قسطه.</li></ul><p>متن خوب. همچنین ارسال رایگان است و اقساط هم دارد. جمله‌ی آخر.</p><p>فقط ارسال رایگان.</p>', 'product');
+check(substr_count($b, 'ارسال رایگان') === 1 && strpos($b, 'متن خوب. جمله‌ی آخر.') !== false && strpos($b, 'فقط') === false, 'shop terms repeated in body paragraphs are cut; the benefits bullet stays');
+$none = H::clean('<p>ارسال رایگان.</p>', 'product');
+check($none === '<p>ارسال رایگان.</p>', 'with no benefits list the sentence is left alone');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

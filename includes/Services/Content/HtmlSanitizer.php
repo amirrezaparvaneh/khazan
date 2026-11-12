@@ -22,7 +22,7 @@ final class HtmlSanitizer {
      */
     public static function clean($html, $kind) {
         $html = (string) $html;
-        if ($kind === Settings::KIND_PRODUCT) $html = self::drop_faq_terms(self::polish_product(self::drop_unknowns($html)));
+        if ($kind === Settings::KIND_PRODUCT) $html = self::drop_body_terms(self::drop_faq_terms(self::polish_product(self::drop_unknowns($html))));
         $html = self::style_tables($html);
         return self::tidy_whitespace($html);
     }
@@ -52,7 +52,12 @@ final class HtmlSanitizer {
      */
     public static function polish_product($html) {
         $html = preg_replace('~چرم\s+(?:طبیعی\s+و\s+چرم\s+تبریز|تبریز\s+و\s+چرم\s+طبیعی)~u', 'چرم طبیعی تبریز', $html);
-        $html = preg_replace('~چرم\s+تبریز\s+با\s+(?:پایه|منشأ|منشا)\s+(?:چرم\s+)?گاوی~u', 'چرم گاوی تبریز', $html);
+        // "چرم تبریز با پایه/منشأ/ماهیت/جنس/کیفیت (چرم) گاوی" is the stored value "چرم تبریز - چرم گاوی" read aloud
+        $html = preg_replace('~چرم\s+تبریز\s+با\s+(?:[^\s<>،.]+\s+){1,2}?گاوی~u', 'چرم گاوی تبریز', $html);
+        // blanks inside a link text become blanks outside it ("<a> متن </a>،" must not leave " ،")
+        $html = preg_replace_callback('~(<a\b[^>]*>)(\s*)([^<]*?)(\s*)(</a>)~u', function ($m) {
+            return $m[2] . $m[1] . $m[3] . $m[5] . $m[4];
+        }, $html);
         $html = preg_replace('~\s+با\s+(?:پایه|منشأ|منشا)\s+(?=(?:چرم\s+)?(?:گاوی|طبیعی))~u', ' ', $html);
         $html = preg_replace('~\s+([،؛])~u', '$1', $html);
         // benefit bullets: an arrow points the wrong way in right-to-left text; "feature: benefit" with a bold feature reads right
@@ -71,6 +76,18 @@ final class HtmlSanitizer {
                 return '<p' . $m[1] . '>برای دیدن گزینه‌های بیشتر می‌توانید به ' . $x[1] . ' سر بزنید.</p>';
             }
             return $m[0];
+        }, $html);
+    }
+
+    /** Shop terms (shipping, installments, returns) stay in the benefits list: a sentence repeating them in a body paragraph is cut. */
+    public static function drop_body_terms($html) {
+        $terms = '~(?:ارسال\s+رایگان|اقساط|قسط|اسنپ[‌\s]*پی|ترب[‌\s]*پی|ضمانت\s+بازگشت|بازگشت\s+کالا)~u';
+        if (!preg_match_all('~<li\b[^>]*>.*?</li>~isu', $html, $li) || !preg_match($terms, implode(' ', $li[0]))) return $html;
+        return preg_replace_callback('~<p\b([^>]*)>(.*?)</p>~isu', function ($m) use ($terms) {
+            if (!preg_match($terms, strip_tags($m[2]))) return $m[0];
+            $parts = preg_split('~(?<=[.!؟?])\s+~u', $m[2]);
+            $kept = array_filter($parts, function ($x) use ($terms) { return !preg_match($terms, strip_tags($x)); });
+            return $kept ? '<p' . $m[1] . '>' . implode(' ', $kept) . '</p>' : '';
         }, $html);
     }
 
