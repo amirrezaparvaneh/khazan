@@ -36,16 +36,23 @@ check(count($r2['missing']) === 1, 'no free paragraph: the link is reported as s
 $faq = "<p>$long</p><h2>جنس</h2><p>$long $a</p><p>$long</p><h2>سوالات متداول</h2><h3>س؟</h3><p>جواب $b</p><p>فراخوان خرید.</p><p>گزینه‌های بیشتر: $c و <a href=\"https://x.ir/a\">لارا دوباره</a></p>";
 $e = S::evict_closing($faq, 'x.ir');
 check(substr_count($e['html'], '<a ') === 2, 'links after the last FAQ answer are unwrapped (FAQ answer and body links stay)');
-check(count($e['links']) === 1 && $e['links'][0]['url'] === 'https://x.ir/c' && strpos($e['html'], 'گزینه‌های بیشتر: استلا و') !== false, 'only a link that would be lost is handed back, its words stay');
+check(count($e['links']) === 1 && $e['links'][0]['url'] === 'https://x.ir/c' && strpos($e['html'], 'گزینه‌های بیشتر') === false, 'a short link-only paragraph after the call to action is removed; only a link that would be lost is handed back');
+$mixed = "<p>$long</p><h2>سوالات متداول</h2><h3>س؟</h3><p>جواب.</p><p>فراخوان خرید.</p><p>$long $c برای دیدن مدل‌های بیشتر.</p>";
+$e2 = S::evict_closing($mixed, 'x.ir');
+check(substr_count($e2['html'], '<a ') === 0 && count($e2['links']) === 1 && strpos($e2['html'], $long) !== false, 'a long paragraph after the call to action keeps its words');
 check(S::evict_closing("<p>$long $a</p>", 'x.ir')['links'] === array(), 'no FAQ heading: nothing evicted');
 $cat = '<a href="https://x.ir/cat">کلکسیون بوت</a>';
 $near = "<p>مقدمه بوت $a</p><p>$cat را ببینید.</p><h2>جنس</h2><p>$long</p><p>$long</p><p>$long</p><h2>ست</h2><p>$long</p><p>$long</p><h2>سوالات متداول</h2><h3>س؟</h3><p>جواب.</p><p>فراخوان.</p>";
 $sep = S::separate($near, 'x.ir', array('https://x.ir/cat'), 70);
 preg_match_all('~<p\b[^>]*>.*?</p>~is', $sep, $pp);
-check(substr_count($sep, '<a ') === 2 && strpos($pp[0][1], 'https://x.ir/cat') !== false && strpos($pp[0][0], '<a ') === false, 'a product link too close to the category link moves out of the intro; the category link stays');
+check(substr_count($sep, '<a ') === 2 && strpos($pp[0][0], 'https://x.ir/cat') !== false && strpos($sep, 'مقدمه بوت') === false, 'a product link too close to the category link moves out of the intro (its mention sentence goes with it); the category link stays');
 check(Khazan\Services\Content\ContentAudit::min_link_gap($sep, 'x.ir') >= 70 || Khazan\Services\Content\ContentAudit::min_link_gap($sep, 'x.ir') === null, 'after separating, the gap meets the standard');
 check(S::separate($sep, 'x.ir', array('https://x.ir/cat'), 70) === $sep, 'idempotent');
 $tiny = "<p>مقدمه $a</p><p>$cat</p>";
 check(S::separate($tiny, 'x.ir', array('https://x.ir/cat'), 70) === $tiny, 'no free paragraph: links stay, nothing is dropped');
+// the same link repeated: moving it never leaves unlinked copies of the mention sentence behind
+$dup = "<p>مقدمه کوتاه درباره کفش و $cat را ببینید.</p><h2>الف</h2><p>$long برای مقایسه نگاهی به $a بیندازید.</p><p>$long $a هم هست.</p><h2>ب</h2><p>$long</p><p>$long</p><h2>سوالات متداول</h2><h3>س؟</h3><p>جواب.</p><p>فراخوان.</p>";
+$d1 = S::separate(S::spread($dup, 'x.ir'), 'x.ir', array('https://x.ir/cat'), 70);
+check(substr_count($d1, 'لارا') <= 2, 'a moved link leaves no extra plain mentions of its anchor');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

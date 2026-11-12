@@ -115,7 +115,6 @@ final class YoastGuard {
      * half-space spelling for compounds («طراحی شده» -> «طراحی‌شده», «قدم زدن» -> «قدم‌زدن»).
      */
     public static function soften_passive($html, $keyword = '') {
-        $wear = preg_match('/^(?:کفش|بوت|نیم‌بوت|نیم\s?بوت|صندل|کتانی|دمپایی|کالج|چکمه)/u', trim((string) $keyword)) ? 'به پا کردن' : (preg_match('/^دستکش/u', trim((string) $keyword)) ? 'به دست کردن' : 'به تن کردن');
         $tokens = preg_split('~(<[^>]+>)~', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
         $skip = 0;
         foreach ($tokens as $i => $token) {
@@ -125,12 +124,12 @@ final class YoastGuard {
                 continue;
             }
             if ($skip > 0) continue;
-            $tokens[$i] = self::soften_text($token, $wear);
+            $tokens[$i] = self::soften_text($token);
         }
         return implode('', $tokens);
     }
 
-    private static function soften_text($text, $wear) {
+    private static function soften_text($text) {
         $b = '(?![\p{L}\p{N}\x{200c}])';          // end of a word
         $a = '(?<![\p{L}\p{N}\x{200c}])';         // start of a word
         $swap = array(
@@ -140,7 +139,7 @@ final class YoastGuard {
             "~{$a}دیده\s+شوند{$b}~u"      => 'به چشم بیایند',
             "~{$a}دیده\s+شود{$b}~u"       => 'به چشم بیاید',
             "~{$a}خریدن{$b}~u"            => 'خرید',
-            "~{$a}پوشیدن{$b}~u"           => $wear,
+            "~{$a}پوشیدن{$b}~u"           => 'استفاده',
             "~{$a}آماده(?=\s+(?:است|هست|نیست|باش|می‌|شد|کرد|کن|بود))~u" => 'مهیا',
             "~{$a}آماده\s+(?=[\p{L}])~u"  => 'مهیای ',
         );
