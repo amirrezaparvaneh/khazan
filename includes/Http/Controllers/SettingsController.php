@@ -31,6 +31,7 @@ final class SettingsController extends BaseController {
             'has_avalai_key' => !empty($avalai_key),
             'avalai_masked_key' => !empty($avalai_key) ? (substr($avalai_key, 0, 6) . '...' . substr($avalai_key, -4)) : '',
             'avalai_model' => $avalai_client->get_active_model(),
+            'ai_reasoning' => Settings::ai_reasoning(),
             'ai_base_url' => Settings::ai_base_url(),
             'ai_default_base_url' => Settings::AI_BASE_URL,
             'homepage_keywords' => $homepage_keywords,

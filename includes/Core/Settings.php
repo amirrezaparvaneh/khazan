@@ -18,6 +18,7 @@ final class Settings {
     const OPT_AVALAI_API_KEY             = 'wila_avalai_api_key';
     const OPT_AI_PROVIDER                = 'wila_ai_provider';
     const OPT_AI_MODEL                   = 'wila_ai_model';
+    const OPT_AI_REASONING               = 'wila_ai_reasoning';
     const OPT_AI_BASE_URL                = 'wila_ai_base_url';
     const OPT_HOMEPAGE_KEYWORDS          = 'wila_homepage_keywords';
     const OPT_CONTENT_WRAPPER_CLASS      = 'wila_content_wrapper_class';
@@ -281,6 +282,19 @@ final class Settings {
     }
 
     /** Model used for text generation: the saved choice, else the built-in default. */
+    /** Allowed reasoning-effort values; 'default' = let the provider decide (no parameter sent). */
+    const AI_REASONING_LEVELS  = array('default', 'minimal', 'low', 'medium', 'high');
+    const AI_REASONING_DEFAULT = 'low';
+
+    /**
+     * Reasoning effort for GPT-5/o-series models. Hidden reasoning tokens are billed as output,
+     * so 'low' keeps long-form copy generation far cheaper than the provider default (medium).
+     */
+    public static function ai_reasoning() {
+        $v = strtolower(trim((string) get_option(self::OPT_AI_REASONING, self::AI_REASONING_DEFAULT)));
+        return in_array($v, self::AI_REASONING_LEVELS, true) ? $v : self::AI_REASONING_DEFAULT;
+    }
+
     public static function ai_model() {
         $model = trim((string) get_option(self::OPT_AI_MODEL, ''));
         return self::is_valid_model_id($model) ? $model : self::AI_MODEL;

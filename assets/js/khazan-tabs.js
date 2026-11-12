@@ -774,6 +774,9 @@ ${siteExpanded ? `
           <span style="font-size:0.75rem; color:#64748b;">${m.list.length ? m.list.length + ' مدل در دسترس' : 'برای دیدن مدل‌های حساب خود، فهرست را دریافت کنید.'}</span>
         </div>
         ${m.error ? `<p style="font-size:0.75rem; color:#991b1b; margin:6px 0 0;">${escapeHtml(m.error)}</p>` : ''}
+        <label style="display:block; font-size:0.825rem; font-weight:500; margin:12px 0 4px;">میزان «تفکر» مدل (فقط مدل‌های GPT-5 و o):</label>
+        <select id="wila-ai-reasoning-input" class="wila-input" style="width:100%;">${[['low', 'کم (پیشنهادی؛ ارزان‌تر)'], ['minimal', 'حداقل (ارزان‌ترین)'], ['medium', 'متوسط'], ['high', 'زیاد (گران)'], ['default', 'پیش‌فرض ارائه‌دهنده']].map(([v, l]) => `<option value="${v}" ${(s.aiReasoning || 'low') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <p style="font-size:0.75rem; color:#64748b; margin:6px 0 0;">توکن‌های «تفکر» پنهان‌اند ولی مثل خروجی حساب می‌شوند. ستون «تفکر مدل» در جدول مصرف نشان می‌دهد چقدر بوده است.</p>
         <label style="display:block; font-size:0.825rem; font-weight:500; margin:12px 0 4px;">آدرس پایه API (سازگار با OpenAI):</label>
         <input type="text" id="wila-ai-base-url-input" class="wila-input" style="width:100%; text-align:left; direction:ltr;" value="${escapeHtml(s.aiBaseUrl || '')}" placeholder="${escapeHtml(s.aiDefaultBaseUrl || 'https://api.avalai.ir/v1')}" />
         <p style="font-size:0.75rem; color:#64748b; margin:6px 0 0;">برای استفاده از AvalAI خالی بگذارید. برای تولید محتوای فارسی طولانی مدل‌های توانمندتر (سطح mini به بالا) نتیجه بهتری می‌دهند.</p>`;
