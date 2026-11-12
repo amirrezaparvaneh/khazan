@@ -124,7 +124,7 @@ final class ContentAudit {
         if (!$m['keyword_in_first_words']) $f['keyword_not_in_first'] = "کلمه اصلی در {$std['keyword_in_first']} کلمه اول نیامده است.";
         if ($m['h1'] > 0) $f['h1_in_body'] = 'متن اصلی نباید H1 داشته باشد.';
         if ($m['h2'] < $std['h2_min']) $f['h2_few'] = "تعداد H2 برابر {$m['h2']} است؛ حداقل {$std['h2_min']} لازم است.";
-        if ($m['keyword_in_headings'] < 1) $f['keyword_not_in_heading'] = 'کلمه اصلی در هیچ زیرعنوانی نیست.';
+        if ($m['keyword_in_h2'] < 1) $f['keyword_not_in_heading'] = 'کلمه اصلی در هیچ H2 نیست؛ دست‌کم یک H2 باید کلمه اصلی را داشته باشد.';
         if ($m['keyword_in_h2'] > $std['h2_keyword_max']) $f['keyword_h2_many'] = "کلمه اصلی در {$m['keyword_in_h2']} عنوان H2 آمده؛ حداکثر {$std['h2_keyword_max']}.";
         if ($m['max_section_words'] > $std['section_words_max']) $f['section_long'] = "یک بخش {$m['max_section_words']} کلمه بدون زیرعنوان دارد؛ حداکثر {$std['section_words_max']}.";
         if ($kind !== Settings::KIND_PRODUCT && $m['tables'] < 1) $f['table_missing'] = 'جدول مقایسه یا راهنمای انتخاب در متن نیست.';
