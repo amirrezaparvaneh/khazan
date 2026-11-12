@@ -101,6 +101,8 @@ final class ContentParser {
             // the closing call to action carries no links: links appended after it move into the body
             $evicted = \Khazan\Services\Links\LinkSpreader::evict_closing($content, $host);
             $content = \Khazan\Services\Links\LinkSpreader::spread($evicted['html'], $host);
+            $keep = array();
+            foreach ($plan as $row) if (is_array($row) && !empty($row['url']) && isset($row['type']) && $row['type'] === 'category') $keep[] = $row['url'];
             // planned links the model left out are written into link-free paragraphs instead of being lost
             $links['missing'] = array_merge($links['missing'], $evicted['links']);
             if ($links['missing']) {
@@ -108,6 +110,8 @@ final class ContentParser {
                 $content = $placed['html'];
                 $links['missing'] = $placed['missing'];
             }
+            // two links closer than the standard gap are separated (category links stay)
+            $content = \Khazan\Services\Links\LinkSpreader::separate($content, $host, $keep, (int) \Khazan\Services\Content\SeoStandards::get('links_min_gap_words'));
         }
 
         $title = sanitize_text_field($seo_title ?: $params['h1_title']);
