@@ -33,5 +33,10 @@ preg_match_all('~([^.]*<a href="https://x.ir/[ml]">[^.]*\.)~u', $r['html'], $sen
 check(count($sent[1]) === 2 && $sent[1][0] !== str_replace('مارلو', 'لارا', $sent[1][1]), 'two placed links use different sentences');
 $r2 = S::place("<p>$long $a</p><p>$long $c</p><p>$long</p>", array(array('url' => '/q', 'anchor' => 'ق')), 'x.ir');
 check(count($r2['missing']) === 1, 'no free paragraph: the link is reported as still missing');
+$faq = "<p>$long</p><h2>جنس</h2><p>$long $a</p><p>$long</p><h2>سوالات متداول</h2><h3>س؟</h3><p>جواب $b</p><p>فراخوان خرید.</p><p>گزینه‌های بیشتر: $c و <a href=\"https://x.ir/a\">لارا دوباره</a></p>";
+$e = S::evict_closing($faq, 'x.ir');
+check(substr_count($e['html'], '<a ') === 2, 'links after the last FAQ answer are unwrapped (FAQ answer and body links stay)');
+check(count($e['links']) === 1 && $e['links'][0]['url'] === 'https://x.ir/c' && strpos($e['html'], 'گزینه‌های بیشتر: استلا و') !== false, 'only a link that would be lost is handed back, its words stay');
+check(S::evict_closing("<p>$long $a</p>", 'x.ir')['links'] === array(), 'no FAQ heading: nothing evicted');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

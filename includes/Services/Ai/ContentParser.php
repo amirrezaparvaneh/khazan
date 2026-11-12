@@ -98,8 +98,11 @@ final class ContentParser {
         $content = \Khazan\Services\Content\ContentGuard::enforce_paragraphs($links['html']);
         // one internal link per paragraph: extra links move to link-free paragraphs elsewhere in the body
         if ($kind === Settings::KIND_PRODUCT) {
-            $content = \Khazan\Services\Links\LinkSpreader::spread($content, $host);
+            // the closing call to action carries no links: links appended after it move into the body
+            $evicted = \Khazan\Services\Links\LinkSpreader::evict_closing($content, $host);
+            $content = \Khazan\Services\Links\LinkSpreader::spread($evicted['html'], $host);
             // planned links the model left out are written into link-free paragraphs instead of being lost
+            $links['missing'] = array_merge($links['missing'], $evicted['links']);
             if ($links['missing']) {
                 $placed = \Khazan\Services\Links\LinkSpreader::place($content, $links['missing'], $host);
                 $content = $placed['html'];
