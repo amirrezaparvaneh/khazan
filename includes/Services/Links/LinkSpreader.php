@@ -54,14 +54,38 @@ class LinkSpreader {
         if ($end === false) return array('html' => $html, 'links' => array());
         $head = substr($html, 0, $end + 4); $tail = substr($html, $end + 4);
         $links = array();
-        $tail = preg_replace_callback('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', function ($m) use (&$links, $home_host) {
-            $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
-            $h = strtolower((string) parse_url($href, PHP_URL_HOST));
-            $internal = $href !== '' && $href[0] !== '#' && ($h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host)));
-            if (!$internal) return $m[0];
-            $links[] = array('url' => $href, 'anchor' => trim(strip_tags($m[3])));
-            return $m[3];
+        // a short paragraph left behind the closing call to action that only points to other pages goes away with its links
+        $tail = preg_replace_callback('~<p\b[^>]*>.*?</p>\s*~is', function ($pm) use (&$links, $home_host) {
+            if (!preg_match_all('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is', $pm[0], $am, PREG_SET_ORDER)) return $pm[0];
+            $words = count(preg_split('/\s+/u', trim(html_entity_decode(strip_tags($pm[0]), ENT_QUOTES, 'UTF-8')), -1, PREG_SPLIT_NO_EMPTY));
+            if ($words > 40) return $pm[0];
+            $rows = array();
+            foreach ($am as $m) {
+                $href = trim(html_entity_decode($m[2], ENT_QUOTES, 'UTF-8'));
+                $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+                $internal = $href !== '' && $href[0] !== '#' && ($h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host)));
+                if (!$internal) return $pm[0];
+                $rows[] = array('url' => $href, 'anchor' => trim(strip_tags($m[3])));
+            }
+            foreach ($rows as $r) $links[] = $r;
+            return '';
         }, $tail);
+        $anchor_re = '~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is';
+        for ($guard = 0; $guard < 40; $guard++) {
+            $found = null;
+            if (preg_match_all($anchor_re, $tail, $mm, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
+                foreach ($mm as $m) {
+                    $href = trim(html_entity_decode($m[2][0], ENT_QUOTES, 'UTF-8'));
+                    $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+                    $internal = $href !== '' && $href[0] !== '#' && ($h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host)));
+                    if ($internal) { $found = array($m, $href); break; }
+                }
+            }
+            if ($found === null) break;
+            list($m, $href) = $found;
+            $links[] = array('url' => $href, 'anchor' => trim(strip_tags($m[3][0])));
+            list($tail) = self::detach_at($tail, $m[0][1], strlen($m[0][0]));
+        }
         // links that are still in the body stay there; only the ones that would be lost are handed back
         $kept = array();
         foreach ($links as $l) {
@@ -109,13 +133,15 @@ class LinkSpreader {
                 if ($move !== null) break;
             }
             if ($move === null) return $html;
-            $seen = 0; $moved = null;
-            $without = preg_replace_callback($anchor, function ($m) use (&$seen, &$moved, $move, $is_internal) {
-                if (!$is_internal($m[2])) return $m[0];
-                if ($seen++ !== $move) return $m[0];
-                $moved = $m[0];
-                return $m[3];
-            }, $html);
+            $moved = null; $without = $html; $seen = 0;
+            if (preg_match_all($anchor, $html, $am, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
+                foreach ($am as $m) {
+                    if (!$is_internal($m[2][0])) continue;
+                    if ($seen++ !== $move) continue;
+                    list($without, $moved) = self::detach_at($html, $m[0][1], strlen($m[0][0]));
+                    break;
+                }
+            }
             if ($moved === null) return $html;
             $placed = self::run($without, $home_host, $moved);
             if ($placed === $without) return $html;
@@ -186,14 +212,16 @@ class LinkSpreader {
             while ($links[$i] > 1) {
                 $best = $pick();
                 if ($best === null) break;
-                // unwrap the last internal link of the crowded paragraph, keep its words
+                // take the last internal link out of the crowded paragraph (a pure mention sentence goes with it)
                 $moved = null; $seen = 0; $total = $links[$i];
-                $parts[$i] = preg_replace_callback($anchor, function ($m) use (&$moved, &$seen, $total, $internal) {
-                    if (!$internal($m[2])) return $m[0];
-                    if (++$seen < $total) return $m[0];
-                    $moved = $m[0];
-                    return $m[3];
-                }, $parts[$i]);
+                if (preg_match_all($anchor, $parts[$i], $am, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
+                    foreach ($am as $m) {
+                        if (!$internal($m[2][0])) continue;
+                        if (++$seen < $total) continue;
+                        list($parts[$i], $moved) = self::detach_at($parts[$i], $m[0][1], strlen($m[0][0]));
+                        break;
+                    }
+                }
                 if ($moved === null) break;
                 $sentence = sprintf(self::TEMPLATES[$used++ % count(self::TEMPLATES)], $moved);
                 $parts[$best] = preg_replace('~\s*</p>\s*$~i', ' ' . $sentence . '</p>', $parts[$best], 1);
@@ -201,6 +229,44 @@ class LinkSpreader {
             }
         }
         return implode('', $parts);
+    }
+
+    /**
+     * Takes the link at byte offset $off (length $len) out of its place. A short sentence that only exists to mention
+     * the link (the template sentences, "see X") is removed together with it, so moving a link never leaves a second,
+     * unlinked mention behind; in any other place only the tag is dropped and the words stay.
+     *
+     * @return array{0:string,1:string} new html, the removed anchor tag
+     */
+    private static function detach_at($html, $off, $len) {
+        $tag   = substr($html, $off, $len);
+        $words = function ($t) { return count(preg_split('/\s+/u', trim(html_entity_decode(strip_tags($t), ENT_QUOTES, 'UTF-8')), -1, PREG_SPLIT_NO_EMPTY)); };
+        $plain = substr($html, 0, $off) . strip_tags($tag) . substr($html, $off + $len);
+        $unwrapped = substr($html, 0, $off) . preg_replace('~^<a\b[^>]*>|</a>$~i', '', $tag) . substr($html, $off + $len);
+
+        $prefix = substr($html, 0, $off);
+        $block = null; $block_end = 0;
+        if (preg_match_all('~<(p|li|td|th|h[1-6])\b[^>]*>~i', $prefix, $bm, PREG_OFFSET_CAPTURE)) {
+            $last = end($bm[0]); $block = strtolower($bm[1][count($bm[1]) - 1][0]); $block_end = $last[1] + strlen($last[0]);
+        }
+        if ($block !== 'p') return array($unwrapped, $tag);
+        $start = $block_end;
+        if (preg_match_all('~[.!?؟…]+(?:\s|&nbsp;)+~u', $prefix, $sm, PREG_OFFSET_CAPTURE)) {
+            $last = end($sm[0]);
+            if ($last[1] + strlen($last[0]) > $start) $start = $last[1] + strlen($last[0]);
+        }
+        $after = substr($html, $off + $len);
+        $close = stripos($after, '</p>');
+        $in_p = $close === false ? $after : substr($after, 0, $close);
+        $end = $off + $len + strlen($in_p);
+        if (preg_match('~^.*?[.!?؟…]+\s*~su', $in_p, $em)) $end = $off + $len + strlen($em[0]);
+        $sentence = substr($html, $start, $end - $start);
+        if (substr_count($sentence, '<a ') !== 1 || $words($sentence) > $words($tag) + 10) return array($unwrapped, $tag);
+
+        $out = substr($html, 0, $start) . substr($html, $end);
+        $out = preg_replace('~\s+</p>~', '</p>', $out);
+        $out = preg_replace('~<p\b[^>]*>\s*</p>\s*~i', '', $out);
+        return array($out, $tag);
     }
 
     private static function trim_slash($url) {
