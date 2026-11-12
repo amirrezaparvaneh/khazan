@@ -266,6 +266,17 @@ check(!in_array(4, $ids, true), 'a men\'s product never links to a women\'s prod
 check(!in_array(5, $ids, true) && count($ids) === 2, 'enough same-category products: no link goes to another category');
 $ids = array_column($d->plan(5, '', array(), 2)['related'], 'id');
 check(!in_array(4, $ids, true) && count($ids) === 2, 'tiny category: unrelated products only fill the gap, still never the other gender');
+$c = new FakeCatalog();
+$c->addCategory(10, 'Women'); $c->addCategory(11, 'Gloves', 10); $c->addCategory(12, 'Jackets', 10);
+$c->addProduct(1, 'دستکش زنانه الف', array(11), 11);
+$c->addProduct(2, 'دستکش زنانه ب', array(11), 11);
+$c->addProduct(3, 'کاپشن زنانه ج', array(12), 12);
+$c->addProduct(4, 'کاپشن زنانه د', array(12), 12);
+$c->db_inbound = array(2 => 9, 3 => 0, 4 => 0);
+$d = new SmartLinkDistributor($c, new InMemoryAssignmentLedger());
+check(array_column($d->plan(1, '', array(), 1)['related'], 'id') === array(2), 'a same-category product wins over an unlinked product of a sibling category, however many links it already has');
+$two = array_column($d->plan(1, '', array(), 2)['related'], 'id');
+check($two[0] === 2 && count($two) === 2, 'the sibling category only fills the slots the own category cannot');
 check(SmartLinkDistributor::gender_of('بوت چرم زنانه') === 'f' && SmartLinkDistributor::gender_of('کفش بچگانه') === 'k' && SmartLinkDistributor::gender_of('کیف') === '', 'gender_of recognises زنانه / بچگانه / none');
 
 echo "11. GlobalLinkPool::shortlist\n";

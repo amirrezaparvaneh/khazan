@@ -206,7 +206,14 @@ final class SmartLinkDistributor {
             $candidates[$id]['load'] = $candidates[$id]['inbound'] === 0 ? -1.0 : $candidates[$id]['inbound'] / self::value_weight(isset($impressions[$id]) ? $impressions[$id] : 0);
         }
 
+        // relevance tiers come first: same category (score >= 1), then only a shared ancestor or a similar title, then the rest.
+        // The balancing below only orders pages inside a tier, so a small category is never padded with unrelated pages
+        // (a glove page linking to jackets) while a related page is still available.
+        foreach ($candidates as $id => $candidate) {
+            $candidates[$id]['tier'] = $candidate['score'] >= 1 ? 0 : ($candidate['score'] > 0 ? 1 : 2);
+        }
         usort($candidates, function ($a, $b) {
+            if ($a['tier'] !== $b['tier']) return $a['tier'] < $b['tier'] ? -1 : 1;
             if (abs($a['load'] - $b['load']) > 1e-9) return $a['load'] < $b['load'] ? -1 : 1;
             if ($a['pending'] !== $b['pending']) return $a['pending'] < $b['pending'] ? -1 : 1;
             if ($a['score'] !== $b['score']) return $a['score'] > $b['score'] ? -1 : 1;
