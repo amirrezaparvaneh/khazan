@@ -51,6 +51,7 @@ final class HtmlSanitizer {
      * and a link left alone at the end of a paragraph (no sentence around it) is wrapped into a sentence.
      */
     public static function polish_product($html) {
+        $html = preg_replace('~چرم\s+(?:طبیعی\s+و\s+چرم\s+تبریز|تبریز\s+و\s+چرم\s+طبیعی)~u', 'چرم طبیعی تبریز', $html);
         $html = preg_replace('~چرم\s+تبریز\s+با\s+(?:پایه|منشأ|منشا)\s+(?:چرم\s+)?گاوی~u', 'چرم گاوی تبریز', $html);
         $html = preg_replace('~\s+با\s+(?:پایه|منشأ|منشا)\s+(?=(?:چرم\s+)?(?:گاوی|طبیعی))~u', ' ', $html);
         $html = preg_replace('~\s+([،؛])~u', '$1', $html);
