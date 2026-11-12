@@ -174,6 +174,7 @@
       const sleep = ms => new Promise(r => setTimeout(r, ms));
       // انتظار قابل‌قطع با دکمه توقف
       const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
+      const isFatal = r => r && ['ai_no_credit', 'ai_invalid_key', 'ai_forbidden', 'missing_api_key'].includes(r.code);
       const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
       for (let n = 0; n < queue.length; n++) {
         const i = queue[n];
@@ -185,7 +186,7 @@
           try {
             const r = await this.apiFetch('/bulk/process', { method: 'POST', body: JSON.stringify({ product_id: row.match && row.match.matched ? row.match.product_id : 0, row, options: { mode: b.mode, inject_seo: b.injectSeo, auto_links: b.autoLinks, create_missing: b.createMissing, run_id: runId, queue_ids: queueProductIds } }) });
             if (!r.success) {
-              const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err;
+              const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); err.fatal = isFatal(r); throw err;
             }
             if (r.created) row.match = { matched: true, via: 'created', product_id: r.product_id, title: r.title, url: r.url };
             row.run = 'done'; row.editUrl = r.edit_url; row.match.generated = r.generated;
@@ -200,8 +201,9 @@
               await wait(delay);
               continue;
             }
-            row.run = 'error'; row.error = e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message;
+            row.run = 'error'; row.error = e.message;
             this.bulkLog('err', `خطا در ${this.bulkRowTitle(row)}: ${row.error}`);
+            if (e.fatal) { b.stopRequested = true; this.bulkLog('err', 'ادامه فایده‌ای ندارد؛ پردازش گروهی متوقف شد. پس از رفع مشکل بالا، موارد باقی‌مانده را دوباره اجرا کنید.'); }
             break;
           }
         }

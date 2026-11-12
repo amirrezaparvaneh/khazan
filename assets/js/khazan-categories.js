@@ -96,6 +96,7 @@
       this.render();
       const sleep = ms => new Promise(r => setTimeout(r, ms));
       const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
+      const isFatal = r => r && ['ai_no_credit', 'ai_invalid_key', 'ai_forbidden', 'missing_api_key'].includes(r.code);
       const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
       for (let n = 0; n < queue.length; n++) {
         const item = queue[n];
@@ -106,7 +107,7 @@
         for (let attempt = 0; attempt <= 2; attempt++) {
           try {
             const r = await this.apiFetch('/bulk/process-category', { method: 'POST', body: JSON.stringify({ term_id: item.id, options: { inject_seo: c.injectSeo, auto_links: c.autoLinks, run_id: runId, queue_ids: queueIds } }) });
-            if (!r.success) { const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); throw err; }
+            if (!r.success) { const err = new Error(r.message || 'تولید انجام نشد.'); err.temporary = isTemporary(r); err.fatal = isFatal(r); throw err; }
             c.run[item.id] = { state: 'done', editUrl: r.edit_url };
             Object.assign(item, { has_description: true, generated: r.generated, word_count: Number(r.word_count || item.word_count) });
             if (c.injectSeo) { item.keyword_status = 'ok'; item.seo = Object.assign({}, item.seo, { focuskw: item.title }); }
@@ -121,8 +122,9 @@
               await wait(delay);
               continue;
             }
-            c.run[item.id] = { state: 'error', error: e instanceof SyntaxError ? 'پاسخ نامعتبر سرور (احتمالاً Timeout)' : e.message };
+            c.run[item.id] = { state: 'error', error: e.message };
             this.bulkLog('err', `خطا در ${item.title}: ${c.run[item.id].error}`);
+            if (e.fatal) { b.stopRequested = true; this.bulkLog('err', 'ادامه فایده‌ای ندارد؛ پردازش گروهی متوقف شد. پس از رفع مشکل بالا، موارد باقی‌مانده را دوباره اجرا کنید.'); }
             break;
           }
         }
