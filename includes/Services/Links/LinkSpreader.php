@@ -150,6 +150,33 @@ class LinkSpreader {
         return $html;
     }
 
+    /**
+     * A URL is linked once: later links to an already linked internal URL are taken out (a pure mention sentence goes
+     * with them, otherwise only the tag is dropped). Links to $self_url are always taken out.
+     */
+    public static function dedupe($html, $home_host = '', $self_url = '') {
+        $html = (string) $html;
+        $home_host = strtolower((string) $home_host);
+        $self = $self_url !== '' ? self::trim_slash(html_entity_decode((string) $self_url, ENT_QUOTES, 'UTF-8')) : '';
+        $anchor = '~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is';
+        for ($guard = 0; $guard < 60; $guard++) {
+            if (!preg_match_all($anchor, $html, $am, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) return $html;
+            $seen = array(); $hit = null;
+            foreach ($am as $m) {
+                $href = trim(html_entity_decode($m[2][0], ENT_QUOTES, 'UTF-8'));
+                if ($href === '' || $href[0] === '#') continue;
+                $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+                if (!($h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host)))) continue;
+                $key = self::trim_slash(preg_replace('~#.*$~', '', $href));
+                if (($self !== '' && $key === $self) || isset($seen[$key])) { $hit = $m; break; }
+                $seen[$key] = true;
+            }
+            if ($hit === null) return $html;
+            list($html) = self::detach_at($html, $hit[0][1], strlen($hit[0][0]));
+        }
+        return $html;
+    }
+
     public static function spread($html, $home_host = '') {
         return self::run($html, $home_host, null);
     }
