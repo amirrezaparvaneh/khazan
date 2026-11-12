@@ -70,6 +70,60 @@ class LinkSpreader {
         return array('html' => $head . $tail, 'links' => $kept);
     }
 
+    /**
+     * Two internal links closer than $min_gap words are separated: the non-protected one is unwrapped (its words stay) and
+     * written into the free paragraph farthest from the other links. Category links ($keep) stay where they are. Stops when
+     * no free paragraph is left; a link is never dropped.
+     *
+     * @param string[] $keep urls that must not move
+     */
+    public static function separate($html, $home_host = '', array $keep = array(), $min_gap = 70) {
+        $html = (string) $html;
+        $home_host = strtolower((string) $home_host);
+        $keep = array_map(function ($u) { return self::trim_slash(html_entity_decode((string) $u, ENT_QUOTES, 'UTF-8')); }, $keep);
+        $anchor = '~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is';
+        $is_internal = function ($href) use ($home_host) {
+            $href = trim(html_entity_decode($href, ENT_QUOTES, 'UTF-8'));
+            if ($href === '' || $href[0] === '#') return false;
+            $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+            return $h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host));
+        };
+        for ($round = 0; $round < 6; $round++) {
+            // mark every internal link, strip the tags and read the word distance between consecutive markers
+            $n = 0; $urls = array();
+            $marked = preg_replace_callback($anchor, function ($m) use (&$n, &$urls, $is_internal) {
+                if (!$is_internal($m[2])) return $m[3];
+                $urls[$n] = self::trim_slash(html_entity_decode(trim($m[2]), ENT_QUOTES, 'UTF-8'));
+                return ' ' . "\x01" . $n++ . ' ';
+            }, $html);
+            $text = html_entity_decode(strip_tags(preg_replace('~</(?:p|li|h[1-6]|div|tr)>~i', ' ', $marked)), ENT_QUOTES, 'UTF-8');
+            $words = preg_split('/\s+/u', trim($text), -1, PREG_SPLIT_NO_EMPTY);
+            $at = array();
+            foreach ($words as $i => $w) if (preg_match('/^\x01(\d+)$/', $w, $mm)) $at[(int) $mm[1]] = $i;
+            $move = null;
+            for ($k = 1; $k < $n; $k++) {
+                if (!isset($at[$k], $at[$k - 1]) || $at[$k] - $at[$k - 1] - 1 >= $min_gap) continue;
+                $later_free = !in_array($urls[$k], $keep, true);
+                $earlier_free = !in_array($urls[$k - 1], $keep, true);
+                if ($later_free) $move = $k; elseif ($earlier_free) $move = $k - 1;
+                if ($move !== null) break;
+            }
+            if ($move === null) return $html;
+            $seen = 0; $moved = null;
+            $without = preg_replace_callback($anchor, function ($m) use (&$seen, &$moved, $move, $is_internal) {
+                if (!$is_internal($m[2])) return $m[0];
+                if ($seen++ !== $move) return $m[0];
+                $moved = $m[0];
+                return $m[3];
+            }, $html);
+            if ($moved === null) return $html;
+            $placed = self::run($without, $home_host, $moved);
+            if ($placed === $without) return $html;
+            $html = $placed;
+        }
+        return $html;
+    }
+
     public static function spread($html, $home_host = '') {
         return self::run($html, $home_host, null);
     }
@@ -147,5 +201,9 @@ class LinkSpreader {
             }
         }
         return implode('', $parts);
+    }
+
+    private static function trim_slash($url) {
+        return rtrim((string) $url, '/');
     }
 }
