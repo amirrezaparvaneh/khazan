@@ -156,7 +156,7 @@ final class BulkRowProcessor {
 
     private function build_params($product_id, array $row, array $context, array $internal_links) {
         $category = $product_id ? $this->targets->primary_category_name($product_id) : '';
-        $focus = \Khazan\Services\Seo\KeyphraseExtractor::optimal($row['focus_keyword'], $context['title'], $category);
+        $focus = $product_id ? $this->targets->product_focus($product_id, $row['focus_keyword'], $context['title']) : \Khazan\Services\Seo\KeyphraseExtractor::optimal($row['focus_keyword'], $context['title'], $category);
         return array(
             'content_kind'      => Settings::KIND_PRODUCT,
             'target_id'         => $product_id,

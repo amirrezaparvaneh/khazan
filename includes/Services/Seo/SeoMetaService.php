@@ -103,7 +103,8 @@ final class SeoMetaService {
      * متای پست: Yoast کلیدواژه اصلی و مترادف‌ها را جدا نگه می‌دارد، RankMath همه را در یک فهرست ویرگول‌دار می‌خواهد
      */
     public static function post_meta_map($seo) {
-        $focus = KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
+        // focuskw_exact: a keyphrase extended on purpose to tell sibling products apart is stored as it is
+        $focus = !empty($seo['focuskw_exact']) ? trim(preg_replace('/\s+/u', ' ', (string) $seo['focuskw'])) : KeyphraseExtractor::cap(trim((string) $seo['focuskw']));
         $synonyms = self::clean_synonyms($seo['synonyms'], $focus);
         $map = array(
             '_yoast_wpseo_title'           => SeoTitleGuard::strip_variables($seo['title']),

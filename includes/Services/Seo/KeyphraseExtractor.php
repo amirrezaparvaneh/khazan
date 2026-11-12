@@ -90,6 +90,49 @@ final class KeyphraseExtractor {
         return false;
     }
 
+    /**
+     * Two products must not share a focus keyphrase (Yoast: "keyphrase previously used"). When other product titles
+     * carry every word of $focus, the words of this title that tell it apart (variant, colour, material, code) are
+     * appended in title order - at most two, up to KEYPHRASE_UNIQUE_MAX_WORDS words in total.
+     *
+     * @param string[] $sibling_titles titles of the other products
+     */
+    public static function disambiguate($focus, $title, array $sibling_titles) {
+        $focus = trim(preg_replace('/\s+/u', ' ', (string) $focus));
+        $focus_keys = array_map(array(__CLASS__, 'key'), self::words($focus));
+        // siblings are compared on the keyphrase words that come from the title (a modifier added from the category is ignored)
+        $match_keys = array_values(array_intersect($focus_keys, array_map(array(__CLASS__, 'key'), self::words($title))));
+        if (count($match_keys) < 2) return $focus;
+        $siblings = array();
+        foreach ($sibling_titles as $t) {
+            $keys = array_map(array(__CLASS__, 'key'), self::words($t));
+            if (!array_diff($match_keys, $keys)) $siblings[] = $keys;
+        }
+        if (!$siblings) return $focus;
+
+        $skip = array_flip(array_map(array(__CLASS__, 'key'), array(Settings::KEYPHRASE_MODEL_MARKER, 'و', 'با', 'برای', 'از', 'در', 'به', 'کد', 'رنگ', 'طرح', 'سایز')));
+        $extra = array();
+        foreach (self::words($title) as $word) {
+            $k = self::key($word);
+            if ($k === '' || isset($skip[$k]) || in_array($k, $focus_keys, true) || isset($extra[$k])) continue;
+            $shared = 0;
+            foreach ($siblings as $keys) if (in_array($k, $keys, true)) $shared++;
+            if ($shared === count($siblings)) continue;   // every sibling has it too: it tells nothing apart
+            $extra[$k] = array('word' => $word, 'shared' => $shared);
+        }
+        if (!$extra) return $focus;
+
+        $room = max(0, Settings::KEYPHRASE_UNIQUE_MAX_WORDS - count($focus_keys));
+        $picked = array();
+        $left = $siblings;
+        foreach ($extra as $k => $row) {
+            if (count($picked) >= min(2, $room) || !$left) break;
+            $picked[] = $row['word'];
+            $left = array_values(array_filter($left, function ($keys) use ($k) { return in_array($k, $keys, true); }));
+        }
+        return $picked ? $focus . ' ' . implode(' ', $picked) : $focus;
+    }
+
     public static function is_valid($phrase) {
         $n = self::count_words($phrase);
         return $n >= 1 && $n <= Settings::KEYPHRASE_MAX_WORDS;
