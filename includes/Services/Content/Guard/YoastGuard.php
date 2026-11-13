@@ -23,6 +23,7 @@ final class YoastGuard {
         $keyword = trim((string) $keyword);
         if ($keyword === '') return self::soften_passive($html, $keyword);
         $html = self::ensure_subheadings($html, $keyword);
+        $html = self::raise_keyphrase($html, $keyword);
         $html = self::cap_keyphrase($html, $keyword);
         return self::soften_passive($html, $keyword);
     }
@@ -50,6 +51,36 @@ final class YoastGuard {
             $need--;
             return $m[1] . $new . $m[3];
         }, $html);
+    }
+
+    /**
+     * Yoast wants the keyphrase at least a few times per text: while it is below the recommended minimum, a body mention
+     * written as «این بوت / این مدل / این محصول» becomes the full keyphrase (headings and links stay, one per sentence).
+     */
+    public static function raise_keyphrase($html, $keyword) {
+        $type = self::type_word($keyword);
+        if ($type === '') return $html;
+        list($min) = YoastRules::keyphrase_bounds(YoastRules::word_count($html), $keyword);
+        $need = $min - YoastRules::keyphrase_count($html, $keyword);
+        if ($need <= 0) return $html;
+        $pattern = '~(?<![\p{L}\x{200c}])این\s+(?:' . preg_quote($type, '~') . '|محصول|مدل|کالا)(?![\p{L}\x{200c}])~u';
+        $tokens = preg_split('~(<[^>]+>)~', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+        $spots = array(); $skip = 0;
+        foreach ($tokens as $i => $token) {
+            if ($token[0] === '<') {
+                if (preg_match('~^<(?:a|h[1-6])\b~i', $token)) $skip++;
+                elseif (preg_match('~^</(?:a|h[1-6])>~i', $token)) $skip = max(0, $skip - 1);
+                continue;
+            }
+            if ($skip === 0 && preg_match($pattern, $token)) $spots[] = $i;
+        }
+        if (!$spots) return $html;
+        $take = min($need, count($spots));
+        for ($j = 0; $j < $take; $j++) {
+            $i = $spots[(int) floor(($j + 0.5) * count($spots) / $take)];
+            $tokens[$i] = preg_replace($pattern, $keyword, $tokens[$i], 1);
+        }
+        return implode('', $tokens);
     }
 
     /**

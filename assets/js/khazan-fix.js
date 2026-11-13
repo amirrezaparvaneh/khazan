@@ -80,7 +80,7 @@
         const r = await this.apiFetch(`/fix/ids?kind=${encodeURIComponent(f.kind)}`);
         ids = r.ids || [];
       } catch (e) { return this.toast('خطا: ' + e.message); }
-      Object.assign(b, { running: true, stop: false, done: 0, total: ids.length, changed: 0, failed: 0, ai, last: '' });
+      Object.assign(b, { running: true, stop: false, done: 0, total: ids.length, changed: 0, failed: 0, still: 0, aiError: '', lastError: '', ai, last: '' });
       this.render();
       for (const id of ids) {
         if (b.stop) break;
@@ -88,13 +88,20 @@
           const r = await this.apiFetch('/fix/run', { method: 'POST', body: JSON.stringify({ kind: f.kind, id, ai }) });
           if (!r.success) throw new Error(r.message || '');
           if (r.changed) b.changed++;
+          if (r.after > 0) b.still++;
+          if (r.ai_error && !b.aiError) b.aiError = r.ai_error;
           b.last = r.title || '';
-        } catch (e) { b.failed++; }
+        } catch (e) { b.failed++; b.lastError = e.message || ''; }
         b.done++;
         this.renderFixProgress();
       }
       b.running = false;
       this.toast(b.stop ? 'اجرای گروهی متوقف شد.' : `بررسی تمام شد: ${fa(b.changed)} صفحه اصلاح شد.`);
+      const notes = [];
+      if (b.still) notes.push(`${fa(b.still)} صفحه هنوز ایراد دارد؛ ایرادهای باقی‌مانده را جلوی هر محصول ببینید (با دکمه «بررسی و اصلاح» تکی هم می‌شود دوباره امتحان کرد).`);
+      if (b.aiError) notes.push('اصلاح با هوش مصنوعی انجام نشد: ' + b.aiError);
+      if (b.failed) notes.push(`${fa(b.failed)} صفحه ذخیره نشد${b.lastError ? ': ' + b.lastError : ''}.`);
+      b.summary = notes;
       this.loadFix();
     },
 
@@ -113,6 +120,7 @@
       return `<div id="khz-fix-progress" role="status" style="margin-top:12px">
         <div style="height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#16a34a;transition:width .2s"></div></div>
         <p style="font-size:.82rem;color:#475569;margin:6px 0 0">${fa(b.done)} از ${fa(b.total)} بررسی شد؛ ${fa(b.changed)} صفحه اصلاح شد${b.failed ? `، ${fa(b.failed)} خطا` : ''}${b.running && b.last ? ` — آخرین: ${escapeHtml(b.last)}` : ''}</p>
+        ${!b.running && b.summary && b.summary.length ? `<ul style="margin:8px 0 0;padding-inline-start:18px;font-size:.82rem;line-height:1.9;color:#92400e">${b.summary.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : ''}
         ${b.running ? '<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" id="khz-fix-stop" style="margin-top:6px">توقف</button>' : ''}
       </div>`;
     },
@@ -124,7 +132,7 @@
       const rows = d && d.items.length ? d.items.map(it => `
         <tr>
           <td><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>${it.focus ? `<div style="font-size:.75rem;color:#64748b">${escapeHtml(it.focus)}</div>` : ''}</td>
-          <td>${it.empty ? '<span class="wila-badge wila-badge-neutral">بدون محتوا</span>' : it.issues ? `<span class="wila-badge wila-badge-warning" title="${escapeHtml(it.issue_list.join('\n'))}">${fa(it.issues)} ایراد</span>` : '<span class="wila-badge wila-badge-success">سالم</span>'}</td>
+          <td>${it.empty ? '<span class="wila-badge wila-badge-neutral">بدون محتوا</span>' : it.issues ? `<span class="wila-badge wila-badge-warning" title="${escapeHtml(it.issue_list.join('\n'))}">${fa(it.issues)} ایراد</span><div style="font-size:.72rem;color:#92400e;margin-top:4px;max-width:340px;line-height:1.7">${escapeHtml(it.issue_list[0] || '')}${it.issues > 1 ? ` (و ${fa(it.issues - 1)} مورد دیگر)` : ''}</div>` : '<span class="wila-badge wila-badge-success">سالم</span>'}</td>
           <td style="white-space:nowrap">
             ${it.empty ? '' : `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-preview="${it.id}" ${f.previewBusy || b.running ? 'disabled' : ''}>بررسی و اصلاح</button>`}
             ${it.backup ? `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-restore="${it.id}" ${b.running ? 'disabled' : ''}>بازگردانی</button>` : ''}

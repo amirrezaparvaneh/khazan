@@ -47,5 +47,15 @@ $seg = F::segments('<p>جمله‌ای ساده بدون لینک که طولا�
 check($seg === array('جمله‌ای ساده بدون لینک که طولانی است.'), 'only plain blocks are offered to the AI');
 $patched = F::apply_patches('<p>جمله‌ای ساده بدون لینک که طولانی است.</p>', array(array('before' => 'جمله‌ای ساده بدون لینک که طولانی است.', 'after' => 'جمله تازه $1 بدون مشکل.')));
 check($patched === '<p>جمله تازه $1 بدون مشکل.</p>', 'patch applied literally');
+// density below the recommended minimum: «این کاپشن» mentions become the keyphrase
+$low = '<h2>جنس</h2><p>' . str_repeat('این متن برای پر کردن طول نوشته است و حرف تازه‌ای ندارد. ', 40) . 'این کاپشن راحت است. این مدل سبک است. این کاپشن گرم است.</p>';
+$before = Y::keyphrase_count($low, $kw);
+$raised = Khazan\Services\Content\Guard\YoastGuard::raise_keyphrase($low, $kw);
+check(Y::keyphrase_count($raised, $kw) > $before, 'low keyphrase count is raised from «این کاپشن» mentions');
+check(strpos(Khazan\Services\Content\Guard\YoastGuard::raise_keyphrase('<h2>این کاپشن</h2>' . $low, $kw), '<h2>این کاپشن</h2>') !== false, 'headings are never rewritten by the raise');
+$seg = F::segments('<h2>جنس و ساخت</h2><p>' . str_repeat('متن بلند ', 5) . '</p>', true);
+check(in_array('جنس و ساخت', $seg, true), 'headings join the AI segments when asked');
+check(!in_array('جنس و ساخت', F::segments('<h2>جنس و ساخت</h2><p>' . str_repeat('متن بلند ', 5) . '</p>'), true), 'and stay out by default');
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);
