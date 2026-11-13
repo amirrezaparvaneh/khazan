@@ -143,7 +143,8 @@ class LinkSpreader {
                 }
             }
             if ($moved === null) return $html;
-            $placed = self::run($without, $home_host, $moved);
+            $placed = self::place_far($without, $home_host, $moved, $min_gap);
+            if ($placed === null) $placed = self::run($without, $home_host, $moved);
             if ($placed === $without) return $html;
             $html = $placed;
         }
@@ -294,6 +295,60 @@ class LinkSpreader {
         $out = preg_replace('~\s+</p>~', '</p>', $out);
         $out = preg_replace('~<p\b[^>]*>\s*</p>\s*~i', '', $out);
         return array($out, $tag);
+    }
+
+    /**
+     * Writes a link sentence at the end of the link-free body paragraph that is the farthest (in words) from every other
+     * internal link; null when no paragraph is at least $min_gap words away (the caller falls back to run()).
+     */
+    private static function place_far($html, $home_host, $extra, $min_gap) {
+        $html = (string) $html;
+        $parts = preg_split('~(<p\b[^>]*>.*?</p>)~is', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if (!$parts || count($parts) < 5) return null;
+        $home_host = strtolower((string) $home_host);
+        $anchor = '~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1[^>]*>(.*?)</a>~is';
+        $internal = function ($href) use ($home_host) {
+            $href = trim(html_entity_decode($href, ENT_QUOTES, 'UTF-8'));
+            if ($href === '' || $href[0] === '#') return false;
+            $h = strtolower((string) parse_url($href, PHP_URL_HOST));
+            return $h === '' || ($home_host !== '' && ($h === $home_host || $h === 'www.' . $home_host));
+        };
+        $words = function ($t) { return count(preg_split('/\s+/u', trim(html_entity_decode(strip_tags((string) $t), ENT_QUOTES, 'UTF-8')), -1, PREG_SPLIT_NO_EMPTY)); };
+        $pos = 0; $faq = false; $para = array(); $link_at = array(); $last_p = null;
+        foreach ($parts as $i => $part) {
+            if ($i % 2 === 0) {
+                if (preg_match('~<h2\b[^>]*>[^<]*(?:سوال|سؤال|پرسش)[^<]*</h2>~iu', $part)) $faq = true;
+                $pos += $words(preg_replace('~</(?:li|h[1-6]|div|tr)>~i', ' ', $part));
+                continue;
+            }
+            $len = $words($part);
+            $has = false;
+            if (preg_match_all($anchor, $part, $am, PREG_OFFSET_CAPTURE | PREG_SET_ORDER)) {
+                foreach ($am as $m) {
+                    if (!$internal($m[2][0])) continue;
+                    $has = true;
+                    $link_at[] = $pos + $words(substr($part, 0, $m[0][1]));
+                }
+            }
+            $para[$i] = array('end' => $pos + $len, 'has' => $has, 'faq' => $faq, 'len' => mb_strlen(trim(strip_tags($part))));
+            $last_p = $i;
+            $pos += $len;
+        }
+        $best = null; $best_d = -1;
+        foreach ($para as $i => $p) {
+            if ($p['has'] || $p['faq'] || $i === $last_p || $p['len'] < 60) continue;
+            $d = PHP_INT_MAX;
+            foreach ($link_at as $at) $d = min($d, abs($p['end'] - $at));
+            if ($d > $best_d) { $best_d = $d; $best = $i; }
+        }
+        if ($best === null || $best_d < $min_gap) return null;
+        $used = 0;
+        foreach (self::TEMPLATES as $t) {
+            $tail = trim(preg_replace('~^.*%s~u', '', $t));
+            if ($tail !== '' && $tail !== '.') $used += substr_count($html, preg_replace('~\.$~u', '', $tail) . '.');
+        }
+        $parts[$best] = preg_replace('~\s*</p>\s*$~i', ' ' . sprintf(self::TEMPLATES[$used % count(self::TEMPLATES)], $extra) . '</p>', $parts[$best], 1);
+        return implode('', $parts);
     }
 
     private static function trim_slash($url) {

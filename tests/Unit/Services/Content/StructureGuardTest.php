@@ -38,5 +38,19 @@ $r = F::fix($html, array('kind' => 'product', 'focus' => $kw, 'home_host' => 'a.
 $fa = A::analyze($r['html'], $kw, $opts)['failures'];
 check(!isset($fa['keyword_not_in_first']) && !isset($fa['keyword_not_in_heading']) && !isset($fa['section_long']), 'the fixer applies the structure guard');
 check(Khazan\Services\Seo\YoastRules::keyphrase_count($r['html'], $kw) > Khazan\Services\Seo\YoastRules::keyphrase_count($html, $kw), 'the keyphrase count goes up from the available spots');
+
+// keyphrase still too rare: neutral closing sentences with the keyphrase are added to body paragraphs
+$para = function ($n) use ($fill) { return '<p>' . $fill($n) . '.</p>'; };
+$rare = '<h2>الف</h2>' . $para(90) . $para(90) . '<h2>ب</h2>' . $para(90) . $para(90) . $para(90) . '<h2>سوالات متداول</h2><h3>q</h3>' . $para(40) . $para(30);
+$g = 'Khazan\\Services\\Content\\Guard\\YoastGuard';
+$boosted = $g::boost_keyphrase($rare, $kw);
+check(Khazan\Services\Seo\YoastRules::keyphrase_count($boosted, $kw) > Khazan\Services\Seo\YoastRules::keyphrase_count($rare, $kw), 'boost adds keyphrase sentences');
+check(substr_count($boosted, '<h2>سوالات متداول</h2><h3>q</h3><p>' . $fill(40) . '.</p>') === 1, 'the FAQ answers are untouched');
+$fl = array('https://a.test/c/');
+$lk = function ($u) { return '<a href="https://a.test/' . $u . '/">محصول ' . $u . '</a>'; };
+$close = '<p>' . $fill(60) . ' ' . $lk('p1') . ' ' . $fill(5) . '.</p><h2>الف</h2><p>' . $fill(30) . ' ' . $lk('p2') . ' ' . $fill(20) . '.</p>' . $para(80) . $para(80) . $para(80) . '<h2>ب</h2>' . $para(80) . $para(80) . '<h2>سوالات متداول</h2><h3>q</h3>' . $para(40) . $para(30);
+check(A::min_link_gap($close, 'a.test') < 70, 'the sample has two links closer than 70 words');
+$apart = Khazan\Services\Links\LinkSpreader::separate($close, 'a.test', array(), 70);
+check(A::min_link_gap($apart, 'a.test') >= 70, 'the links are moved at least 70 words apart');
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

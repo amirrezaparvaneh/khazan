@@ -57,6 +57,7 @@ final class ContentFixer {
                 $step('ساختار: کلمه کلیدی در ۱۰۰ کلمه اول و یک H2، زیرعنوان برای بخش‌های طولانی', StructureGuard::apply($html, $focus));
                 $step('کلمه کلیدی در زیرعنوان‌ها', YoastGuard::ensure_subheadings($html, $focus));
                 $step('رساندن تعداد کلمه کلیدی به حد پیشنهادی Yoast', YoastGuard::raise_keyphrase($html, $focus));
+                $step('افزودن جمله‌های کوتاه با نام محصول برای رسیدن به حد پیشنهادی Yoast', YoastGuard::boost_keyphrase($html, $focus));
                 $step('تراکم کلمه کلیدی در حد مجاز Yoast', YoastGuard::cap_keyphrase($html, $focus));
             }
         }
