@@ -30,6 +30,7 @@ final class ContentFixService {
     const DRAFT    = 'khazan_fix_draft_';
     const PER_PAGE = 20;
     const AI_MEMO  = '_khazan_fix_ai_hash';
+    const AI_PROMPT = 'v2';   // bump when the AI prompt changes: texts judged under an older prompt are sent again
 
     /** Audit failures a text patch can fix; link counts, spacing, length and meta never go to the model (it would only cost credit). */
     const AI_FIXABLE = array('density_low', 'density_high', 'passive_high', 'subheading_keyword_low', 'subheading_keyword_high', 'keyword_not_in_first', 'keyword_not_in_heading', 'keyword_h2_many', 'section_long');
@@ -172,7 +173,7 @@ final class ContentFixService {
             return $result;
         }
         // the same final text was already sent once: asking again would only spend credit
-        $memo = md5($result['html']);
+        $memo = md5(self::AI_PROMPT . $result['html']);
         if ($round === 0 && $instructions === '' && $this->ai_memo($page) === $memo) {
             $result['ai_note'] = 'این متن قبلاً با هوش مصنوعی بررسی شده و تغییری نکرده است، پس دوباره ارسال نشد.';
             return $result;
@@ -202,7 +203,7 @@ final class ContentFixService {
         $result['after'] = $after;
         $result['ai_patches'] = count($ai['patches']);
         $result['changes'][] = 'بازنویسی ' . count($ai['patches']) . ' جمله یا بند معیوب با هوش مصنوعی';
-        $this->ai_memo($page, md5($again['html']));
+        $this->ai_memo($page, md5(self::AI_PROMPT . $again['html']));
         // a rewrite can leave other text failures: one more round on the new text, then stop (credit)
         if ($round < 1 && array_intersect_key((array) $result['after'], array_flip(self::AI_FIXABLE))) {
             $more = $this->ai_pass($page, $result, '', $round + 1);
