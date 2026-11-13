@@ -55,6 +55,7 @@
       if (rs && rs.state === 'error') return `<span class="wila-badge wila-badge-danger">خطا</span>${note(rs.message, '#991b1b')}`;
       let out = '';
       if (it.empty) out = '<span class="wila-badge wila-badge-neutral">بدون محتوا</span>';
+      else if (it.thin) out = '<span class="wila-badge wila-badge-neutral">متن بسیار کوتاه</span><div style="font-size:.74rem;color:#475569;margin-top:4px;max-width:420px;line-height:1.7">برای این مورد اصلاح فایده ندارد؛ از «تولید انبوه» محتوای کامل بسازید.</div>';
       else if (it.issues) out = `<span class="wila-badge wila-badge-warning">${fa(it.issues)} ایراد</span><ul style="margin:4px 0 0;padding-inline-start:16px;font-size:.74rem;color:#92400e;line-height:1.7;max-width:420px">${(it.issue_list || []).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
       else out = '<span class="wila-badge wila-badge-success">سالم</span>';
       if (rs && rs.state === 'done') {
@@ -193,7 +194,7 @@
           <td><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>${it.focus ? `<div style="font-size:.75rem;color:#64748b">${escapeHtml(it.focus)}</div>` : ''}</td>
           <td data-fix-status="${it.id}">${this.fixStatusHtml(it)}</td>
           <td style="white-space:nowrap">
-            ${it.empty ? '' : `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-preview="${it.id}" ${f.previewBusy || b.running ? 'disabled' : ''}>بررسی و اصلاح</button>`}
+            ${it.empty || it.thin ? '' : `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-preview="${it.id}" ${f.previewBusy || b.running ? 'disabled' : ''}>بررسی و اصلاح</button>`}
             ${it.backup ? `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-restore="${it.id}" ${b.running ? 'disabled' : ''}>بازگردانی</button>` : ''}
           </td>
         </tr>
