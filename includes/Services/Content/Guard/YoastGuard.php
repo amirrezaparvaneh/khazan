@@ -24,6 +24,7 @@ final class YoastGuard {
         if ($keyword === '') return self::soften_passive($html, $keyword);
         $html = self::ensure_subheadings($html, $keyword);
         $html = self::raise_keyphrase($html, $keyword);
+        $html = self::boost_keyphrase($html, $keyword);
         $html = self::cap_keyphrase($html, $keyword);
         return self::soften_passive($html, $keyword);
     }
@@ -95,6 +96,49 @@ final class YoastGuard {
             $tokens[$c[0]] = substr($tokens[$c[0]], 0, $c[1]) . $keyword . substr($tokens[$c[0]], $c[1] + $c[2]);
         }
         return implode('', $tokens);
+    }
+
+    /** Neutral closing sentences that name the product (no claim about it); used only when mentions are still too few. */
+    const BOOST_SENTENCES = array(
+        'پیش از خرید، جزئیات %s را یک بار دیگر مرور کنید.',
+        'برای انتخاب نهایی، ویژگی‌های %s را با نیاز خودتان مقایسه کنید.',
+        'اگر به این سبک علاقه دارید، %s را در نظر بگیرید.',
+        'در مجموع، %s انتخابی است که ارزش بررسی دقیق دارد.',
+        'درباره %s اگر پرسشی دارید، بخش پرسش‌های متداول را ببینید.',
+    );
+
+    /**
+     * Last resort for a keyphrase count still under Yoast's minimum: a short neutral sentence with the keyphrase is added
+     * to the end of body paragraphs (no links, not the FAQ, not the last paragraph), one per paragraph, spread through the text.
+     */
+    public static function boost_keyphrase($html, $keyword) {
+        $keyword = trim((string) $keyword);
+        if ($keyword === '') return $html;
+        list($min) = YoastRules::keyphrase_bounds(YoastRules::word_count($html), $keyword);
+        $need = $min - YoastRules::keyphrase_count($html, $keyword);
+        if ($need <= 0) return $html;
+        $parts = preg_split('~(<p\b[^>]*>.*?</p>)~is', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if (!$parts) return $html;
+        $faq = false; $cand = array(); $last = null;
+        foreach ($parts as $i => $part) {
+            if ($i % 2 === 0) {
+                if (preg_match('~<h2\b[^>]*>[^<]*(?:سوال|سؤال|پرسش)[^<]*</h2>~iu', $part)) $faq = true;
+                continue;
+            }
+            $last = $i;
+            $text = trim(strip_tags($part));
+            if ($faq || stripos($part, '<a ') !== false || mb_strlen($text) < 120 || strpos($text, $keyword) !== false || !preg_match('~[.!؟]$~u', $text)) continue;
+            $cand[] = $i;
+        }
+        $cand = array_values(array_diff($cand, array($last)));
+        if (!$cand) return $html;
+        $take = min($need, count($cand));
+        for ($j = 0; $j < $take; $j++) {
+            $i = $cand[(int) floor(($j + 0.5) * count($cand) / $take)];
+            $sentence = sprintf(self::BOOST_SENTENCES[$j % count(self::BOOST_SENTENCES)], $keyword);
+            $parts[$i] = preg_replace('~\s*</p>\s*$~i', ' ' . $sentence . '</p>', $parts[$i], 1);
+        }
+        return implode('', $parts);
     }
 
     /**
