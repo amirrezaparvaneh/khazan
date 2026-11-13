@@ -38,6 +38,7 @@
         if (!r.success) throw new Error(r.message || 'بررسی انجام نشد.');
         f.preview = r;
         if (withAi && r.ai_error) this.toast('هوش مصنوعی: ' + r.ai_error);
+        else if (withAi && r.ai_note) this.toast(r.ai_note);
       } catch (e) { f.preview = null; this.toast('خطا: ' + e.message); }
       f.previewBusy = false; this.render();
     },
@@ -82,14 +83,15 @@
       } catch (e) { return this.toast('خطا: ' + e.message); }
       Object.assign(b, { running: true, stop: false, done: 0, total: ids.length, changed: 0, failed: 0, still: 0, aiError: '', lastError: '', ai, last: '' });
       this.render();
+      let useAi = ai;
       for (const id of ids) {
         if (b.stop) break;
         try {
-          const r = await this.apiFetch('/fix/run', { method: 'POST', body: JSON.stringify({ kind: f.kind, id, ai }) });
+          const r = await this.apiFetch('/fix/run', { method: 'POST', body: JSON.stringify({ kind: f.kind, id, ai: useAi }) });
           if (!r.success) throw new Error(r.message || '');
           if (r.changed) b.changed++;
           if (r.after > 0) b.still++;
-          if (r.ai_error && !b.aiError) b.aiError = r.ai_error;
+          if (r.ai_error) { if (!b.aiError) b.aiError = r.ai_error; useAi = false; }   // an AI failure (credit, key) would repeat on every page
           b.last = r.title || '';
         } catch (e) { b.failed++; b.lastError = e.message || ''; }
         b.done++;
@@ -99,7 +101,7 @@
       this.toast(b.stop ? 'اجرای گروهی متوقف شد.' : `بررسی تمام شد: ${fa(b.changed)} صفحه اصلاح شد.`);
       const notes = [];
       if (b.still) notes.push(`${fa(b.still)} صفحه هنوز ایراد دارد؛ ایرادهای باقی‌مانده را جلوی هر محصول ببینید (با دکمه «بررسی و اصلاح» تکی هم می‌شود دوباره امتحان کرد).`);
-      if (b.aiError) notes.push('اصلاح با هوش مصنوعی انجام نشد: ' + b.aiError);
+      if (b.aiError) notes.push('اصلاح با هوش مصنوعی انجام نشد و بقیه صفحه‌ها فقط با خود افزونه بررسی شدند: ' + b.aiError);
       if (b.failed) notes.push(`${fa(b.failed)} صفحه ذخیره نشد${b.lastError ? ': ' + b.lastError : ''}.`);
       b.summary = notes;
       this.loadFix();
