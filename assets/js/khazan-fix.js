@@ -13,19 +13,62 @@
   function initialState() {
     return { kind: 'product', page: 1, search: '', data: null, loading: false, error: '',
       preview: null, previewBusy: false, applyBusy: false, useAi: false, instructions: '',
-      bulk: { running: false, stop: false, done: 0, total: 0, changed: 0, failed: 0, ai: false, last: '' } };
+      rows: {}, loadedCount: 0, bulk: { running: false, stop: false, done: 0, total: 0, changed: 0, failed: 0, ai: false, last: '' } };
   }
 
   const methods = {
+    // The whole list is fetched in chunks (20 pages are audited per request so the server never times out) and shown without paging.
     loadFix: async function () {
       const f = this.state.fix;
-      f.loading = true; f.error = ''; this.render();
+      const token = (f.loadToken = (f.loadToken || 0) + 1);
+      f.loading = true; f.error = ''; f.rows = {}; f.loadedCount = 0; f.data = { items: [], total: 0 };
+      this.render();
+      let page = 1, pages = 1;
       try {
-        const r = await this.apiFetch(`/fix/items?kind=${encodeURIComponent(f.kind)}&page=${f.page}&search=${encodeURIComponent(f.search)}`);
-        if (!r.success) throw new Error(r.message || 'فهرست دریافت نشد.');
-        f.data = r;
-      } catch (e) { f.error = e.message; f.data = null; }
+        do {
+          const r = await this.apiFetch(`/fix/items?kind=${encodeURIComponent(f.kind)}&page=${page}&search=${encodeURIComponent(f.search)}`);
+          if (token !== f.loadToken) return;
+          if (!r.success) throw new Error(r.message || 'فهرست دریافت نشد.');
+          pages = r.pages || 1;
+          f.data.items = f.data.items.concat(r.items || []);
+          f.data.total = r.total;
+          f.loadedCount = f.data.items.length;
+          page++;
+          if (page === 2 || page > pages) this.render(); else this.renderFixLoading();
+        } while (page <= pages);
+      } catch (e) { if (token !== f.loadToken) return; f.error = e.message; }
       f.loading = false; this.render();
+    },
+
+    renderFixLoading: function () {
+      const el = this.root && this.root.querySelector('#khz-fix-loading');
+      const f = this.state.fix;
+      if (el) el.textContent = `در حال بررسی ${fa(f.loadedCount)} از ${fa(f.data ? f.data.total : 0)}…`;
+    },
+
+    // Result of one page during/after a run, shown in its row.
+    fixStatusHtml: function (it) {
+      const f = this.state.fix, rs = f.rows[it.id];
+      const note = (txt, color) => `<div style="font-size:.74rem;color:${color};margin-top:4px;max-width:420px;line-height:1.7">${escapeHtml(txt)}</div>`;
+      if (rs && rs.state === 'queued') return '<span class="wila-badge wila-badge-neutral">در صف…</span>';
+      if (rs && rs.state === 'running') return '<span class="wila-badge wila-badge-neutral" role="status">در حال بررسی…</span>';
+      if (rs && rs.state === 'error') return `<span class="wila-badge wila-badge-danger">خطا</span>${note(rs.message, '#991b1b')}`;
+      let out = '';
+      if (it.empty) out = '<span class="wila-badge wila-badge-neutral">بدون محتوا</span>';
+      else if (it.issues) out = `<span class="wila-badge wila-badge-warning">${fa(it.issues)} ایراد</span><ul style="margin:4px 0 0;padding-inline-start:16px;font-size:.74rem;color:#92400e;line-height:1.7;max-width:420px">${(it.issue_list || []).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+      else out = '<span class="wila-badge wila-badge-success">سالم</span>';
+      if (rs && rs.state === 'done') {
+        out = `<div style="font-size:.74rem;color:${rs.changed ? '#166534' : '#475569'};margin-bottom:4px">${rs.changed ? `✓ ${fa((rs.changes || []).length)} اصلاح ذخیره شد` : 'تغییری لازم نبود'}${rs.skipped ? ' — ' + escapeHtml(rs.skipped) : ''}</div>` + out;
+        if (rs.ai_error) out += note('هوش مصنوعی انجام نشد: ' + rs.ai_error, '#991b1b');
+        else if (rs.ai_note) out += note(rs.ai_note, '#475569');
+      }
+      return out;
+    },
+
+    refreshFixRow: function (id) {
+      const f = this.state.fix, it = f.data && f.data.items.find(x => x.id === id);
+      const cell = this.root && this.root.querySelector(`[data-fix-status="${id}"]`);
+      if (it && cell) cell.innerHTML = this.fixStatusHtml(it);
     },
 
     previewFix: async function (id, withAi) {
@@ -84,19 +127,33 @@
       Object.assign(b, { running: true, stop: false, done: 0, total: ids.length, changed: 0, failed: 0, still: 0, aiError: '', lastError: '', ai, last: '' });
       this.render();
       let useAi = ai;
+      ids.forEach(id => { f.rows[id] = { state: 'queued' }; });
+      this.render();
+      const find = id => f.data && f.data.items.find(x => x.id === id);
       for (const id of ids) {
         if (b.stop) break;
+        f.rows[id] = { state: 'running' }; this.refreshFixRow(id);
+        const row = this.root.querySelector(`[data-fix-status="${id}"]`);
+        if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
         try {
           const r = await this.apiFetch('/fix/run', { method: 'POST', body: JSON.stringify({ kind: f.kind, id, ai: useAi }) });
-          if (!r.success) throw new Error(r.message || '');
+          if (!r.success) throw new Error(r.message || 'اصلاح انجام نشد.');
           if (r.changed) b.changed++;
           if (r.after > 0) b.still++;
           if (r.ai_error) { if (!b.aiError) b.aiError = r.ai_error; useAi = false; }   // an AI failure (credit, key) would repeat on every page
           b.last = r.title || '';
-        } catch (e) { b.failed++; b.lastError = e.message || ''; }
+          const it = find(id);
+          if (it && !r.skipped) { it.issues = r.after; it.issue_list = r.remaining || []; if (r.changed) it.backup = true; }
+          f.rows[id] = { state: 'done', changed: !!r.changed, changes: r.changes || [], skipped: r.skipped || '', ai_error: r.ai_error || '', ai_note: r.ai_note || '' };
+        } catch (e) {
+          b.failed++; b.lastError = e.message || '';
+          f.rows[id] = { state: 'error', message: e.message || 'اصلاح این صفحه انجام نشد.' };
+        }
         b.done++;
+        this.refreshFixRow(id);
         this.renderFixProgress();
       }
+      Object.keys(f.rows).forEach(k => { if (f.rows[k].state === 'queued') delete f.rows[k]; });
       b.running = false;
       this.toast(b.stop ? 'اجرای گروهی متوقف شد.' : `بررسی تمام شد: ${fa(b.changed)} صفحه اصلاح شد.`);
       const notes = [];
@@ -104,7 +161,7 @@
       if (b.aiError) notes.push('اصلاح با هوش مصنوعی انجام نشد و بقیه صفحه‌ها فقط با خود افزونه بررسی شدند: ' + b.aiError);
       if (b.failed) notes.push(`${fa(b.failed)} صفحه ذخیره نشد${b.lastError ? ': ' + b.lastError : ''}.`);
       b.summary = notes;
-      this.loadFix();
+      this.render();
     },
 
     renderFixProgress: function () {
@@ -134,7 +191,7 @@
       const rows = d && d.items.length ? d.items.map(it => `
         <tr>
           <td><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>${it.focus ? `<div style="font-size:.75rem;color:#64748b">${escapeHtml(it.focus)}</div>` : ''}</td>
-          <td>${it.empty ? '<span class="wila-badge wila-badge-neutral">بدون محتوا</span>' : it.issues ? `<span class="wila-badge wila-badge-warning" title="${escapeHtml(it.issue_list.join('\n'))}">${fa(it.issues)} ایراد</span><div style="font-size:.72rem;color:#92400e;margin-top:4px;max-width:340px;line-height:1.7">${escapeHtml(it.issue_list[0] || '')}${it.issues > 1 ? ` (و ${fa(it.issues - 1)} مورد دیگر)` : ''}</div>` : '<span class="wila-badge wila-badge-success">سالم</span>'}</td>
+          <td data-fix-status="${it.id}">${this.fixStatusHtml(it)}</td>
           <td style="white-space:nowrap">
             ${it.empty ? '' : `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-preview="${it.id}" ${f.previewBusy || b.running ? 'disabled' : ''}>بررسی و اصلاح</button>`}
             ${it.backup ? `<button type="button" class="wila-btn wila-btn-outline wila-btn-sm" data-fix-restore="${it.id}" ${b.running ? 'disabled' : ''}>بازگردانی</button>` : ''}
@@ -159,11 +216,7 @@
           ${f.error ? `<p style="color:#991b1b">${escapeHtml(f.error)}</p>` : ''}
           ${f.loading && !d ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
           ${d ? `<div class="wila-table-scroll" style="margin-top:12px"><table class="wila-table"><thead><tr><th>${label}</th><th>وضعیت</th><th>اقدام</th></tr></thead><tbody>${rows || `<tr><td colspan="3">موردی پیدا نشد.</td></tr>`}</tbody></table></div>
-            <div style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.82rem">
-              <button type="button" class="wila-btn wila-btn-outline wila-btn-sm" id="khz-fix-prev" ${d.page <= 1 || f.loading ? 'disabled' : ''}>قبلی</button>
-              <span>صفحه ${fa(d.page)} از ${fa(d.pages)} (${fa(d.total)} ${label})</span>
-              <button type="button" class="wila-btn wila-btn-outline wila-btn-sm" id="khz-fix-next" ${d.page >= d.pages || f.loading ? 'disabled' : ''}>بعدی</button>
-            </div>` : ''}
+            <p id="khz-fix-loading" role="status" style="font-size:.82rem;color:#64748b;margin:10px 0 0">${f.loading ? `در حال بررسی ${fa(f.loadedCount)} از ${fa(d.total)}…` : `${fa(d.total)} ${label} بررسی شد.`}</p>` : ''}
         </div>`;
     },
 
@@ -213,8 +266,6 @@
       if (instr) instr.addEventListener('input', e => { f.instructions = e.target.value; });
       on('#khz-fix-bulk', () => this.runFixBulk());
       on('#khz-fix-stop', (e) => { f.bulk.stop = true; e.currentTarget.disabled = true; });
-      on('#khz-fix-prev', () => { f.page = Math.max(1, f.page - 1); f.preview = null; this.loadFix(); });
-      on('#khz-fix-next', () => { f.page += 1; f.preview = null; this.loadFix(); });
       on('#khz-fix-apply', () => this.applyFix());
       on('#khz-fix-close', () => { f.preview = null; this.render(); });
       on('#khz-fix-ai-run', () => f.preview && this.previewFix(f.preview.id, true));

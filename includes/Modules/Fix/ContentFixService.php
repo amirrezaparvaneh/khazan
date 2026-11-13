@@ -261,7 +261,7 @@ final class ContentFixService {
         }
         return array('id' => $page['id'], 'title' => $page['title'], 'changed' => $changed, 'changes' => $result['changes'],
             'before' => count($result['before']), 'after' => count($result['after']), 'remaining' => array_values($result['after']),
-            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '');
+            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '', 'ai_note' => isset($result['ai_note']) ? $result['ai_note'] : '');
     }
 
     private function save(array $page, $html, $focus) {
