@@ -29,6 +29,21 @@ final class YoastGuard {
         return self::soften_passive($html, $keyword);
     }
 
+    /**
+     * Mentions still missing: the audit asks for an exact-phrase minimum and Yoast for its own recommended minimum; both must hold.
+     */
+    private static function shortfall($html, $keyword, $extra_words = 0) {
+        list($ymin, $ymax) = YoastRules::keyphrase_bounds(YoastRules::word_count($html) + $extra_words, $keyword);
+        $by_yoast = $ymin - YoastRules::keyphrase_count($html, $keyword);
+        $words = \Khazan\Services\Content\ContentAudit::word_count($html) + $extra_words;
+        $std_min = (float) \Khazan\Services\Content\SeoStandards::get('density_min');
+        list($amin, $amax) = YoastRules::keyphrase_bounds($words, $keyword);
+        $audit_need = min((int) ceil($words * $std_min / 100), max($amin, $amax - 2));
+        $by_audit = $audit_need - \Khazan\Services\Content\ContentAudit::phrase_count($html, $keyword);
+        // never past Yoast's own maximum (cap_keyphrase would only take the mentions away again)
+        return min(max($by_yoast, $by_audit), $ymax - YoastRules::keyphrase_count($html, $keyword));
+    }
+
     /** The product type of a keyphrase: its first word («بوت چرم زنانه برشکا» -> «بوت»). */
     private static function type_word($keyword) {
         $words = preg_split('/\s+/u', trim($keyword), -1, PREG_SPLIT_NO_EMPTY);
@@ -61,8 +76,7 @@ final class YoastGuard {
     public static function raise_keyphrase($html, $keyword) {
         $type = self::type_word($keyword);
         if ($type === '') return $html;
-        list($min) = YoastRules::keyphrase_bounds(YoastRules::word_count($html), $keyword);
-        $need = $min - YoastRules::keyphrase_count($html, $keyword);
+        $need = self::shortfall($html, $keyword);
         if ($need <= 0) return $html;
         $tokens = preg_split('~(<[^>]+>)~', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
         $by_kind = array(0 => array(), 1 => array());   // kind 0: «این X», kind 1: a bare type word before a function word
@@ -114,9 +128,10 @@ final class YoastGuard {
     public static function boost_keyphrase($html, $keyword) {
         $keyword = trim((string) $keyword);
         if ($keyword === '') return $html;
-        list($min) = YoastRules::keyphrase_bounds(YoastRules::word_count($html), $keyword);
-        $need = $min - YoastRules::keyphrase_count($html, $keyword);
+        $need = self::shortfall($html, $keyword);
         if ($need <= 0) return $html;
+        // every added sentence also lengthens the text (and so the minimum): size the batch for the longer text
+        $need = max($need, self::shortfall($html, $keyword, $need * (count(preg_split('/\s+/u', self::BOOST_SENTENCES[0], -1, PREG_SPLIT_NO_EMPTY)) + count(preg_split('/\s+/u', $keyword, -1, PREG_SPLIT_NO_EMPTY)))));
         $parts = preg_split('~(<p\b[^>]*>.*?</p>)~is', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE);
         if (!$parts) return $html;
         $faq = false; $cand = array(); $last = null;
@@ -132,11 +147,18 @@ final class YoastGuard {
         }
         $cand = array_values(array_diff($cand, array($last)));
         if (!$cand) return $html;
-        $take = min($need, count($cand));
+        $slots = array_merge($cand, $cand);               // a paragraph may take a second sentence when the paragraphs alone are not enough
+        $take = min($need, count($slots));
+        $per = array();
         for ($j = 0; $j < $take; $j++) {
-            $i = $cand[(int) floor(($j + 0.5) * count($cand) / $take)];
-            $sentence = sprintf(self::BOOST_SENTENCES[$j % count(self::BOOST_SENTENCES)], $keyword);
-            $parts[$i] = preg_replace('~\s*</p>\s*$~i', ' ' . $sentence . '</p>', $parts[$i], 1);
+            $i = $cand[$j % count($cand)];
+            if ($take <= count($cand)) $i = $cand[(int) floor(($j + 0.5) * count($cand) / $take)];
+            $per[$i][] = $j;
+        }
+        foreach ($per as $i => $js) {
+            $add = '';
+            foreach ($js as $j) $add .= ' ' . sprintf(self::BOOST_SENTENCES[$j % count(self::BOOST_SENTENCES)], $keyword);
+            $parts[$i] = preg_replace('~\s*</p>\s*$~i', $add . '</p>', $parts[$i], 1);
         }
         return implode('', $parts);
     }

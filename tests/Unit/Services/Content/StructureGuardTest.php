@@ -52,5 +52,11 @@ $close = '<p>' . $fill(60) . ' ' . $lk('p1') . ' ' . $fill(5) . '.</p><h2>الف
 check(A::min_link_gap($close, 'a.test') < 70, 'the sample has two links closer than 70 words');
 $apart = Khazan\Services\Links\LinkSpreader::separate($close, 'a.test', array(), 70);
 check(A::min_link_gap($apart, 'a.test') >= 70, 'the links are moved at least 70 words apart');
+
+// the audit counts the exact phrase; raising must reach its minimum too
+$rare2 = '<h2>الف</h2>' . $para(90) . $para(90) . '<h2>ب</h2>' . $para(90) . $para(90) . $para(90) . '<h2>سوالات متداول</h2><h3>q</h3>' . $para(40) . $para(30);
+$g2 = $g::boost_keyphrase($g::raise_keyphrase($rare2, $kw), $kw);
+$aud = A::analyze($g2, $kw, $opts)['failures'];
+check(!isset($aud['density_low']), 'the exact-phrase minimum of the audit is reached' . (isset($aud['density_low']) ? ' (' . $aud['density_low'] . ')' : ''));
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

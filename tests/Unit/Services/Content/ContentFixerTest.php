@@ -35,7 +35,7 @@ check(Y::keyphrase_count($out, $kw) <= $max, 'keyphrase count inside Yoast range
 check(strpos($out, 'ساخته شده') === false, 'passive word softened');
 check(count($r['changes']) >= 4, 'changes are reported (' . implode(' / ', $r['changes']) . ')');
 $again = F::fix($out, array('kind' => 'product', 'focus' => $kw, 'home_host' => 'a.test', 'anchors' => $anchors, 'keep' => array('https://a.test/cat/')));
-check($again['changes'] === array(), 'a fixed text needs no further change');
+check($again['changes'] === array(), 'a fixed text needs no further change (' . implode(' / ', $again['changes']) . ')');
 check(F::fix('<p>متن سالم و کوتاه.</p>', array('kind' => 'article'))['html'] === '<p>متن سالم و کوتاه.</p>', 'healthy text stays byte-identical');
 
 // descriptive anchors and anchors equal to the own keyphrase are left alone
