@@ -164,7 +164,7 @@ final class ContentFixService {
     }
 
     /** Remaining failures go to the AI as text patches on plain blocks only. */
-    private function ai_pass(array $page, array $result, $instructions) {
+    private function ai_pass(array $page, array $result, $instructions, $round = 0) {
         $instructions = trim((string) $instructions);
         $fixable = array_intersect_key((array) $result['after'], array_flip(self::AI_FIXABLE));
         if (!$fixable && $instructions === '') {
@@ -173,7 +173,7 @@ final class ContentFixService {
         }
         // the same final text was already sent once: asking again would only spend credit
         $memo = md5($result['html']);
-        if ($instructions === '' && $this->ai_memo($page) === $memo) {
+        if ($round === 0 && $instructions === '' && $this->ai_memo($page) === $memo) {
             $result['ai_note'] = 'این متن قبلاً با هوش مصنوعی بررسی شده و تغییری نکرده است، پس دوباره ارسال نشد.';
             return $result;
         }
@@ -203,6 +203,13 @@ final class ContentFixService {
         $result['ai_patches'] = count($ai['patches']);
         $result['changes'][] = 'بازنویسی ' . count($ai['patches']) . ' جمله یا بند معیوب با هوش مصنوعی';
         $this->ai_memo($page, md5($again['html']));
+        // a rewrite can leave other text failures: one more round on the new text, then stop (credit)
+        if ($round < 1 && array_intersect_key((array) $result['after'], array_flip(self::AI_FIXABLE))) {
+            $more = $this->ai_pass($page, $result, '', $round + 1);
+            if (isset($more['ai_patches']) && $more['ai_patches'] > 0) $more['ai_patches'] += $result['ai_patches'];
+            else $more['ai_patches'] = $result['ai_patches'];
+            return $more;
+        }
         return $result;
     }
 

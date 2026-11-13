@@ -12,7 +12,7 @@
 
   function initialState() {
     return { kind: 'product', page: 1, search: '', data: null, loading: false, error: '',
-      preview: null, previewBusy: false, applyBusy: false, useAi: false, instructions: '',
+      preview: null, previewBusy: false, applyBusy: false, useAi: true, onlyIssues: true, instructions: '',
       rows: {}, loadedCount: 0, bulk: { running: false, stop: false, done: 0, total: 0, changed: 0, failed: 0, ai: false, last: '' } };
   }
 
@@ -119,12 +119,10 @@
       if (b.running) return;
       const label = KIND_LABELS[f.kind];
       const ai = !!f.useAi;
-      if (!confirm(`همه ${label}ها بررسی و ایرادهایشان ${ai ? 'با افزونه و هوش مصنوعی (هزینه دارد)' : 'فقط با خود افزونه (بدون هزینه)'} اصلاح و ذخیره می‌شود. برای هر صفحه نسخه پشتیبان نگه داشته می‌شود. ادامه می‌دهید؟`)) return;
-      let ids = [];
-      try {
-        const r = await this.apiFetch(`/fix/ids?kind=${encodeURIComponent(f.kind)}`);
-        ids = r.ids || [];
-      } catch (e) { return this.toast('خطا: ' + e.message); }
+      if (f.loading) return this.toast('بررسی فهرست هنوز تمام نشده؛ چند لحظه صبر کنید.');
+      const ids = (f.data ? f.data.items : []).filter(it => !it.empty && !it.thin && it.issues > 0).map(it => it.id);
+      if (!ids.length) return this.toast(`همه ${label}ها سالم‌اند و چیزی برای اصلاح نیست.`);
+      if (!confirm(`${fa(ids.length)} ${label} که ایراد دارند اصلاح و ذخیره می‌شوند${ai ? ' (ایرادهای باقی‌مانده هم با هوش مصنوعی؛ هزینه کم دارد)' : ' (فقط با خود افزونه، بدون هزینه)'}. برای هر صفحه نسخه پشتیبان نگه داشته می‌شود. ادامه می‌دهید؟`)) return;
       Object.assign(b, { running: true, stop: false, done: 0, total: ids.length, changed: 0, failed: 0, still: 0, aiError: '', lastError: '', ai, last: '' });
       this.render();
       let useAi = ai;
@@ -189,7 +187,12 @@
       const f = this.state.fix, d = f.data, p = f.preview, b = f.bulk;
       const label = KIND_LABELS[f.kind];
       const list = (arr, empty) => arr && arr.length ? `<ul style="margin:6px 0 0;padding-inline-start:18px;font-size:.82rem;line-height:1.9">${arr.map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>` : `<p style="font-size:.82rem;color:#16a34a;margin:6px 0 0">${empty}</p>`;
-      const rows = d && d.items.length ? d.items.map(it => `
+      const running = b.running;
+      const needsFix = it => !it.empty && !it.thin && it.issues > 0;
+      const visible = it => !f.onlyIssues || needsFix(it) || (f.rows[it.id] && (running ? true : f.rows[it.id].state === 'error'));
+      const shown = d ? d.items.filter(visible) : [];
+      const issueCount = d ? d.items.filter(needsFix).length : 0;
+      const rows = shown.length ? shown.map(it => `
         <tr>
           <td><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener">${escapeHtml(it.title)}</a>${it.focus ? `<div style="font-size:.75rem;color:#64748b">${escapeHtml(it.focus)}</div>` : ''}</td>
           <td data-fix-status="${it.id}">${this.fixStatusHtml(it)}</td>
@@ -206,7 +209,7 @@
           ${this.radioSwitch('khz_fix_kind', [['product', 'محصول'], ['product_cat', 'دسته‌بندی محصول'], ['article', 'مقاله']], f.kind, 'khz-fix-kind', 'data-kind', b.running)}
           <div style="margin-top:14px;padding:12px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc">
             <strong style="font-size:.9rem">اصلاح گروهی همه ${label}ها</strong>
-            <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:.85rem"><input type="checkbox" id="khz-fix-ai" ${f.useAi ? 'checked' : ''} ${b.running ? 'disabled' : ''}> ایرادهای باقی‌مانده را هم با هوش مصنوعی اصلاح کن (فقط جمله‌های معیوب؛ هزینه دارد)</label>
+            <label style="display:flex;gap:8px;align-items:center;margin:8px 0;font-size:.85rem"><input type="checkbox" id="khz-fix-ai" ${f.useAi ? 'checked' : ''} ${b.running ? 'disabled' : ''}> رفع کامل ایرادها با هوش مصنوعی (پیشنهادی؛ فقط برای ایرادهای متنی و با کمترین تفکر مدل، هزینه کم دارد)</label>
             <button type="button" class="wila-btn wila-btn-primary" id="khz-fix-bulk" ${b.running ? 'disabled' : ''}>${b.running ? 'در حال اصلاح…' : `اصلاح خودکار همه ${label}ها`}</button>
             ${this.fixProgressHtml()}
           </div>
@@ -214,10 +217,11 @@
             <label for="khz-fix-search" class="khazan-sr-only">جستجو</label>
             <input id="khz-fix-search" type="search" class="wila-input" style="flex:1" placeholder="جستجو در ${label}ها…" value="${escapeHtml(f.search)}">
           </div>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:.85rem"><input type="checkbox" id="khz-fix-all" ${f.onlyIssues ? '' : 'checked'}> نمایش همه ${label}ها (شامل سالم‌ها)</label>
           ${f.error ? `<p style="color:#991b1b">${escapeHtml(f.error)}</p>` : ''}
           ${f.loading && !d ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
-          ${d ? `<div class="wila-table-scroll" style="margin-top:12px"><table class="wila-table"><thead><tr><th>${label}</th><th>وضعیت</th><th>اقدام</th></tr></thead><tbody>${rows || `<tr><td colspan="3">موردی پیدا نشد.</td></tr>`}</tbody></table></div>
-            <p id="khz-fix-loading" role="status" style="font-size:.82rem;color:#64748b;margin:10px 0 0">${f.loading ? `در حال بررسی ${fa(f.loadedCount)} از ${fa(d.total)}…` : `${fa(d.total)} ${label} بررسی شد.`}</p>` : ''}
+          ${d ? `<div class="wila-table-scroll" style="margin-top:12px"><table class="wila-table"><thead><tr><th>${label}</th><th>وضعیت</th><th>اقدام</th></tr></thead><tbody>${rows || `<tr><td colspan="3">${f.loading ? 'در حال بررسی…' : (f.onlyIssues ? `همه ${label}ها سالم‌اند و ایرادی ندارند. ✓` : 'موردی پیدا نشد.')}</td></tr>`}</tbody></table></div>
+            <p id="khz-fix-loading" role="status" style="font-size:.82rem;color:#64748b;margin:10px 0 0">${f.loading ? `در حال بررسی ${fa(f.loadedCount)} از ${fa(d.total)}…` : `${fa(d.total)} ${label} بررسی شد؛ ${fa(issueCount)} مورد ایراد دارد.`}</p>` : ''}
         </div>`;
     },
 
@@ -261,6 +265,8 @@
         f.search = e.target.value.trim();
         this.fixSearchTimer = setTimeout(() => { f.page = 1; this.loadFix(); }, 400);
       });
+      const showAll = this.root.querySelector('#khz-fix-all');
+      if (showAll) showAll.addEventListener('change', e => { f.onlyIssues = !e.target.checked; this.render(); });
       const ai = this.root.querySelector('#khz-fix-ai');
       if (ai) ai.addEventListener('change', e => { f.useAi = e.target.checked; });
       const instr = this.root.querySelector('#khz-fix-instr');
