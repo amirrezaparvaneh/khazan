@@ -102,6 +102,13 @@ final class ContentFixService {
         return $a['failures'];
     }
 
+    /** Text so short that no repair makes sense: it needs to be generated, not fixed. */
+    const THIN_WORDS = 100;
+
+    private function is_thin($html) {
+        return \Khazan\Services\Content\ContentAudit::word_count(\Khazan\Services\Content\Guard\WrapperGuard::unwrap((string) $html)) < self::THIN_WORDS;
+    }
+
     /** Free fix in memory: nothing is saved. */
     public function check(array $page) {
         $focus = $this->focus($page);
@@ -252,6 +259,7 @@ final class ContentFixService {
         $page = $this->load($kind, $id);
         if (is_wp_error($page)) return $page;
         if (trim(wp_strip_all_tags($page['html'])) === '') return array('id' => $page['id'], 'title' => $page['title'], 'skipped' => 'بدون محتوا', 'changes' => array(), 'before' => 0, 'after' => 0);
+        if ($this->is_thin($page['html'])) return array('id' => $page['id'], 'title' => $page['title'], 'skipped' => 'متن بسیار کوتاه است؛ باید با «تولید انبوه» ساخته شود، نه اصلاح', 'changes' => array(), 'before' => 0, 'after' => 0);
         $result = $this->check($page);
         if ($use_ai && $result['after'] && Settings::avalai_api_key() !== '') $result = $this->ai_pass($page, $result, '');
         $changed = $result['html'] !== $page['html'] || $result['focus_changed'];
@@ -315,9 +323,10 @@ final class ContentFixService {
             $page = $this->load($kind, $id);
             if (is_wp_error($page)) continue;
             $empty = trim(wp_strip_all_tags($page['html'])) === '';
+            $thin = !$empty && $this->is_thin($page['html']);
             $focus = trim((string) $page['seo']['focuskw']);
-            $fails = $empty ? array() : $this->audit($page['html'], $focus, $kind);
-            $rows[] = array('id' => (int) $id, 'title' => $page['title'], 'url' => $page['url'], 'empty' => $empty, 'focus' => $focus,
+            $fails = ($empty || $thin) ? array() : $this->audit($page['html'], $focus, $kind);
+            $rows[] = array('id' => (int) $id, 'title' => $page['title'], 'url' => $page['url'], 'empty' => $empty, 'thin' => $thin, 'focus' => $focus,
                 'issues' => count($fails), 'issue_list' => array_values($fails), 'backup' => ContentUpdater::has_backup($page['type'], $id));
         }
         return array('items' => $rows, 'total' => $total, 'page' => $page_no, 'pages' => (int) max(1, ceil($total / self::PER_PAGE)));
