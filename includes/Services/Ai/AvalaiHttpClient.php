@@ -17,6 +17,13 @@ if (!defined('ABSPATH')) {
 
 final class AvalaiHttpClient {
 
+    /** @var string|null reasoning level forced for the next requests (cheap maintenance passes), null = the setting */
+    private static $reasoning_force = null;
+
+    public static function force_reasoning($level) {
+        self::$reasoning_force = $level;
+    }
+
 
     /** @var string */
     private $api_key;
@@ -56,7 +63,7 @@ final class AvalaiHttpClient {
         );
         if (preg_match('/^(gpt-5|o\d)/i', $this->model)) {
             $body['max_completion_tokens'] = $max_tokens;
-            $effort = Settings::ai_reasoning();
+            $effort = self::$reasoning_force !== null ? self::$reasoning_force : Settings::ai_reasoning();
             if ($effort !== 'default') {
                 $body['reasoning_effort'] = $effort;
             }

@@ -29,6 +29,10 @@ final class ContentFixService {
 
     const DRAFT    = 'khazan_fix_draft_';
     const PER_PAGE = 20;
+    const AI_MEMO  = '_khazan_fix_ai_hash';
+
+    /** Audit failures a text patch can fix; link counts, spacing, length and meta never go to the model (it would only cost credit). */
+    const AI_FIXABLE = array('density_low', 'density_high', 'passive_high', 'subheading_keyword_low', 'subheading_keyword_high', 'keyword_not_in_first', 'keyword_not_in_heading', 'keyword_h2_many', 'section_long');
 
     /** @var ContentTargetRepository */
     private $targets;
@@ -154,27 +158,57 @@ final class ContentFixService {
 
     /** Remaining failures go to the AI as text patches on plain blocks only. */
     private function ai_pass(array $page, array $result, $instructions) {
-        if (!$result['after'] && trim($instructions) === '') return $result;
-        $heads = (bool) preg_grep('/زیرعنوان/u', $result['after']);   // headings go to the model only when the keyphrase is missing from them
+        $instructions = trim((string) $instructions);
+        $fixable = array_intersect_key((array) $result['after'], array_flip(self::AI_FIXABLE));
+        if (!$fixable && $instructions === '') {
+            if ($result['after']) $result['ai_note'] = 'ایرادهای باقی‌مانده با بازنویسی متن رفع نمی‌شوند، پس اعتباری مصرف نشد.';
+            return $result;
+        }
+        // the same final text was already sent once: asking again would only spend credit
+        $memo = md5($result['html']);
+        if ($instructions === '' && $this->ai_memo($page) === $memo) {
+            $result['ai_note'] = 'این متن قبلاً با هوش مصنوعی بررسی شده و تغییری نکرده است، پس دوباره ارسال نشد.';
+            return $result;
+        }
+        $heads = (bool) preg_grep('/زیرعنوان/u', $fixable);   // headings go to the model only when the keyphrase is missing from them
         $segments = ContentFixer::segments($result['html'], $heads);
         if (!$segments) return $result;
-        $brief = array_values($result['after']);
-        if (trim($instructions) !== '') $brief[] = trim($instructions);
+        $brief = array_values($fixable);
+        if ($instructions !== '') $brief[] = $instructions;
         $meta = array('title' => (string) $page['seo']['title'], 'desc' => (string) $page['seo']['desc'], 'focuskw' => $result['focus']);
-        $ai = (new \Khazan\Services\Ai\AiService())->suggest_seo_repairs($segments, implode("\n", $brief), $meta, $page['type'] === 'term' ? 'term' : ($page['kind'] === Settings::KIND_PRODUCT ? 'product' : 'post'));
+        // same model as generation, always the lowest reasoning: a maintenance patch needs no deep thinking
+        \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning('low');
+        try {
+            $ai = (new \Khazan\Services\Ai\AiService())->suggest_seo_repairs($segments, implode("\n", $brief), $meta, $page['type'] === 'term' ? 'term' : ($page['kind'] === Settings::KIND_PRODUCT ? 'product' : 'post'));
+        } finally {
+            \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning(null);
+        }
         if (is_wp_error($ai)) { $result['ai_error'] = $ai->get_error_message(); return $result; }
-        if (empty($ai['patches'])) { $result['ai_patches'] = 0; return $result; }
+        if (empty($ai['patches'])) { $result['ai_patches'] = 0; $this->ai_memo($page, $memo); return $result; }
         $patched = ContentFixer::apply_patches($result['html'], $ai['patches']);
         // the patched text goes through the free guards again (a rewrite can bring back a passive word or the keyphrase)
         list($anchors, $keep) = $this->link_context($patched);
         $again = ContentFixer::fix($patched, array('kind' => $page['kind'], 'focus' => $result['focus'], 'home_host' => $this->host(), 'self_url' => $page['url'], 'anchors' => $anchors, 'keep' => $keep));
         $after = $this->audit($again['html'], $result['focus'], $page['kind']);
-        if (count($after) > count($result['after'])) { $result['ai_patches'] = 0; return $result; }
+        if (count($after) > count($result['after'])) { $result['ai_patches'] = 0; $this->ai_memo($page, $memo); return $result; }
         $result['html'] = $again['html'];
         $result['after'] = $after;
         $result['ai_patches'] = count($ai['patches']);
         $result['changes'][] = 'بازنویسی ' . count($ai['patches']) . ' جمله یا بند معیوب با هوش مصنوعی';
+        $this->ai_memo($page, md5($again['html']));
         return $result;
+    }
+
+    /** Hash of the text last sent to the AI for this page (read, or written when $set is given). */
+    private function ai_memo(array $page, $set = null) {
+        if ($page['type'] === 'term') {
+            if ($set === null) return (string) get_term_meta($page['id'], self::AI_MEMO, true);
+            update_term_meta($page['id'], self::AI_MEMO, $set);
+        } else {
+            if ($set === null) return (string) get_post_meta($page['id'], self::AI_MEMO, true);
+            update_post_meta($page['id'], self::AI_MEMO, $set);
+        }
+        return $set;
     }
 
     /** Preview (nothing is saved): free fix, optionally the AI pass; the draft can be applied for a day. */
@@ -194,7 +228,7 @@ final class ContentFixService {
             'changes' => $result['changes'], 'before' => array_values($result['before']), 'after' => array_values($result['after']),
             'changed' => $result['html'] !== $page['html'] || $result['focus_changed'],
             'focus' => $result['focus'], 'html' => $result['html'],
-            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '', 'ai_patches' => isset($result['ai_patches']) ? $result['ai_patches'] : null,
+            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '', 'ai_note' => isset($result['ai_note']) ? $result['ai_note'] : '', 'ai_patches' => isset($result['ai_patches']) ? $result['ai_patches'] : null,
             'backup' => ContentUpdater::has_backup($page['type'], $page['id']),
         );
     }
@@ -227,7 +261,7 @@ final class ContentFixService {
         }
         return array('id' => $page['id'], 'title' => $page['title'], 'changed' => $changed, 'changes' => $result['changes'],
             'before' => count($result['before']), 'after' => count($result['after']), 'remaining' => array_values($result['after']),
-            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '');
+            'ai_error' => isset($result['ai_error']) ? $result['ai_error'] : '', 'ai_note' => isset($result['ai_note']) ? $result['ai_note'] : '');
     }
 
     private function save(array $page, $html, $focus) {
