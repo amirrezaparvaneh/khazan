@@ -11,6 +11,7 @@ namespace Khazan\Services\Content;
 
 use Khazan\Core\Settings;
 use Khazan\Services\Content\Guard\WrapperGuard;
+use Khazan\Services\Content\Guard\StructureGuard;
 use Khazan\Services\Content\Guard\YoastGuard;
 use Khazan\Services\Links\LinkSpreader;
 use Khazan\Services\Seo\KeyphraseExtractor;
@@ -53,6 +54,7 @@ final class ContentFixer {
             $keep = isset($opts['keep']) ? (array) $opts['keep'] : array();
             $step('فاصله‌گذاری لینک‌های نزدیک به هم', LinkSpreader::separate($html, $host, $keep, (int) SeoStandards::get('links_min_gap_words')));
             if ($focus !== '') {
+                $step('ساختار: کلمه کلیدی در ۱۰۰ کلمه اول و یک H2، زیرعنوان برای بخش‌های طولانی', StructureGuard::apply($html, $focus));
                 $step('کلمه کلیدی در زیرعنوان‌ها', YoastGuard::ensure_subheadings($html, $focus));
                 $step('رساندن تعداد کلمه کلیدی به حد پیشنهادی Yoast', YoastGuard::raise_keyphrase($html, $focus));
                 $step('تراکم کلمه کلیدی در حد مجاز Yoast', YoastGuard::cap_keyphrase($html, $focus));
