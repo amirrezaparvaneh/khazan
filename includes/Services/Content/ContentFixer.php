@@ -54,6 +54,7 @@ final class ContentFixer {
             $step('فاصله‌گذاری لینک‌های نزدیک به هم', LinkSpreader::separate($html, $host, $keep, (int) SeoStandards::get('links_min_gap_words')));
             if ($focus !== '') {
                 $step('کلمه کلیدی در زیرعنوان‌ها', YoastGuard::ensure_subheadings($html, $focus));
+                $step('رساندن تعداد کلمه کلیدی به حد پیشنهادی Yoast', YoastGuard::raise_keyphrase($html, $focus));
                 $step('تراکم کلمه کلیدی در حد مجاز Yoast', YoastGuard::cap_keyphrase($html, $focus));
             }
         }
@@ -95,9 +96,11 @@ final class ContentFixer {
      * Plain-text blocks (<p>/<li> without inner tags) the AI may rewrite: index => text. Blocks with links or
      * formatting stay out so a patch can never break a link.
      */
-    public static function segments($html) {
+    public static function segments($html, $with_headings = false) {
         $out = array();
-        if (preg_match_all('~<(p|li)\b[^>]*>([^<]{20,})</\1>~u', WrapperGuard::unwrap((string) $html), $m)) {
+        $tags = $with_headings ? 'p|li|h2|h3' : 'p|li';
+        $min = $with_headings ? 8 : 20;
+        if (preg_match_all('~<(' . $tags . ')\b[^>]*>([^<]{' . $min . ',})</\1>~u', WrapperGuard::unwrap((string) $html), $m)) {
             foreach ($m[2] as $text) $out[] = html_entity_decode($text, ENT_QUOTES, 'UTF-8');
         }
         return array_values(array_unique($out));
@@ -110,7 +113,7 @@ final class ContentFixer {
             $before = htmlspecialchars((string) $p['before'], ENT_NOQUOTES, 'UTF-8');
             $after  = htmlspecialchars((string) $p['after'], ENT_NOQUOTES, 'UTF-8');
             foreach (array($before, (string) $p['before']) as $needle) {
-                $new = preg_replace('~(<(p|li)\b[^>]*>)' . preg_quote($needle, '~') . '(</\2>)~u', '${1}' . str_replace(array('\\', '$'), array('\\\\', '\$'), $after) . '${3}', $html, 1, $n);
+                $new = preg_replace('~(<(p|li|h2|h3)\b[^>]*>)' . preg_quote($needle, '~') . '(</\2>)~u', '${1}' . str_replace(array('\\', '$'), array('\\\\', '\$'), $after) . '${3}', $html, 1, $n);
                 if ($n) { $html = $new; break; }
             }
         }

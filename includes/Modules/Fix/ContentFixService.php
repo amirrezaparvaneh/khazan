@@ -101,8 +101,10 @@ final class ContentFixService {
     /** Free fix in memory: nothing is saved. */
     public function check(array $page) {
         $focus = $this->focus($page);
-        list($anchors, $keep) = $this->link_context($page['html']);
-        $fixed = ContentFixer::fix($page['html'], array('kind' => $page['kind'], 'focus' => $focus, 'home_host' => $this->host(), 'self_url' => $page['url'], 'anchors' => $anchors, 'keep' => $keep));
+        $linked = $page['kind'] === Settings::KIND_PRODUCT ? $this->add_missing_links($page) : array('html' => $page['html'], 'added' => 0);
+        list($anchors, $keep) = $this->link_context($linked['html']);
+        $fixed = ContentFixer::fix($linked['html'], array('kind' => $page['kind'], 'focus' => $focus, 'home_host' => $this->host(), 'self_url' => $page['url'], 'anchors' => $anchors, 'keep' => $keep));
+        if ($linked['added']) array_unshift($fixed['changes'], 'افزودن ' . $linked['added'] . ' لینک داخلی کم‌بود (دسته‌بندی و محصولات مرتبط)');
         $stored = trim((string) $page['seo']['focuskw']);
         $focus_changed = $focus !== '' && KeyphraseExtractor::key($focus) !== KeyphraseExtractor::key($stored);
         if ($focus_changed) array_unshift($fixed['changes'], 'کلمه کلیدی اصلی: «' . ($stored !== '' ? $stored : 'خالی') . '» ← «' . $focus . '»');
@@ -113,10 +115,48 @@ final class ContentFixService {
         );
     }
 
+    /**
+     * A product with fewer internal links than the standard gets the missing ones (own category first, then related products
+     * with the fewest inbound links) written into link-free body paragraphs.
+     *
+     * @return array{html:string,added:int}
+     */
+    private function add_missing_links(array $page) {
+        $html = (string) $page['html'];
+        $none = array('html' => $html, 'added' => 0);
+        $min = (int) \Khazan\Services\Content\SeoStandards::get('links_product');
+        $host = $this->host();
+        $have = array();
+        if (preg_match_all('~<a\b[^>]*\bhref\s*=\s*(["\'])(.*?)\1~is', $html, $m)) {
+            foreach ($m[2] as $u) {
+                $u = html_entity_decode(trim($u), ENT_QUOTES, 'UTF-8');
+                $h = strtolower((string) wp_parse_url($u, PHP_URL_HOST));
+                if ($u !== '' && $u[0] !== '#' && ($h === '' || $h === $host || $h === 'www.' . $host)) $have[rtrim($u, '/')] = true;
+            }
+        }
+        $need = $min - count($have);
+        if ($need <= 0) return $none;
+        try {
+            $plan = $this->targets->link_distributor()->plan($page['id'], '', array(), $need + 2);
+        } catch (\Exception $e) { return $none; }
+        $self = rtrim((string) $page['url'], '/');
+        $add = array();
+        foreach ((array) $plan['internal_links'] as $link) {
+            $u = rtrim((string) (isset($link['url']) ? $link['url'] : ''), '/');
+            if ($u === '' || $u === $self || isset($have[$u])) continue;
+            $add[] = array('url' => $link['url'], 'anchor' => isset($link['anchor']) ? $link['anchor'] : '');
+            if (count($add) >= $need) break;
+        }
+        if (!$add) return $none;
+        $placed = \Khazan\Services\Links\LinkSpreader::place($html, $add, $host);
+        return array('html' => $placed['html'], 'added' => count($add) - count($placed['missing']));
+    }
+
     /** Remaining failures go to the AI as text patches on plain blocks only. */
     private function ai_pass(array $page, array $result, $instructions) {
         if (!$result['after'] && trim($instructions) === '') return $result;
-        $segments = ContentFixer::segments($result['html']);
+        $heads = (bool) preg_grep('/زیرعنوان/u', $result['after']);   // headings go to the model only when the keyphrase is missing from them
+        $segments = ContentFixer::segments($result['html'], $heads);
         if (!$segments) return $result;
         $brief = array_values($result['after']);
         if (trim($instructions) !== '') $brief[] = trim($instructions);
