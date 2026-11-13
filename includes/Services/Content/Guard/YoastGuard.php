@@ -63,22 +63,36 @@ final class YoastGuard {
         list($min) = YoastRules::keyphrase_bounds(YoastRules::word_count($html), $keyword);
         $need = $min - YoastRules::keyphrase_count($html, $keyword);
         if ($need <= 0) return $html;
-        $pattern = '~(?<![\p{L}\x{200c}])این\s+(?:' . preg_quote($type, '~') . '|محصول|مدل|کالا)(?![\p{L}\x{200c}])~u';
         $tokens = preg_split('~(<[^>]+>)~', (string) $html, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
-        $spots = array(); $skip = 0;
+        $by_kind = array(0 => array(), 1 => array());   // kind 0: «این X», kind 1: a bare type word before a function word
+        $skip = 0;
         foreach ($tokens as $i => $token) {
             if ($token[0] === '<') {
                 if (preg_match('~^<(?:a|h[1-6])\b~i', $token)) $skip++;
                 elseif (preg_match('~^</(?:a|h[1-6])>~i', $token)) $skip = max(0, $skip - 1);
                 continue;
             }
-            if ($skip === 0 && preg_match($pattern, $token)) $spots[] = $i;
+            if ($skip > 0) continue;
+            $seen = array();
+            foreach (StructureGuard::spots($token, $keyword) as $s) {
+                if (isset($seen[$s[2]])) continue;           // one replacement per kind and text block keeps the keyphrase from clustering
+                $seen[$s[2]] = true;
+                $by_kind[$s[2]][] = array($i, $s[0], $s[1]);
+            }
         }
-        if (!$spots) return $html;
-        $take = min($need, count($spots));
-        for ($j = 0; $j < $take; $j++) {
-            $i = $spots[(int) floor(($j + 0.5) * count($spots) / $take)];
-            $tokens[$i] = preg_replace($pattern, $keyword, $tokens[$i], 1);
+        $chosen = array(); $used = array();
+        foreach (array(0, 1) as $kind) {
+            $pool = array_values(array_filter($by_kind[$kind], function ($c) use ($used) { return !isset($used[$c[0]]); }));
+            $take = min($need - count($chosen), count($pool));
+            for ($j = 0; $j < $take; $j++) {
+                $c = $pool[(int) floor(($j + 0.5) * count($pool) / $take)];
+                $chosen[] = $c; $used[$c[0]] = true;
+            }
+            if (count($chosen) >= $need) break;
+        }
+        usort($chosen, function ($a, $b) { return $a[0] === $b[0] ? $b[1] - $a[1] : $a[0] - $b[0]; });
+        foreach ($chosen as $c) {
+            $tokens[$c[0]] = substr($tokens[$c[0]], 0, $c[1]) . $keyword . substr($tokens[$c[0]], $c[1] + $c[2]);
         }
         return implode('', $tokens);
     }
