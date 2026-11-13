@@ -100,6 +100,20 @@ final class AiService {
         return array('patches' => $patches, 'meta_patches' => ContentParser::repair_meta_patches($parsed, $meta, $kind), 'issues' => $issues);
     }
 
+    /**
+     * Rewrites the segments needed to clear the given audit failures (see PromptBuilder::fix_issues): patches only.
+     *
+     * @return array|\WP_Error array('patches' => [...])
+     */
+    public function suggest_fix_patches($segments, array $failures, $meta = array()) {
+        if (!$this->is_configured()) return new \WP_Error('no_api_key', 'کلید API هوش مصنوعی تنظیم نشده است. آن را در تنظیمات افزونه وارد کنید.', array('status' => 400));
+        $parsed = AiResponseDecoder::decode_json($this->send($this->prompts->fix_issues($segments, $failures, $meta)));
+        if (is_wp_error($parsed)) return $parsed;
+        $patches = ContentParser::repair_patches($parsed, $segments, 30);
+        if (is_wp_error($patches)) return $patches;
+        return array('patches' => $patches);
+    }
+
     public function generate_content_blueprint($params) {
         try {
             $candidates = $this->getAllSiteEntities();

@@ -186,7 +186,7 @@ final class ContentFixService {
         // same model as generation, the lowest reasoning level: a maintenance patch needs no deep thinking (reasoning tokens bill as output)
         \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning('minimal');
         try {
-            $ai = (new \Khazan\Services\Ai\AiService())->suggest_seo_repairs($segments, implode("\n", $brief), $meta, $page['type'] === 'term' ? 'term' : ($page['kind'] === Settings::KIND_PRODUCT ? 'product' : 'post'));
+            $ai = (new \Khazan\Services\Ai\AiService())->suggest_fix_patches($segments, $brief, $meta);
         } finally {
             \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning(null);
         }
