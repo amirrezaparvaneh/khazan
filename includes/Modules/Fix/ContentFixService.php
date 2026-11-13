@@ -176,8 +176,8 @@ final class ContentFixService {
         $brief = array_values($fixable);
         if ($instructions !== '') $brief[] = $instructions;
         $meta = array('title' => (string) $page['seo']['title'], 'desc' => (string) $page['seo']['desc'], 'focuskw' => $result['focus']);
-        // same model as generation, always the lowest reasoning: a maintenance patch needs no deep thinking
-        \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning('low');
+        // same model as generation, the lowest reasoning level: a maintenance patch needs no deep thinking (reasoning tokens bill as output)
+        \Khazan\Services\Ai\AvalaiHttpClient::force_reasoning('minimal');
         try {
             $ai = (new \Khazan\Services\Ai\AiService())->suggest_seo_repairs($segments, implode("\n", $brief), $meta, $page['type'] === 'term' ? 'term' : ($page['kind'] === Settings::KIND_PRODUCT ? 'product' : 'post'));
         } finally {

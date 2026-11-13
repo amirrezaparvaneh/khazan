@@ -112,9 +112,17 @@ final class AvalaiHttpClient {
             $data = json_decode(wp_remote_retrieve_body($response), true);
         }
 
-        // Gateways/models that do not support reasoning_effort: retry once without it.
-        if ($code === 400 && isset($body['reasoning_effort']) && stripos((string) wp_remote_retrieve_body($response), 'reasoning') !== false) {
-            unset($body['reasoning_effort']);
+        // A model that rejects the requested reasoning level (newer GPT-5 versions take «none» instead of «minimal»):
+        // step down to the next cheap level before giving the parameter up (the default level is the expensive one).
+        $tried = array(isset($body['reasoning_effort']) ? $body['reasoning_effort'] : '');
+        while ($code === 400 && isset($body['reasoning_effort']) && stripos((string) wp_remote_retrieve_body($response), 'reasoning') !== false) {
+            $next = null;
+            if (in_array($body['reasoning_effort'], array('minimal', 'none'), true)) {
+                foreach (array('none', 'minimal', 'low') as $cand) {
+                    if (!in_array($cand, $tried, true)) { $next = $cand; break; }
+                }
+            }
+            if ($next === null) unset($body['reasoning_effort']); else { $body['reasoning_effort'] = $next; $tried[] = $next; }
             $response = $this->post($this->api_key, $body, $timeout);
             if (is_wp_error($response)) {
                 return ApiErrors::transport($response);
