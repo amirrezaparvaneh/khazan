@@ -227,12 +227,12 @@ final class ContentParser {
     /**
      * اعتبارسنجی پیشنهادهای اصلاح خوانایی؛ فقط وصله‌های سالم و منطبق بر قطعه اصلی نگه داشته می‌شوند
      */
-    public static function repair_patches($parsed, $segments) {
+    public static function repair_patches($parsed, $segments, $limit = 20) {
         if (!isset($parsed['patches'])) $parsed['patches'] = array();
         if (!is_array($parsed['patches'])) return new \WP_Error('invalid_repairs', 'پاسخ اصلاح معتبر نیست.');
         $patches = array();
         $seen = array();
-        foreach (array_slice($parsed['patches'], 0, 20) as $patch) {
+        foreach (array_slice($parsed['patches'], 0, (int) $limit) as $patch) {
             if (!is_array($patch) || !isset($patch['index'], $patch['before'], $patch['after'], $patch['reason']) || !is_int($patch['index'])) continue;
             $i = $patch['index'];
             if (!isset($segments[$i]) || isset($seen[$i]) || !is_string($patch['after']) || !is_string($patch['reason']) || $patch['before'] !== $segments[$i]) continue;
