@@ -176,7 +176,12 @@
       const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
       const isFatal = r => r && ['ai_no_credit', 'ai_invalid_key', 'ai_forbidden', 'missing_api_key'].includes(r.code);
       const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
-      for (let n = 0; n < queue.length; n++) {
+      let cursor = 0;
+      const workerCount = Math.max(1, Math.min(5, Number(b.workers) || 3));
+      const worker = async () => {
+      while (true) {
+        const n = cursor++;
+        if (n >= queue.length) break;
         const i = queue[n];
         while (b.paused && !b.stopRequested) await sleep(300);
         if (b.stopRequested) break;
@@ -208,9 +213,11 @@
           }
         }
         b.done++; this.bulkRefreshUi();
-        // فاصله ۳ ثانیه‌ای بین محصولات برای جلوگیری از Rate Limit
-        if (n < queue.length - 1 && !b.stopRequested) await wait(3000);
+        // فاصله کوتاه بین درخواست‌های هر خط پردازش برای جلوگیری از Rate Limit
+        if (cursor < queue.length && !b.stopRequested) await wait(workerCount > 1 ? 1000 : 3000);
       }
+      };
+      await Promise.all(Array.from({ length: workerCount }, (_, k) => sleep(k * 1500).then(worker)));
       this.bulkLog('info', b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش صف به پایان رسید.');
       b.running = false; b.paused = false;
       this.render();
@@ -332,6 +339,7 @@
       this.root.querySelectorAll('.wila-site-row').forEach(box => box.addEventListener('change', e => { bulk.site.selected[e.target.dataset.id] = e.target.checked; this.render(); }));
       const siteLoad = this.root.querySelector('#wila-site-load'); if (siteLoad) siteLoad.addEventListener('click', () => this.loadSiteProducts());
       this.root.querySelectorAll('.wila-site-add').forEach(btn => btn.addEventListener('click', () => this.addSiteProductsToQueue()));
+      const bulkWorkers = this.root.querySelector('#wila-bulk-workers'); if (bulkWorkers) bulkWorkers.addEventListener('change', e => { bulk.workers = Number(e.target.value) || 3; });
       const bulkMode = this.root.querySelector('#wila-bulk-mode'); if (bulkMode) bulkMode.addEventListener('change', e => { bulk.mode = e.target.value; });
       this.root.querySelectorAll('.wila-bulk-view').forEach(btn => btn.addEventListener('click', e => { bulk.view = e.currentTarget.getAttribute('data-view'); this.render(); }));
       const bulkSeo = this.root.querySelector('#wila-bulk-seo'); if (bulkSeo) bulkSeo.addEventListener('change', e => { bulk.injectSeo = e.target.checked; });
@@ -367,7 +375,7 @@
 
   window.KhazanQueue = {
     initialState: function () {
-      return { target: 'products', source: 'site', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, startedAt: 0, log: [] };
+      return { target: 'products', source: 'site', site: { filter: 'all', category: 0, search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], categories: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, collapsed: false, addedCount: 0 }, fileName: '', rows: [], selected: {}, filter: 'all', mode: 'replace', injectSeo: true, autoLinks: true, createMissing: false, workers: 3, status: 'pending', matching: false, view: 'found', running: false, paused: false, stopRequested: false, total: 0, done: 0, startedAt: 0, log: [] };
     },
     methods: methods
   };

@@ -451,6 +451,10 @@ ${siteExpanded ? `
           ${siteBar('bottom')}` : ''}
           ${b.matching ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
           ${queueVisible ? `
+            <div class="khazan-field" style="margin-bottom:10px"><label for="wila-bulk-workers">سرعت پردازش (تعداد محصول هم‌زمان)</label>
+              <select id="wila-bulk-workers" class="wila-select" ${locked}>
+                ${[[1, 'یکی‌یکی؛ کندترین و امن‌ترین'], [2, 'دو تا هم‌زمان'], [3, 'سه تا هم‌زمان؛ پیشنهادی'], [4, 'چهار تا هم‌زمان'], [5, 'پنج تا هم‌زمان؛ سریع‌ترین']].map(([n, t]) => `<option value="${n}" ${Number(b.workers || 3) === n ? 'selected' : ''}>${t}</option>`).join('')}
+              </select><small class="khazan-hint">اگر خطای «سقف درخواست» یا کندی سرور دیدید، عدد را کم کنید.</small></div>
             <div class="khazan-toggle-grid" id="wila-queue-settings">
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-seo" ${b.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره عنوان سئو، توضیحات متا و کلیدواژه در Yoast و Rank Math</small></span></label>
               <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-bulk-links" ${b.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔗 لینک‌سازی خودکار</strong><small>${this.productLinkCaption()}</small></span></label>

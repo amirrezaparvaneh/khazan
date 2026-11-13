@@ -37,6 +37,23 @@ final class SmartLinkDistributor {
         $this->ledger   = $ledger;
     }
 
+    /** Atomic option-based mutex (add_option fails when the row exists); waits up to 5 s, then goes on without it. */
+    private static function lock($run_id) {
+        if (!function_exists('add_option')) return false;
+        $name = 'khazan_lock_' . substr(md5($run_id), 0, 16);
+        for ($i = 0; $i < 50; $i++) {
+            if (add_option($name, (string) time(), '', 'no')) return true;
+            $held = (int) get_option($name, 0);
+            if ($held && time() - $held > 20) delete_option($name);   // a crashed request must not block the run
+            usleep(100000);
+        }
+        return false;
+    }
+
+    private static function unlock($run_id) {
+        delete_option('khazan_lock_' . substr(md5($run_id), 0, 16));
+    }
+
     /**
      * Plans the internal links of one product row.
      *
@@ -52,6 +69,8 @@ final class SmartLinkDistributor {
             return array('category' => null, 'related' => array(), 'internal_links' => array());
         }
 
+        // Rows of one run may be processed in parallel requests: the read-modify-write of the ledger runs under a short lock.
+        $locked = $run_id !== '' && self::lock($run_id);
         $state = $run_id !== '' ? $this->ledger->load($run_id) : array('assigned' => array(), 'done' => array());
         $state['done'][$product_id] = true;
 
@@ -67,6 +86,7 @@ final class SmartLinkDistributor {
         if ($run_id !== '') {
             $this->ledger->save($run_id, $state);
         }
+        if ($locked) self::unlock($run_id);
 
         $links = array();
         if ($category) {

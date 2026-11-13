@@ -98,7 +98,12 @@
       const wait = async ms => { for (let t = 0; t < ms && !b.stopRequested; t += 250) await sleep(250); };
       const isFatal = r => r && ['ai_no_credit', 'ai_invalid_key', 'ai_forbidden', 'missing_api_key'].includes(r.code);
       const isTemporary = r => r && (r.code === 'ai_rate_limited' || (r.data && [429, 503].includes(Number(r.data.status))));
-      for (let n = 0; n < queue.length; n++) {
+      let cursor = 0;
+      const workerCount = Math.max(1, Math.min(5, Number(c.workers) || 3));
+      const worker = async () => {
+      while (true) {
+        const n = cursor++;
+        if (n >= queue.length) break;
         const item = queue[n];
         while (b.paused && !b.stopRequested) await sleep(300);
         if (b.stopRequested) break;
@@ -129,9 +134,10 @@
           }
         }
         b.done++; this.categoryRefreshUi();
-        // فاصله ۳ ثانیه‌ای بین دسته‌ها برای جلوگیری از Rate Limit
-        if (n < queue.length - 1 && !b.stopRequested) await wait(3000);
+        if (cursor < queue.length && !b.stopRequested) await wait(workerCount > 1 ? 1000 : 3000);
       }
+      };
+      await Promise.all(Array.from({ length: workerCount }, (_, k) => sleep(k * 1500).then(worker)));
       this.bulkLog('info', b.stopRequested ? 'پردازش متوقف شد.' : 'پردازش صف به پایان رسید.');
       b.running = false; b.paused = false;
       this.render();
@@ -194,6 +200,10 @@
         ${c.loaded || c.error ? `<div class="khazan-statusbar"><span class="khazan-status-pill">${c.error ? '⚠️ ' + escapeHtml(c.error) : `🗂️ ${toPersianDigits(c.items.length)} دسته‌بندی بارگذاری شد${c.hasMore ? ' (سقف نمایش؛ جستجو را دقیق‌تر کنید)' : ''}`}</span></div>` : ''}
         ${c.loading ? '<div class="wila-skeleton" style="height:14px;margin-top:14px"></div><div class="wila-skeleton" style="height:14px;margin-top:8px"></div>' : ''}
         ${c.loaded && c.items.length ? `
+          <div class="khazan-field" style="margin-bottom:10px"><label for="wila-cat-workers">سرعت پردازش (تعداد محصول هم‌زمان)</label>
+              <select id="wila-cat-workers" class="wila-select" ${locked}>
+                ${[[1, 'یکی‌یکی؛ کندترین و امن‌ترین'], [2, 'دو تا هم‌زمان'], [3, 'سه تا هم‌زمان؛ پیشنهادی'], [4, 'چهار تا هم‌زمان'], [5, 'پنج تا هم‌زمان؛ سریع‌ترین']].map(([n, t]) => `<option value="${n}" ${Number(c.workers || 3) === n ? 'selected' : ''}>${t}</option>`).join('')}
+              </select><small class="khazan-hint">اگر خطای «سقف درخواست» یا کندی سرور دیدید، عدد را کم کنید.</small></div>
           <div class="khazan-toggle-grid" id="wila-queue-settings">
             <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-cat-seo" ${c.injectSeo ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🔎 درج متای سئو</strong><small>ذخیره کلیدواژه، عنوان و توضیحات متا در ساختار دسته‌بندی Yoast و Rank Math</small></span></label>
             <label class="khazan-toggle"><span class="khazan-switch"><input type="checkbox" id="wila-cat-links" ${c.autoLinks ? 'checked' : ''} ${locked}><span class="khazan-slider"></span></span><span class="khazan-toggle-text"><strong>🕸️ لینک‌سازی عنکبوتی</strong><small>${this.categoryLinkCaption()}</small></span></label>
@@ -220,6 +230,7 @@
         search.addEventListener('keydown', e => { if (e.key === 'Enter' && !b.running) { e.preventDefault(); this.loadSiteCategories(); } });
       }
       const load = this.root.querySelector('#wila-cat-load'); if (load) load.addEventListener('click', () => this.loadSiteCategories());
+      const wk = this.root.querySelector('#wila-cat-workers'); if (wk) wk.addEventListener('change', e => { c.workers = Number(e.target.value) || 3; });
       const seo = this.root.querySelector('#wila-cat-seo'); if (seo) seo.addEventListener('change', e => { c.injectSeo = e.target.checked; });
       const links = this.root.querySelector('#wila-cat-links'); if (links) links.addEventListener('change', e => { c.autoLinks = e.target.checked; });
       this.root.querySelectorAll('.wila-cat-row').forEach(box => box.addEventListener('change', e => { c.selected[e.target.dataset.id] = e.target.checked; this.render(); }));
@@ -237,7 +248,7 @@
 
   window.KhazanCategories = {
     initialState: function () {
-      return { filter: 'all', search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, injectSeo: true, autoLinks: true, run: {} };
+      return { filter: 'all', search: '', loading: false, loaded: false, error: '', hasMore: false, items: [], counts: { total: 0, empty: 0, hasContent: 0 }, selected: {}, injectSeo: true, autoLinks: true, workers: 3, run: {} };
     },
     methods: methods
   };
